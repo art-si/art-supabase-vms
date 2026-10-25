@@ -7,7 +7,7 @@
       icon="ri:traffic-light-line"
       :tags="[
         { label: '交通合规', type: 'primary' },
-        { label: '只读业务台账', type: 'info' }
+        { label: '司机归属核实', type: 'info' }
       ]"
       :metrics="workspaceMetrics"
     >
@@ -34,6 +34,7 @@
       :on-success="handleTableSuccess"
       focusable
     />
+    <DriverLinkDialog ref="driverLinkDialog" @success="tableQueryRef?.refreshData()" />
   </div>
 </template>
 
@@ -56,8 +57,11 @@
     type BusinessWorkspaceMetric
   } from '@/components/business/business-workspace-header/index.vue'
   import BusinessTableWorkspaceActions from '@/components/business/business-table-workspace-actions/index.vue'
+  import ArtButtonTable from '@/components/core/forms/art-button-table/index.vue'
+  import DriverLinkDialog from './modules/driver-link-dialog.vue'
   import {
     canViewField,
+    canEditField,
     mergeFieldAccessMaps,
     formatSensitiveNumberWithAffix
   } from '@/utils/field-permission'
@@ -76,6 +80,7 @@
   }
 
   const tableQueryRef = ref<ArtTableQueryExpose>()
+  const driverLinkDialog = ref<InstanceType<typeof DriverLinkDialog>>()
   const { getDictMap } = storeToRefs(useUserStore())
   const overview = reactive<{ total: number; rows: ViolationRecord[] }>({ total: 0, rows: [] })
   const listFieldAccess = ref<Api.Vms.VehicleManage.VehicleViolationFieldAccessMap>({})
@@ -162,7 +167,15 @@
       { prop: 'companyName', label: '所属公司', minWidth: 150 },
       { prop: 'plateNo', label: '车牌号', width: 120 },
       ...(canViewField(effectiveFieldAccess.value, 'driverIdentity')
-        ? [{ prop: 'driverName', label: '驾驶员', width: 120 }]
+        ? [
+            { prop: 'driverName', label: '原登记驾驶员', width: 130 },
+            {
+              prop: 'linkedDriverName',
+              label: '已关联司机',
+              width: 130,
+              formatter: (row: ViolationRecord) => row.linkedDriverName || '未关联'
+            }
+          ]
         : []),
       ...(canViewField(effectiveFieldAccess.value, 'violationNarrative')
         ? [{ prop: 'violationBehavior', label: '违章行为', minWidth: 180 }]
@@ -199,7 +212,25 @@
           value: (row) => String(row.processed ?? '')
         }
       },
-      { prop: 'createBy', label: '创建人', width: 130 }
+      { prop: 'createBy', label: '创建人', width: 130 },
+      {
+        prop: 'operation',
+        label: '操作',
+        width: 72,
+        fixed: 'right',
+        formatter: (row) =>
+          canEditField(row.fieldAccess, 'driverIdentity') && row.vehicleId ? (
+            <ArtButtonTable
+              type="edit"
+              icon="ri:user-settings-line"
+              label="关联司机"
+              permission="VehicleViolation:LinkDriver"
+              onClick={() => driverLinkDialog.value?.handleOpen(row)}
+            />
+          ) : (
+            '—'
+          )
+      }
     ]
   })
 

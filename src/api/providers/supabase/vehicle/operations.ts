@@ -83,6 +83,35 @@ export async function exportVehicleMileageList(
 }
 
 // 车辆违章
+export interface LinkViolationDriverInput {
+  id: string
+  driverId: string | null
+  expectedUpdatedAt: string
+}
+
+/** Associate an existing violation with a verified driver; keep its historical name. */
+export async function linkVehicleViolationDriver(input: LinkViolationDriverInput) {
+  const signal = AbortSignal.timeout(30_000)
+  const result = await responseHandle<VehicleViolationRecord>(
+    () =>
+      supabase
+        .rpc('vms_link_violation_driver_secure', {
+          p_id: input.id,
+          p_driver_id: input.driverId,
+          p_expected_updated_at: input.expectedUpdatedAt
+        })
+        .abortSignal(signal),
+    { showErrorMessage: false }
+  )
+  if (signal.aborted) {
+    throw new Error('保存结果暂未确认，请关闭窗口并刷新列表，核对司机关联后再操作', {
+      cause: result.error
+    })
+  }
+  if (result.error) throw result.error
+  return result
+}
+
 interface SecureVehicleViolationPayload {
   records: VehicleViolationRecord[]
   total: number

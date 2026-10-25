@@ -118,14 +118,14 @@ export async function editVehicleMaintenance(params: VehicleMaintenanceRecord) {
 export async function deleteVehicleMaintenance(id: string) {
   return await responseHandle<number>(
     () => supabase.rpc('vms_delete_vehicle_maintenance_secure', { p_ids: [id] }),
-    { showMessage: true, message: '删除成功', breakReturn: true }
+    { showMessage: true, message: '删除成功', showErrorMessage: false, breakReturn: true }
   )
 }
 
 export async function deleteVehicleMaintenanceBatch(ids: string[]) {
   return await responseHandle<number>(
     () => supabase.rpc('vms_delete_vehicle_maintenance_secure', { p_ids: ids }),
-    { showMessage: true, breakReturn: true }
+    { showMessage: true, showErrorMessage: false, breakReturn: true }
   )
 }
 

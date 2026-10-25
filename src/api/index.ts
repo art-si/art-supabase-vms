@@ -137,6 +137,7 @@ export const exportVehicleMileageList = supabaseVehicleApi.exportVehicleMileageL
 
 export const fetchVehicleViolationList = supabaseVehicleApi.fetchVehicleViolationList
 export const exportVehicleViolationList = supabaseVehicleApi.exportVehicleViolationList
+export const linkVehicleViolationDriver = supabaseVehicleApi.linkVehicleViolationDriver
 
 export const fetchVehicleAccidentList = supabaseVehicleApi.fetchVehicleAccidentList
 export const exportVehicleAccidentList = supabaseVehicleApi.exportVehicleAccidentList

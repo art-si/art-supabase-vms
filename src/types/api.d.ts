@@ -382,6 +382,8 @@ declare global {
           id?: string
           tenantId?: string
           vehicleId?: string | null
+          driverId?: string | null
+          linkedDriverName?: string | null
           plateNo: string
           companyName?: string
           driverName?: string

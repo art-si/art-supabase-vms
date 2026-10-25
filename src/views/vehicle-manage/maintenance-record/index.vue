@@ -36,11 +36,13 @@
     />
 
     <MaintenanceRecordDialog ref="dialogRef" @success="handleSaveSuccess" />
+    <MasterDataDeleteGuard ref="deleteGuardRef" />
   </div>
 </template>
 
 <script setup lang="tsx">
-  import { useArtFeedback } from '@/hooks/core/useArtFeedback'
+  import { useRecordDeleteGuard } from '@/hooks/core/useRecordDeleteGuard'
+  import MasterDataDeleteGuard from '@/components/business/master-data-delete-guard/index.vue'
   import type { ComputedRef, UnwrapNestedRefs } from 'vue'
   import ArtButtonTable from '@/components/core/forms/art-button-table/index.vue'
   import ArtButtonMore, {
@@ -51,7 +53,6 @@
     ArtTableQueryExpose,
     ArtTableQueryExcelColumn,
     ArtTableQueryHeaderAction,
-    ArtTableQueryHeaderActionContext,
     ArtTableQueryProps
   } from '@/components/core/tables/art-table-query/index.vue'
   import type { ColumnOption, DialogType } from '@/types'
@@ -77,7 +78,10 @@
 
   defineOptions({ name: 'VehicleMaintenance' })
 
-  const { confirmAction } = useArtFeedback()
+  const { deleteGuardRef, deleteRecord, deleteRecords } = useRecordDeleteGuard(
+    'vehicle_maintenance_record',
+    '维修保养记录'
+  )
 
   type MaintenanceRecord = Api.Vms.VehicleManage.VehicleMaintenanceRecord
   type SearchParams = Api.Vms.VehicleManage.VehicleMaintenanceSearchParams
@@ -181,12 +185,20 @@
       {
         type: 'delete',
         permission: 'VehicleMaintenance:Delete',
-        content: ({ selectedCount }: ArtTableQueryHeaderActionContext) =>
-          `确定删除选中的 ${selectedCount} 条维修保养记录吗？删除后无法恢复。`,
+        confirm: false,
         onClick: async ({ selectedRows }) => {
-          const ids = selectedRows.map((row) => row.id).filter(Boolean)
-          await deleteVehicleMaintenanceBatch(ids)
-          await tableQueryRef.value?.refreshRemove()
+          const resources = selectedRows.map((row) => ({
+            id: String(row.id ?? ''),
+            label: String(row.maintenanceNo || row.plateNo || '维修保养记录')
+          }))
+          await deleteRecords({
+            resources,
+            permission: 'VehicleMaintenance:Delete',
+            remove: () => deleteVehicleMaintenanceBatch(resources.map((resource) => resource.id)),
+            onDeleted: async () => {
+              await tableQueryRef.value?.refreshRemove()
+            }
+          })
         }
       }
     ]),
@@ -363,18 +375,15 @@
 
   const handleDelete = async (row: MaintenanceRecord): Promise<void> => {
     if (!row.id) return
-    try {
-      await confirmAction(`确定删除维修单“${row.maintenanceNo}”吗？`, '删除确认', {
-        confirmButtonText: '删除',
-        cancelButtonText: '取消',
-        type: 'warning',
-        confirmButtonType: 'danger'
-      })
-      await deleteVehicleMaintenance(row.id)
-      await tableQueryRef.value?.refreshRemove()
-    } catch {
-      // 用户取消删除时无需提示。
-    }
+    const id = row.id
+    await deleteRecord({
+      resource: { id, label: row.maintenanceNo || row.plateNo || '维修保养记录' },
+      permission: 'VehicleMaintenance:Delete',
+      remove: () => deleteVehicleMaintenance(id),
+      onDeleted: async () => {
+        await tableQueryRef.value?.refreshRemove()
+      }
+    })
   }
 
   const formatMileage = (value?: number | string | null): string =>
