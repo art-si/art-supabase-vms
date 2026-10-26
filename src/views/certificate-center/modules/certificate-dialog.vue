@@ -54,8 +54,11 @@
             v-if="form.subjectId && subjectTenantId"
             title="上传附件"
             :resource-tenant-id="subjectTenantId"
+            :upload-request="uploadAttachment"
+            :show-resource-picker="false"
             :show-file-list="false"
             :show-tip="false"
+            :file-size="15 * 1024 * 1024"
             accept=".jpg,.jpeg,.png,.webp,.pdf"
             multiple
             :limit="20"
@@ -109,7 +112,8 @@
   import {
     fetchCertificateResponsibleOptions,
     fetchCertificateSubjectOptions,
-    saveCertificate
+    saveCertificate,
+    uploadCertificateAttachment
   } from '../../../api/providers/supabase/vehicle/certificates'
   import { CERTIFICATE_TYPE_OPTIONS } from './certificate-policy'
 
@@ -298,6 +302,8 @@
     form.attachments = uniqBy([...form.attachments, ...attachments], 'url')
     ElMessage.success(`已添加 ${attachments.length} 份附件`)
   }
+
+  const uploadAttachment = (file: File) => uploadCertificateAttachment(file, subjectTenantId.value)
 
   async function removeAttachment(row: CertificateAttachment): Promise<void> {
     try {
