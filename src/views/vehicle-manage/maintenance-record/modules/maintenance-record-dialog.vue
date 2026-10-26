@@ -20,7 +20,7 @@
           <ArtTableSingleSelect
             v-model="vehicleSelectValue"
             v-model:selected-data="form.vehicleSelection"
-            :api-fn="fetchVehicleSelectData"
+            :api-fn="fetchApprovedVehicleSelectData"
             :columns="vehicleColumns"
             row-key="id"
             label-key="plateNo"
@@ -160,7 +160,7 @@
   import {
     addVehicleMaintenance,
     editVehicleMaintenance,
-    fetchVehicleArchiveList,
+    fetchApprovedVehicleSelectData,
     fetchVehicleMileageList
   } from '@vms/api'
   import { buildSupabasePageRange } from '@/utils/supabase/pagination'
@@ -574,21 +574,6 @@
   ])
 
   const getBooleanDictOptions = () => booleanOptions
-
-  const fetchVehicleSelectData = async (params: {
-    page: number
-    pageSize: number
-    keyword?: string
-  }) => {
-    const { from, to } = buildSupabasePageRange({ current: params.page, size: params.pageSize })
-    const { data, total } = await fetchVehicleArchiveList({
-      plateNo: params.keyword,
-      auditStatus: 'approved',
-      from,
-      to
-    })
-    return { data: data ?? [], total: total ?? 0 }
-  }
 
   const handleVehicleChange = (_value: unknown, rows: DataSelectRecord[]): void => {
     const vehicle = rows[0] as VehicleArchive | undefined

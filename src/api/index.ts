@@ -55,6 +55,7 @@ export const fetchVehicleArchiveList = supabaseVehicleApi.fetchVehicleArchiveLis
 export const fetchVehicleArchiveNavigation = supabaseVehicleApi.fetchVehicleArchiveNavigation
 export const importVehicleArchives = supabaseVehicleApi.importVehicleArchives
 export * from './modules/vehicle-document-ocr'
+export * from './modules/vehicle-select'
 export type { VehicleArchiveNavigationItem } from '@vms/api/providers/supabase/vehicle/archive'
 export const exportVehicleArchiveList = supabaseVehicleApi.exportVehicleArchiveList
 export const fetchVehicleArchiveDetail = supabaseVehicleApi.fetchVehicleArchiveDetail
@@ -75,6 +76,21 @@ export async function submitVehicleArchiveForApproval(id: string, plateNo: strin
 }
 
 export const fetchVehicleArchiveOptions = supabaseVehicleApi.fetchVehicleArchiveOptions
+export const fetchTrailerList = supabaseVehicleApi.fetchTrailerList
+export const fetchTrailerDetail = supabaseVehicleApi.fetchTrailerDetail
+export const fetchTrailerCompanyOptions = supabaseVehicleApi.fetchTrailerCompanyOptions
+export const saveTrailer = supabaseVehicleApi.saveTrailer
+export const fetchTrailerOptions = supabaseVehicleApi.fetchTrailerOptions
+export const fetchDefaultTrailer = supabaseVehicleApi.fetchDefaultTrailer
+export const setDefaultTrailer = supabaseVehicleApi.setDefaultTrailer
+export type { TrailerOption } from '@vms/api/providers/supabase/vehicle/trailers'
+export type { TrailerCompanyOption } from '@vms/types/trailer'
+export const fetchCertificateList = supabaseVehicleApi.fetchCertificateList
+export const fetchCertificateSubjectOptions = supabaseVehicleApi.fetchCertificateSubjectOptions
+export const fetchCertificateResponsibleOptions =
+  supabaseVehicleApi.fetchCertificateResponsibleOptions
+export const saveCertificate = supabaseVehicleApi.saveCertificate
+export const markCertificateHandled = supabaseVehicleApi.markCertificateHandled
 export const fetchVehicleReminderCompanyOptions =
   supabaseVehicleApi.fetchVehicleReminderCompanyOptions
 export const fetchVehicleReminderInsuranceExpiryList =

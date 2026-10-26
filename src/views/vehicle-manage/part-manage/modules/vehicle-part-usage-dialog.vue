@@ -29,7 +29,7 @@
         <ArtTableSingleSelect
           v-model="vehicleSelectValue"
           v-model:selected-data="form.vehicleSelection"
-          :api-fn="fetchVehicleRows"
+          :api-fn="fetchApprovedVehicleSelectData"
           :columns="vehicleColumns"
           row-key="id"
           label-key="plateNo"
@@ -236,8 +236,8 @@
   import {
     addVehiclePartUsage,
     editVehiclePartUsage,
-    fetchPartsList,
-    fetchVehicleArchiveList
+    fetchApprovedVehicleSelectData,
+    fetchPartsList
   } from '@vms/api'
   import { useUserStore } from '@/store/modules/user'
   import { canEditField, canViewField } from '@/utils/field-permission'
@@ -485,17 +485,6 @@
       ...item,
       value: item.value === 'true'
     }))
-
-  const fetchVehicleRows = async (params: DataSelectFetchParams) => {
-    const { from, to } = buildSupabasePageRange({ current: params.page, size: params.pageSize })
-    const { data, total } = await fetchVehicleArchiveList({
-      plateNo: params.keyword,
-      auditStatus: 'approved',
-      from,
-      to
-    })
-    return { data: data ?? [], total: total ?? 0 }
-  }
 
   const fetchPartRows = async (params: DataSelectFetchParams) => {
     const { from, to } = buildSupabasePageRange({ current: params.page, size: params.pageSize })

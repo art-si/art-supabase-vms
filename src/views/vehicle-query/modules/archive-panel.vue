@@ -9,38 +9,6 @@
             :label-width="128"
           />
         </ArtPageSection>
-        <ArtPageSection
-          v-if="canViewField(vehicle.fieldAccess, 'documents')"
-          title="车辆证件"
-          class="vehicle-query-archive-panel__certificates mt-6"
-        >
-          <div
-            class="vehicle-query-archive-panel__images grid max-w-[860px] grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-5 rounded-[var(--el-border-radius-base)] border border-[var(--el-border-color-lighter)] p-5"
-          >
-            <div
-              v-for="item in certificateItems"
-              :key="item.key"
-              class="vehicle-query-archive-panel__image-item flex flex-col items-center gap-2"
-            >
-              <ElImage
-                v-if="vehicle[item.key]"
-                :src="vehicle[item.key]"
-                class="h-[110px] w-[140px] border border-[var(--el-border-color)]"
-                :alt="item.label"
-                fit="cover"
-                :preview-src-list="[vehicle[item.key] || '']"
-              />
-              <div
-                v-else
-                class="vehicle-query-archive-panel__image-empty flex h-[110px] w-[140px] items-center justify-center border border-[var(--el-border-color)] bg-[var(--el-fill-color-light)] text-[var(--el-text-color-placeholder)]"
-                >--</div
-              >
-              <span class="font-semibold text-[var(--el-text-color-secondary)]">{{
-                item.label
-              }}</span>
-            </div>
-          </div>
-        </ArtPageSection>
       </ElTabPane>
       <ElTabPane v-if="hasAuth('VehicleQuery:TabBody')" label="车身参数" name="body">
         <ArtPageSection title="车身参数">
@@ -79,7 +47,7 @@
 </template>
 
 <script setup lang="ts">
-  import { ElImage, ElTabPane, ElTabs } from 'element-plus'
+  import { ElTabPane, ElTabs } from 'element-plus'
   import ArtEmptyState from '@/components/core/feedback/art-empty-state/index.vue'
   import { useAuth } from '@/hooks/core/useAuth'
   import ArtDescriptions from '@/components/core/base/art-descriptions/index.vue'
@@ -95,9 +63,6 @@
     vehicle: VehicleArchive
   }>()
   const { hasAuth } = useAuth()
-
-  type ImageKey =
-    'vehiclePhotoUrl' | 'drivingLicenseFrontUrl' | 'drivingLicenseBackUrl' | 'operationLicenseUrl'
 
   const panel = reactive({
     activeTab: 'basic'
@@ -122,13 +87,6 @@
   )
   const descriptionData = Object.freeze({})
 
-  const certificateItems: Array<{ key: ImageKey; label: string }> = [
-    { key: 'vehiclePhotoUrl', label: '车辆照片' },
-    { key: 'drivingLicenseFrontUrl', label: '行驶证正页' },
-    { key: 'drivingLicenseBackUrl', label: '行驶证副页' },
-    { key: 'operationLicenseUrl', label: '运营证照片' }
-  ]
-
   const basicDescriptionItems = computed(() =>
     createDescriptionItems([
       { label: '车牌号', value: props.vehicle.plateNo },
@@ -141,13 +99,6 @@
         : []),
       { label: '车辆厂商', value: props.vehicle.manufacturer },
       { label: '厂牌型号', value: props.vehicle.brandModel },
-      ...(canViewField(props.vehicle.fieldAccess, 'vehicleIdentifiers')
-        ? [
-            { label: '营运证号', value: props.vehicle.operationCertNo },
-            { label: '购置证号', value: props.vehicle.purchaseCertNo },
-            { label: '登记证号', value: props.vehicle.registrationCertNo }
-          ]
-        : []),
       { label: '车身颜色', value: props.vehicle.vehicleColor, dictCode: 'vehicleColor' },
       ...(canViewField(props.vehicle.fieldAccess, 'vehicleIdentifiers')
         ? [
@@ -158,8 +109,6 @@
       ...(canViewField(props.vehicle.fieldAccess, 'deviceIdentity')
         ? [{ label: '空调号码', value: props.vehicle.acCode }]
         : []),
-      { label: '登记日期', value: props.vehicle.registerDate },
-      { label: '发证日期', value: props.vehicle.issueDate },
       { label: '购入开票日期', value: props.vehicle.invoiceDate },
       { label: '启用日期', value: props.vehicle.startUseDate },
       { label: '使用年限', value: props.vehicle.serviceYears, suffix: '年' },

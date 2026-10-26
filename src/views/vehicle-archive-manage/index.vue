@@ -124,13 +124,14 @@
 
     <MasterDataDeleteGuard ref="deleteGuardRef" @cleared="handleDeleteGuardCleared" />
     <WorkflowBusinessHistoryDrawer ref="approvalHistoryRef" />
+    <VehicleQuickCreateDialog ref="quickCreateRef" @created="handleQuickCreated" />
   </div>
 </template>
 
 <script setup lang="tsx">
   import ArtEmptyState from '@/components/core/feedback/art-empty-state/index.vue'
   import { getFriendlySupabaseErrorMessage } from '@/utils/supabase'
-  import { useArtFeedback } from '@/hooks/core/useArtFeedback'
+  import { useRecordDeleteGuard } from '@/hooks/core/useRecordDeleteGuard'
   import type { ComputedRef, UnwrapNestedRefs } from 'vue'
   import { ElMessage, ElTree } from 'element-plus'
   import { groupBy } from 'lodash-es'
@@ -175,10 +176,11 @@
     type BusinessWorkspaceMetric
   } from '@/components/business/business-workspace-header/index.vue'
   import { canViewField, mergeFieldAccessMaps } from '@/utils/field-permission'
+  import VehicleQuickCreateDialog from './modules/vehicle-quick-create-dialog.vue'
 
   defineOptions({ name: 'VehicleArchiveManage' })
 
-  const { confirmAction } = useArtFeedback()
+  const { deleteRecords } = useRecordDeleteGuard('mdm_vehicle', '车辆档案')
   const { hasAllAuth } = useAuth()
 
   type VehicleArchive = Api.Vms.ArchiveManage.VehicleArchive
@@ -216,6 +218,7 @@
   const tableQueryRef = ref<ArtTableQueryExpose>()
   const deleteGuardRef = ref<MasterDataDeleteGuardExpose>()
   const approvalHistoryRef = ref<WorkflowBusinessHistoryDrawerExpose>()
+  const quickCreateRef = ref<{ handleOpen: () => Promise<void> }>()
   const initialCarrierId = String(route.query.carrierId || '')
   const initialRecordId = String(route.query.recordId || '')
   const overview = reactive<{ total: number; rows: VehicleArchive[] }>({
@@ -330,6 +333,7 @@
     () =>
       overview.rows.filter(
         (row) =>
+          row.auditStatus === 'draft' ||
           !row.companyName?.trim() ||
           !row.manufacturer?.trim() ||
           (canViewField(row.fieldAccess, 'vehicleIdentifiers') && !row.vin?.trim())
@@ -353,8 +357,8 @@
       label: '本页资料待完善',
       value: incompleteCount.value,
       description: canViewField(effectiveFieldAccess.value, 'vehicleIdentifiers')
-        ? '公司、厂商或 VIN 信息缺失'
-        : '公司或厂商信息缺失',
+        ? '草稿或公司、厂商、VIN 信息缺失'
+        : '草稿或公司、厂商信息缺失',
       icon: 'ri:file-warning-line',
       tone: 'warning'
     }
@@ -611,13 +615,15 @@
       {
         prop: 'operation',
         label: '操作',
-        width: 128,
+        width: 164,
         fixed: 'right',
         formatter: (row) => (
           <div class="vehicle-archive-manage__operation">
             <ArtButtonTable
               type="edit"
               permission="VehicleArchive:Edit"
+              label={row.auditStatus === 'draft' ? '完善资料' : '编辑'}
+              showLabel={row.auditStatus === 'draft'}
               onClick={() => openEditPage(row)}
             />
             <ArtButtonMore
@@ -636,7 +642,7 @@
       rowKey: 'id',
       tableLayout: 'fixed',
       emptyText: '暂无符合条件的车辆档案',
-      emptyDescription: '可调整筛选条件，或新增车辆档案并提交审核。'
+      emptyDescription: '可调整筛选条件，或新增车辆档案后完善资料。'
     }
   })
 
@@ -739,7 +745,13 @@
   )
 
   const openCreatePage = (): void => {
-    void router.push('/vms/vehicle-archive-edit')
+    void quickCreateRef.value?.handleOpen()
+  }
+
+  const handleQuickCreated = (id: string): void => {
+    void loadNavigation()
+    void tableQueryRef.value?.getData()
+    void router.push(`/vms/vehicle-archive-edit/${id}`)
   }
 
   const openDetailPage = (row: VehicleArchive): void => {
@@ -811,30 +823,23 @@
 
   const handleDelete = async (row: VehicleArchive): Promise<void> => {
     if (!row.id) return
-
-    try {
-      if (
-        await deleteGuardRef.value?.inspect({
+    await deleteRecords({
+      resources: [{ id: String(row.id), label: row.plateNo }],
+      permission: 'VehicleArchive:Delete',
+      inspectReferences: async (resources) => {
+        if (!deleteGuardRef.value) throw new Error('关联检查尚未就绪，请刷新列表后重试')
+        return deleteGuardRef.value.inspect({
           resourceType: 'vehicle',
           resourceLabel: '车辆档案',
-          resources: [{ id: String(row.id), label: row.plateNo }]
+          resources
         })
-      ) {
-        return
+      },
+      remove: () => deleteVehicleArchive(String(row.id)),
+      onDeleted: async () => {
+        await tableQueryRef.value?.refreshRemove()
+        await loadNavigation()
       }
-      await confirmAction(`确定删除车辆档案“${row.plateNo}”吗？删除后无法恢复。`, '删除确认', {
-        confirmButtonText: '删除',
-        cancelButtonText: '取消',
-        type: 'warning',
-        confirmButtonType: 'danger'
-      })
-      await deleteVehicleArchive(row.id)
-      await tableQueryRef.value?.refreshRemove()
-      await loadNavigation()
-    } catch (error) {
-      if (error === 'cancel' || error === 'close') return
-      ElMessage.error(getFriendlySupabaseErrorMessage(error, '删除失败'))
-    }
+    })
   }
 
   const handleDeleteGuardCleared = (): void => {

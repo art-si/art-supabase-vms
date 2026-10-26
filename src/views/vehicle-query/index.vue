@@ -4,20 +4,27 @@
       class="vehicle-query-page__overview"
       eyebrow="FLEET INTELLIGENCE"
       title="车辆全景查询"
-      description="以车辆档案为主线，集中核验运营状态、里程、保险、年检与维保资料。"
+      description="以车辆档案为主线，集中核验审核、运营、里程、保险、年检与维保资料。"
       icon="ri:roadster-line"
       :tags="[
-        { label: '仅展示已审核档案', type: 'success', effect: 'light' },
+        { label: '覆盖全部审核状态', type: 'info', effect: 'light' },
         { label: '一车一档', type: 'primary', effect: 'plain' }
       ]"
       :metrics="workspaceMetrics"
-    />
+    >
+      <template #actions>
+        <BusinessTableWorkspaceActions :table="tableQueryRef" />
+      </template>
+    </BusinessWorkspaceHeader>
 
     <ArtTableQuery
+      ref="tableQueryRef"
       v-model="table.searchQuery"
       :search-items="table.searchItems"
       :api-fn="fetchTableData"
       :columns-factory="table.columnsFactory"
+      :header-actions="headerActions"
+      header-actions-placement="workspace"
       :search-bar-props="{ span: 6, labelWidth: 90 }"
       :table-props="table.props"
       :on-success="handleTableSuccess"
@@ -33,9 +40,15 @@
     type BusinessWorkspaceMetric
   } from '@/components/business/business-workspace-header/index.vue'
   import type { SearchFormItem } from '@/components/core/forms/art-search-bar/index.vue'
-  import type { ArtTableQueryProps } from '@/components/core/tables/art-table-query/index.vue'
+  import type {
+    ArtTableQueryExpose,
+    ArtTableQueryHeaderAction,
+    ArtTableQueryExcelColumn,
+    ArtTableQueryProps
+  } from '@/components/core/tables/art-table-query/index.vue'
   import type { ColumnOption } from '@/types'
-  import { fetchVehicleArchiveList } from '@vms/api'
+  import { exportVehicleArchiveList, fetchVehicleArchiveList } from '@vms/api'
+  import BusinessTableWorkspaceActions from '@/components/business/business-table-workspace-actions/index.vue'
   import { useUserStore } from '@/store/modules/user'
   import { buildSupabasePageRange } from '@/utils/supabase/pagination'
   import { formatDate, formatMileage } from './modules/query-format'
@@ -70,6 +83,7 @@
   }
 
   const router = useRouter()
+  const tableQueryRef = ref<ArtTableQueryExpose>()
   const { getDictMap } = storeToRefs(useUserStore())
   const overview = reactive<{ total: number; rows: VehicleQueryRow[] }>({
     total: 0,
@@ -109,13 +123,38 @@
     }
   ])
 
+  const exportColumns: ArtTableQueryExcelColumn[] = [
+    { key: 'plateNo', title: '车牌号' },
+    { key: 'companyName', title: '所属公司' },
+    { key: 'vehicleType', title: '车型' },
+    { key: 'manufacturer', title: '车辆厂商' },
+    { key: 'operationStatus', title: '营运状态' },
+    { key: 'auditStatus', title: '审核状态' }
+  ]
+  const headerActions: ArtTableQueryHeaderAction[] = [
+    {
+      type: 'export',
+      permission: 'VehicleQuery:Export',
+      exportFilename: '车辆综合查询',
+      exportSheetName: '车辆综合查询',
+      exportColumns,
+      exportApi: ({ selectedIds, searchParams, maxRows }) =>
+        exportVehicleArchiveList({
+          ...(searchParams as SearchParams),
+          ids: selectedIds.map(String),
+          maxRows
+        })
+    }
+  ]
+
   const table: UnwrapNestedRefs<TableGroup> = reactive<TableGroup>({
     searchQuery: {
       companyName: '',
       plateNo: '',
       manufacturer: '',
       vin: '',
-      operationStatus: undefined
+      operationStatus: undefined,
+      auditStatus: undefined
     },
     searchItems: computed<SearchFormItem[]>(() => [
       {
@@ -151,6 +190,12 @@
         key: 'operationStatus',
         type: 'select',
         props: { options: getDictMap.value.vehicleOperationStatus ?? [], clearable: true }
+      },
+      {
+        label: '审核状态',
+        key: 'auditStatus',
+        type: 'select',
+        props: { options: getDictMap.value.vehicleAuditStatus ?? [], clearable: true }
       }
     ]),
     columnsFactory: () => [
@@ -174,6 +219,12 @@
         label: '营运状态',
         width: 110,
         dict: { code: 'vehicleOperationStatus', display: 'auto' }
+      },
+      {
+        prop: 'auditStatus',
+        label: '审核状态',
+        width: 110,
+        dict: { code: 'vehicleAuditStatus', display: 'auto' }
       },
       {
         prop: 'lifecycle',
@@ -238,7 +289,6 @@
     const { from, to } = buildSupabasePageRange({ current: params.current, size: params.size })
     const result = await fetchVehicleArchiveList({
       ...params,
-      auditStatus: 'approved',
       from,
       to
     })

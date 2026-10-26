@@ -9,6 +9,7 @@ export type VehicleArchiveForm = VehicleArchive & {
   primaryDriverPhone: string
   secondaryDriverName: string
   secondaryDriverPhone: string
+  vehicleAgeDisplay: string
 }
 
 export type VehicleArchiveWritePayload = Record<string, unknown> & { id?: string }
@@ -41,6 +42,9 @@ const SENSITIVE_PAYLOAD_KEYS: Record<Api.Vms.ArchiveManage.VehicleArchiveFieldKe
   documents: [
     'drivingLicenseFrontUrl',
     'drivingLicenseBackUrl',
+    'drivingLicenseBackReverseUrl',
+    'personVehiclePhotoUrl',
+    'vehicleHeadPhotoUrl',
     'operationLicenseUrl',
     'attachments'
   ],
@@ -129,6 +133,8 @@ export function createInitialVehicleArchiveForm(): VehicleArchiveForm {
     ratedTorqueSpeed: null,
     engineTorque: null,
     plateColor: '',
+    purchaseDate: '',
+    vehicleAgeDisplay: '',
     transportIndustry: '',
     operationType: '',
     ownerName: '',
@@ -154,9 +160,12 @@ export function createInitialVehicleArchiveForm(): VehicleArchiveForm {
     vehiclePhotoUrl: '',
     drivingLicenseFrontUrl: '',
     drivingLicenseBackUrl: '',
+    drivingLicenseBackReverseUrl: '',
+    personVehiclePhotoUrl: '',
+    vehicleHeadPhotoUrl: '',
     operationLicenseUrl: '',
     attachments: [],
-    auditStatus: 'pending',
+    auditStatus: 'draft',
     auditRemark: '',
     fieldAccess: { ...EDITABLE_FIELD_ACCESS },
     isRecordOwner: false
@@ -180,6 +189,7 @@ export function sanitizeVehicleArchivePayload(
     'primaryDriverPhone',
     'secondaryDriverName',
     'secondaryDriverPhone',
+    'vehicleAgeDisplay',
     'ownerId',
     'specLengthM',
     'volumeM3',

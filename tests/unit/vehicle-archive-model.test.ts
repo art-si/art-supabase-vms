@@ -45,6 +45,9 @@ test('vehicle archive payload omits sensitive fields without edit permission', (
     mailingAddress: '上海市测试路 1 号',
     operationRoute: '上海—苏州',
     drivingLicenseFrontUrl: 'https://example.test/license-front.jpg',
+    drivingLicenseBackReverseUrl: 'https://example.test/license-reverse.jpg',
+    personVehiclePhotoUrl: 'https://example.test/person-vehicle.jpg',
+    vehicleHeadPhotoUrl: 'https://example.test/vehicle-head.jpg',
     acCode: 'AC-001',
     fieldAccess: {
       vehicleIdentifiers: 'view',
@@ -66,6 +69,9 @@ test('vehicle archive payload omits sensitive fields without edit permission', (
   assert.equal('mailingAddress' in payload, false)
   assert.equal('operationRoute' in payload, false)
   assert.equal('drivingLicenseFrontUrl' in payload, false)
+  assert.equal('drivingLicenseBackReverseUrl' in payload, false)
+  assert.equal('personVehiclePhotoUrl' in payload, false)
+  assert.equal('vehicleHeadPhotoUrl' in payload, false)
   assert.equal('attachments' in payload, false)
   assert.equal('acCode' in payload, false)
 })
@@ -108,6 +114,7 @@ test('vehicle archive payload keeps the OCR artifact marker on create and edit',
 test('vehicle archive keeps the selected type and ownership while server fills its metrics', () => {
   const form = createInitialVehicleArchiveForm()
   assert.equal(form.vehicleOwnership, 'self_operated')
+  assert.equal(form.auditStatus, 'draft')
 
   Object.assign(form, {
     vehicleTypeProfileId: 'profile-1',
@@ -118,6 +125,8 @@ test('vehicle archive keeps the selected type and ownership while server fills i
     loadTons: 30,
     ownerId: 'legacy-owner'
   })
+  form.vehicleAgeDisplay = '3 年 2 个月'
+  form.purchaseDate = '2023-08-01'
 
   const payload = sanitizeVehicleArchivePayload(form)
   assert.equal(payload.vehicleTypeProfileId, 'profile-1')
@@ -126,6 +135,8 @@ test('vehicle archive keeps the selected type and ownership while server fills i
   assert.equal('volumeM3' in payload, false)
   assert.equal('loadTons' in payload, false)
   assert.equal('ownerId' in payload, false)
+  assert.equal('vehicleAgeDisplay' in payload, false)
+  assert.equal(payload.purchaseDate, '2023-08-01')
 })
 
 test('vehicle archive payload respects required and nullable database fields', () => {

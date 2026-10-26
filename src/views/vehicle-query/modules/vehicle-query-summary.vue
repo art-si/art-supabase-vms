@@ -75,6 +75,11 @@
         dictCode: 'vehicleOperationStatus'
       },
       {
+        label: '审核状态',
+        value: props.vehicle.auditStatus,
+        dictCode: 'vehicleAuditStatus'
+      },
+      {
         label: '运营时长',
         value: years === null ? undefined : formatNumberValue(years),
         suffix: '年'

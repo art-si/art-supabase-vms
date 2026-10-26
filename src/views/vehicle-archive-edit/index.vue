@@ -18,6 +18,20 @@
     <div ref="pageRef" class="vehicle-archive-edit__content">
       <ElTabs v-model="page.activeTab" class="vehicle-archive-edit__tabs art-card-xs">
         <ElTabPane v-if="hasAuth('VehicleArchive:TabBasic')" label="基础信息" name="basic">
+          <div class="vehicle-archive-edit__vehicle-photo">
+            <ArtUploadImage
+              v-model="form.vehiclePhotoUrl"
+              :resource-tenant-id="form.tenantId"
+              title="车辆图片"
+              :size="120"
+              :limit="1"
+              :readonly="!form.tenantId || !hasAuth(savePermission)"
+            />
+            <div>
+              <strong>车辆图片</strong>
+              <p>上传车辆外观照片，便于调度和车管快速识别。</p>
+            </div>
+          </div>
           <ArtForm
             ref="basicFormRef"
             :model-value="form"
@@ -51,7 +65,41 @@
             </template>
           </ArtForm>
 
-          <section class="vehicle-archive-edit__section vehicle-archive-edit__certificate-panel">
+          <div class="vehicle-archive-edit__trailer-field">
+            <div>
+              <strong>默认挂车</strong>
+              <p>可从挂车档案参选；牵引车与挂车的默认关系会同步更新。</p>
+            </div>
+            <div class="vehicle-archive-edit__trailer-actions">
+              <ArtTableSingleSelect
+                v-model="defaultTrailerId"
+                v-model:selected-data="defaultTrailerSelection"
+                :api-fn="fetchDefaultTrailerOptions"
+                :columns="defaultTrailerColumns"
+                row-key="id"
+                label-key="plateNo"
+                description-key="trailerType"
+                title="参选默认挂车"
+                search-placeholder="输入挂车车牌号"
+                placeholder="请选择默认挂车"
+                :disabled="
+                  !isEdit || page.saving || trailerSaving || !hasAuth('VehicleArchive:Edit')
+                "
+                clearable
+                show-pagination
+                @change="handleDefaultTrailerChange"
+              />
+              <span v-if="!isEdit">先保存车辆档案后参选</span>
+              <ElButton v-if="defaultTrailerError" link type="primary" @click="loadDefaultTrailer"
+                >加载失败，重试</ElButton
+              >
+            </div>
+          </div>
+
+          <section
+            v-if="canViewArchiveField('documents')"
+            class="vehicle-archive-edit__section vehicle-archive-edit__certificate-panel"
+          >
             <header class="vehicle-archive-edit__certificate-heading">
               <div>
                 <ArtSectionTitle :show-line="false">车辆证件影像</ArtSectionTitle>
@@ -59,9 +107,28 @@
               </div>
               <span>{{ certificateFilledCount }}/{{ visibleCertificateItems.length }} 已完成</span>
             </header>
+            <div
+              class="vehicle-archive-edit__image-switch"
+              role="tablist"
+              aria-label="车辆证件影像"
+            >
+              <button
+                v-for="item in visibleCertificateItems"
+                :key="item.key"
+                type="button"
+                role="tab"
+                :aria-selected="activeImageKey === item.key"
+                :class="{ 'is-current': activeImageKey === item.key }"
+                @click="activeImageKey = item.key"
+              >
+                {{ item.label }}<span v-if="form[item.key]" aria-label="已上传">✓</span>
+              </button>
+            </div>
             <div class="vehicle-archive-edit__images">
               <div
-                v-for="item in visibleCertificateItems"
+                v-for="item in visibleCertificateItems.filter(
+                  (candidate) => candidate.key === activeImageKey
+                )"
                 :key="item.key"
                 class="vehicle-archive-edit__certificate-item"
               >
@@ -177,8 +244,22 @@
       hint="带 * 的信息为必填项；提交前请确认车辆、证件与运营信息完整。"
     >
       <ElButton :disabled="page.saving" @click="goBack">取消</ElButton>
-      <ElButton v-auth="savePermission" type="primary" :loading="page.saving" @click="handleSave">
-        {{ saveButtonLabel }}
+      <ElButton
+        v-auth="savePermission"
+        :type="canSubmitForApproval ? undefined : 'primary'"
+        :loading="page.saving"
+        @click="handleSave(false)"
+      >
+        {{ isEdit ? '保存资料' : '保存草稿' }}
+      </ElButton>
+      <ElButton
+        v-if="canSubmitForApproval"
+        v-auth="'VehicleArchive:Submit'"
+        type="primary"
+        :loading="page.saving"
+        @click="handleSave(true)"
+      >
+        {{ originalAuditStatus === 'rejected' ? '保存并重新提交' : '保存并提交审核' }}
       </ElButton>
     </ArtStickyActionBar>
     <VehicleTypePicker ref="vehicleTypePickerRef" @selected="handleVehicleTypeSelected" />
@@ -253,6 +334,9 @@
     addVehicleArchive,
     analyzeVehicleDocumentByAi,
     editVehicleArchive,
+    fetchDefaultTrailer,
+    fetchTrailerOptions,
+    setDefaultTrailer,
     fetchCarrierOptions,
     fetchDriverOptions,
     fetchVehicleArchiveDetail,
@@ -260,7 +344,8 @@
     type VmsCarrierReference,
     type VmsDriverReference,
     type VehicleDocumentOcrType,
-    type VehicleDocumentOcrResult
+    type VehicleDocumentOcrResult,
+    type TrailerOption
   } from '@vms/api'
   import { useUserStore } from '@/store/modules/user'
   import { useTenantScopeStore } from '@/store/modules/tenant-scope'
@@ -270,6 +355,7 @@
   import { attachmentTableLink } from '@/components/core/media/art-file-viewer/table-link'
   import { canEditField, canViewField } from '@/utils/field-permission'
   import { getFriendlySupabaseErrorMessage } from '@/utils/supabase'
+  import dayjs from 'dayjs'
   import {
     createInitialVehicleArchiveForm,
     requiresVehicleArchiveResubmission,
@@ -279,6 +365,11 @@
   } from './modules/vehicle-archive-model'
   import VehicleTypeTab from './modules/vehicle-type-tab.vue'
   import VehicleTypePicker from './modules/vehicle-type-picker.vue'
+  import ArtTableSingleSelect from '@/components/core/forms/art-data-select/table-single.vue'
+  import type {
+    DataSelectColumn,
+    DataSelectFetchParams
+  } from '@/components/core/forms/art-data-select/types'
   import type { VehicleTypeProfile } from './modules/vehicle-type-catalog'
 
   defineOptions({ name: 'VehicleArchiveEdit' })
@@ -291,23 +382,33 @@
   type ArchiveTabName = 'basic' | 'body' | 'engine' | 'other' | 'types'
   type BooleanDictOption = Omit<Api.DataCenter.DictListItem, 'value'> & { value: boolean }
   type ImageKey =
-    'vehiclePhotoUrl' | 'drivingLicenseFrontUrl' | 'drivingLicenseBackUrl' | 'operationLicenseUrl'
+    | 'vehiclePhotoUrl'
+    | 'drivingLicenseFrontUrl'
+    | 'drivingLicenseBackUrl'
+    | 'drivingLicenseBackReverseUrl'
+    | 'personVehiclePhotoUrl'
+    | 'vehicleHeadPhotoUrl'
+    | 'operationLicenseUrl'
 
   const originalAuditStatus = ref<VehicleArchive['auditStatus']>()
   const shouldResubmit = computed(
     () => isEdit.value && requiresVehicleArchiveResubmission(originalAuditStatus.value)
   )
+  const canSubmitForApproval = computed(
+    () =>
+      hasAuth('VehicleArchive:Submit') &&
+      hasAuth(savePermission.value) &&
+      (!isEdit.value || originalAuditStatus.value === 'draft' || shouldResubmit.value)
+  )
   const pageSubtitle = computed(() =>
     shouldResubmit.value
-      ? '修正驳回问题；保存成功后将自动重新提交审批'
+      ? '修正驳回问题；可先保存资料，再明确提交审批'
       : isEdit.value
-        ? '维护车辆基础资料、车身参数、发动机参数和运营信息'
-        : '填写完整车辆资料；提交后将自动进入配置的审批流程'
+        ? originalAuditStatus.value === 'draft'
+          ? '档案已建立，继续完善车辆、证照与运营资料后提交审核'
+          : '维护车辆基础资料、车身参数、发动机参数和运营信息'
+        : '填写车辆资料，可保存草稿或提交审核'
   )
-  const saveButtonLabel = computed(() => {
-    if (!isEdit.value) return '提交审核'
-    return shouldResubmit.value ? '保存并重新提交' : '保存'
-  })
 
   interface FormExpose {
     validate: () => Promise<boolean>
@@ -331,6 +432,7 @@
     vehicleOwnership: ComputedRef<Api.DataCenter.DictListItem[]>
     originType: ComputedRef<Api.DataCenter.DictListItem[]>
     color: ComputedRef<Api.DataCenter.DictListItem[]>
+    plateColor: ComputedRef<Api.DataCenter.DictListItem[]>
     businessType: ComputedRef<Api.DataCenter.DictListItem[]>
     operationStatus: ComputedRef<Api.DataCenter.DictListItem[]>
     purchaseStatus: ComputedRef<Api.DataCenter.DictListItem[]>
@@ -368,10 +470,27 @@
       selectedId?: string | null
     }) => Promise<void>
   }>()
+  const defaultTrailer = shallowRef<TrailerOption | null>(null)
+  const defaultTrailerError = ref(false)
+  const trailerSaving = ref(false)
+  const defaultTrailerId = ref<string>()
+  const defaultTrailerSelection = ref<TrailerOption[]>([])
+  const defaultTrailerColumns: DataSelectColumn<TrailerOption>[] = [
+    { prop: 'plateNo', label: '车牌号', width: 150 },
+    {
+      prop: 'plateColor',
+      label: '车牌颜色',
+      width: 110,
+      dict: { code: 'vehiclePlateColor', display: 'auto' }
+    },
+    { prop: 'trailerType', label: '挂车类型', minWidth: 170 }
+  ]
   const ocrReviewDialogRef = ref<ArtDialogExpose<VehicleDocumentOcrResult>>()
   const ocrResult = ref<VehicleDocumentOcrResult | null>(null)
   const ocrDocumentType = ref<VehicleDocumentOcrType>('driving_license')
   const ocrBusyKey = ref<ImageKey | null>(null)
+  const activeImageKey = ref<ImageKey>('drivingLicenseFrontUrl')
+  const submitIntent = ref(false)
   const ocrReplaceExisting = ref(false)
   const formTabs: FormTab[] = [
     { name: 'basic', formRef: basicFormRef },
@@ -427,9 +546,15 @@
   })
 
   const options: UnwrapNestedRefs<OptionGroup> = reactive<OptionGroup>({
-    vehicleOwnership: computed(() => getDictMap.value.vehicleOwnership ?? []),
+    vehicleOwnership: computed(() =>
+      (getDictMap.value.vehicleOwnership ?? []).map((item) => ({
+        ...item,
+        disabled: Boolean(item.status && item.status !== '1')
+      }))
+    ),
     originType: computed(() => getDictMap.value.vehicleOriginType ?? []),
     color: computed(() => getDictMap.value.vehicleColor ?? []),
+    plateColor: computed(() => getDictMap.value.vehiclePlateColor ?? []),
     businessType: computed(() => getDictMap.value.vehicleBusinessType ?? []),
     operationStatus: computed(() => getDictMap.value.vehicleOperationStatus ?? []),
     purchaseStatus: computed(() => getDictMap.value.vehiclePurchaseStatus ?? []),
@@ -450,6 +575,22 @@
   const createInitialForm = createInitialVehicleArchiveForm
 
   const form = reactive<VehicleArchiveForm>(createInitialForm())
+  watch(
+    () => form.purchaseDate,
+    (date) => {
+      const purchased = dayjs(date)
+      if (!date || !purchased.isValid() || purchased.isAfter(dayjs())) {
+        form.vehicleAgeDisplay = ''
+        return
+      }
+      const months = dayjs().diff(purchased, 'month')
+      form.vehicleAgeDisplay =
+        months < 12
+          ? `${months} 个月`
+          : `${Math.floor(months / 12)} 年${months % 12 ? ` ${months % 12} 个月` : ''}`
+    },
+    { immediate: true }
+  )
   const archiveNumber = useDocumentNumberRule('vehicle.archive_self', () => form.tenantId)
 
   const canViewArchiveField = (field: Api.Vms.ArchiveManage.VehicleArchiveFieldKey): boolean =>
@@ -512,10 +653,20 @@
         trigger: 'change'
       }
     ],
-    registerDate: [{ required: true, message: '请选择登记日期', trigger: 'change' }],
-    issueDate: [{ required: true, message: '请选择发证日期', trigger: 'change' }],
-    invoiceDate: [{ required: true, message: '请选择购入开票日期', trigger: 'change' }],
-    startUseDate: [{ required: true, message: '请选择启用日期', trigger: 'change' }],
+    plateColor: [{ required: true, message: '请选择车牌颜色', trigger: 'change' }],
+    vehicleOwnership: [{ required: true, message: '请选择车辆归属', trigger: 'change' }],
+    registerDate: submitIntent.value
+      ? [{ required: true, message: '请选择登记日期', trigger: 'change' }]
+      : [],
+    issueDate: submitIntent.value
+      ? [{ required: true, message: '请选择发证日期', trigger: 'change' }]
+      : [],
+    invoiceDate: submitIntent.value
+      ? [{ required: true, message: '请选择购入开票日期', trigger: 'change' }]
+      : [],
+    startUseDate: submitIntent.value
+      ? [{ required: true, message: '请选择启用日期', trigger: 'change' }]
+      : [],
     operationStatus: [{ required: true, message: '请选择营运状态', trigger: 'change' }]
   }))
 
@@ -527,8 +678,53 @@
 
   const basicItems = computed<FormItem[]>(() =>
     [
-      { label: '车辆身份与归属', key: 'identitySection', type: 'divider', span: 24 },
+      { label: '车辆基础信息', key: 'identitySection', type: 'divider', span: 24 },
       { label: '车牌号', key: 'plateNo', type: 'input' },
+      {
+        label: '车牌颜色',
+        key: 'plateColor',
+        type: 'select',
+        props: { options: options.plateColor }
+      },
+      {
+        label: '车型',
+        key: 'vehicleType',
+        type: 'input',
+        span: 6
+      },
+      {
+        label: '规格 / 车长（米）',
+        key: 'specLengthM',
+        type: 'input',
+        span: 6,
+        props: derivedMetricInputProps
+      },
+      {
+        label: '容积（立方米）',
+        key: 'volumeM3',
+        type: 'input',
+        span: 6,
+        props: derivedMetricInputProps
+      },
+      {
+        label: '载重（吨）',
+        key: 'loadTons',
+        type: 'input',
+        span: 6,
+        props: derivedMetricInputProps
+      },
+      { label: '购置时间', key: 'purchaseDate', type: 'date', span: 12, props: dateProps },
+      {
+        label: '车辆年限',
+        key: 'vehicleAgeDisplay',
+        type: 'input',
+        span: 12,
+        props: {
+          readonly: true,
+          placeholder: '选择购置时间后自动计算',
+          class: 'vehicle-archive-edit__derived-input'
+        }
+      },
       ...(tenantScopeStore.isAllTenants && !isEdit.value
         ? [
             {
@@ -651,33 +847,6 @@
         props: { options: options.color }
       },
       { label: '车型与运力', key: 'capacitySection', type: 'divider', span: 24 },
-      {
-        label: '车型',
-        key: 'vehicleType',
-        type: 'input',
-        span: 6
-      },
-      {
-        label: '规格 / 车长（米）',
-        key: 'specLengthM',
-        type: 'input',
-        span: 6,
-        props: derivedMetricInputProps
-      },
-      {
-        label: '容积（立方米）',
-        key: 'volumeM3',
-        type: 'input',
-        span: 6,
-        props: derivedMetricInputProps
-      },
-      {
-        label: '载重（吨）',
-        key: 'loadTons',
-        type: 'input',
-        span: 6,
-        props: derivedMetricInputProps
-      },
       { label: '吨位/座位', key: 'tonnageOrSeat', type: 'input' },
       {
         label: '核定乘员数',
@@ -933,7 +1102,6 @@
   const otherItems = computed<FormItem[]>(() =>
     [
       { label: '车主与联系', key: 'ownerContactSection', type: 'divider', span: 24 },
-      { label: '车牌颜色', key: 'plateColor', type: 'select', props: { options: options.color } },
       {
         label: '运输行业',
         key: 'transportIndustry',
@@ -999,7 +1167,7 @@
       { label: '主司机姓名', key: 'primaryDriverName', type: 'input', props: { readonly: true } },
       { label: '主司机电话', key: 'primaryDriverPhone', type: 'input', props: { readonly: true } },
       {
-        label: '辅司机',
+        label: '备用司机',
         key: 'secondaryDriverId',
         type: 'select',
         span: 8,
@@ -1023,7 +1191,7 @@
           filterable: true,
           clearable: true,
           disabled: !form.carrierId,
-          placeholder: form.carrierId ? '请选择辅司机' : '请先选择所属承运商',
+          placeholder: form.carrierId ? '请选择备用司机' : '请先选择所属承运商',
           onVisibleChange: (visible: boolean) => {
             if (visible && form.carrierId)
               void otherFormRef.value?.reloadOptions('secondaryDriverId')
@@ -1042,9 +1210,14 @@
           }
         }
       },
-      { label: '辅司机姓名', key: 'secondaryDriverName', type: 'input', props: { readonly: true } },
       {
-        label: '辅司机电话',
+        label: '备用司机姓名',
+        key: 'secondaryDriverName',
+        type: 'input',
+        props: { readonly: true }
+      },
+      {
+        label: '备用司机电话',
         key: 'secondaryDriverPhone',
         type: 'input',
         props: { readonly: true }
@@ -1116,15 +1289,15 @@
   }
 
   const certificateItems: Array<{ key: ImageKey; label: string }> = [
-    { key: 'vehiclePhotoUrl', label: '车辆照片' },
-    { key: 'drivingLicenseFrontUrl', label: '行驶证正页' },
+    { key: 'drivingLicenseFrontUrl', label: '行驶证主页' },
     { key: 'drivingLicenseBackUrl', label: '行驶证副页' },
+    { key: 'drivingLicenseBackReverseUrl', label: '副页背面照' },
+    { key: 'personVehiclePhotoUrl', label: '人车合影' },
+    { key: 'vehicleHeadPhotoUrl', label: '车辆大头照' },
     { key: 'operationLicenseUrl', label: '运营证照片' }
   ]
   const visibleCertificateItems = computed(() =>
-    certificateItems.filter(
-      (item) => item.key === 'vehiclePhotoUrl' || canViewArchiveField('documents')
-    )
+    canViewArchiveField('documents') ? certificateItems : []
   )
   const certificateFilledCount = computed(
     () => visibleCertificateItems.value.filter((item) => Boolean(form[item.key])).length
@@ -1276,6 +1449,7 @@
         'vehicleOriginType',
         'vehicleTypeCategory',
         'vehicleColor',
+        'vehiclePlateColor',
         'vehicleBusinessType',
         'vehicleOperationStatus',
         'vehiclePurchaseStatus',
@@ -1321,8 +1495,12 @@
           drivingLicenseFrontUrl: '',
           drivingLicenseBackUrl: '',
           operationLicenseUrl: '',
+          drivingLicenseBackReverseUrl: '',
+          personVehiclePhotoUrl: '',
+          vehicleHeadPhotoUrl: '',
+          vehiclePhotoUrl: '',
           attachments: [],
-          auditStatus: 'pending',
+          auditStatus: 'draft',
           auditRemark: ''
         })
         return
@@ -1340,6 +1518,49 @@
     if (!data) throw new Error('车辆档案不存在或无权访问')
     originalAuditStatus.value = data.auditStatus
     replaceForm({ ...createInitialForm(), ...data, attachments: data.attachments ?? [] })
+    await loadDefaultTrailer()
+  }
+
+  const loadDefaultTrailer = async (): Promise<void> => {
+    if (!isEdit.value) return
+    const result = await fetchDefaultTrailer(String(route.params.id))
+    defaultTrailerError.value = Boolean(result.error)
+    if (!result.error) {
+      defaultTrailer.value = result.data ?? null
+      defaultTrailerId.value = result.data?.id
+      defaultTrailerSelection.value = result.data ? [result.data] : []
+    }
+  }
+
+  const fetchDefaultTrailerOptions = async (params: DataSelectFetchParams) => {
+    return await fetchTrailerOptions({
+      vehicleId: String(route.params.id),
+      keyword: params.keyword,
+      from: (params.page - 1) * params.pageSize,
+      to: params.page * params.pageSize - 1
+    })
+  }
+
+  const handleDefaultTrailerChange = async (
+    _value: unknown,
+    rows: TrailerOption[]
+  ): Promise<void> => {
+    const prior = defaultTrailer.value
+    trailerSaving.value = true
+    try {
+      const result = await setDefaultTrailer({
+        vehicleId: String(route.params.id),
+        trailerId: rows[0]?.id ?? null
+      })
+      if (result.error) throw result.error
+      defaultTrailer.value = result.data ?? rows[0] ?? null
+      defaultTrailerError.value = false
+    } catch {
+      defaultTrailerId.value = prior?.id
+      defaultTrailerSelection.value = prior ? [prior] : []
+    } finally {
+      trailerSaving.value = false
+    }
   }
 
   const replaceForm = (nextForm: VehicleArchiveForm): void => {
@@ -1374,7 +1595,9 @@
     return true
   }
 
-  const handleSave = async (): Promise<void> => {
+  const handleSave = async (submitForApproval: boolean): Promise<void> => {
+    submitIntent.value = submitForApproval
+    await nextTick()
     const valid = await validateForms()
     if (!valid) return
 
@@ -1382,8 +1605,8 @@
     try {
       const payload = sanitizeVehicleArchivePayload(toRaw(form))
       if (isEdit.value) {
-        await editVehicleArchive(payload, { showMessage: !shouldResubmit.value })
-        if (shouldResubmit.value) {
+        await editVehicleArchive(payload, { showMessage: !submitForApproval })
+        if (submitForApproval) {
           await submitVehicleArchiveForApproval(
             String(payload.id),
             String(payload.plateNo || '未编号车辆')
@@ -1392,10 +1615,12 @@
       } else {
         const response = await addVehicleArchive(payload, { showMessage: false })
         if (!response.data?.id) throw new Error('车辆档案创建成功，但未返回档案 ID')
-        await submitVehicleArchiveForApproval(
-          response.data.id,
-          String(payload.plateNo || '未编号车辆')
-        )
+        if (submitForApproval) {
+          await submitVehicleArchiveForApproval(
+            response.data.id,
+            String(payload.plateNo || '未编号车辆')
+          )
+        }
       }
       goBack()
     } finally {
@@ -1509,6 +1734,59 @@
       flex: none;
       // Sticky 向上偏移时会压缩视觉间距，提前补偿以稳定保持 16px 卡片间隔。
       margin-top: calc(var(--art-space-4) + var(--art-sticky-offset));
+    }
+
+    &__vehicle-photo {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      padding: 12px 0 18px;
+
+      strong {
+        font-size: 14px;
+        color: var(--el-text-color-primary);
+      }
+
+      p {
+        margin: 6px 0 0;
+        font-size: 12px;
+        color: var(--el-text-color-secondary);
+      }
+    }
+
+    &__trailer-field {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px 20px;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px;
+      margin-top: 8px;
+      background: var(--el-fill-color-extra-light);
+      border-radius: var(--art-control-radius);
+
+      strong {
+        font-size: 14px;
+        color: var(--el-text-color-primary);
+      }
+
+      p {
+        margin: 4px 0 0;
+        font-size: 12px;
+        color: var(--el-text-color-secondary);
+      }
+    }
+
+    &__trailer-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+
+      > span {
+        font-size: 12px;
+        color: var(--el-text-color-secondary);
+      }
     }
 
     &__type-trigger {
@@ -1636,16 +1914,52 @@
 
     &__images {
       display: grid;
-      grid-template-columns: repeat(4, minmax(120px, 1fr));
+      grid-template-columns: minmax(0, 1fr);
       gap: 16px;
-      justify-items: center;
+      justify-items: start;
+    }
+
+    &__image-switch {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 16px;
+
+      button {
+        display: inline-flex;
+        gap: 6px;
+        align-items: center;
+        min-height: 36px;
+        padding: 6px 12px;
+        color: var(--el-text-color-regular);
+        cursor: pointer;
+        background: var(--el-bg-color);
+        border: 1px solid var(--el-border-color-light);
+        border-radius: var(--art-control-radius);
+
+        &.is-current {
+          font-weight: 600;
+          color: var(--el-color-primary);
+          background: var(--el-color-primary-light-9);
+          border-color: var(--el-color-primary-light-5);
+        }
+
+        &:focus-visible {
+          outline: 2px solid var(--el-color-primary);
+          outline-offset: 2px;
+        }
+
+        span {
+          color: var(--el-color-success);
+        }
+      }
     }
 
     &__certificate-item {
       display: flex;
       flex-direction: column;
       gap: 8px;
-      align-items: center;
+      align-items: flex-start;
       min-width: 0;
     }
 
@@ -1681,18 +1995,6 @@
 
     :deep(.el-tabs__content) {
       padding-top: 8px;
-    }
-
-    @media (width <= 760px) {
-      &__images {
-        grid-template-columns: repeat(2, minmax(120px, 1fr));
-      }
-    }
-
-    @media (width <= 420px) {
-      &__images {
-        grid-template-columns: 1fr;
-      }
     }
   }
 </style>

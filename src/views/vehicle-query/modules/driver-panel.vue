@@ -10,12 +10,16 @@
   import VehicleQueryTable from './vehicle-query-table.vue'
   import type { VehicleArchive, VehicleDriver } from './types'
   import { canViewField } from '@/utils/field-permission'
+  import { RouterLink } from 'vue-router'
+  import { h } from 'vue'
+  import { useAuth } from '@/hooks/core/useAuth'
 
   defineOptions({ name: 'VehicleQueryDriverPanel' })
 
   const props = defineProps<{
     vehicle: VehicleArchive
   }>()
+  const { hasAuth } = useAuth()
 
   const drivers = computed<VehicleDriver[]>(() =>
     [props.vehicle.primaryDriver, props.vehicle.secondaryDriver].filter(
@@ -25,7 +29,23 @@
 
   const columns = computed<ColumnOption<VehicleDriver>[]>(() => [
     { type: 'globalIndex', label: '序号', width: 70 },
-    { prop: 'driverName', label: '司机姓名', minWidth: 140 },
+    {
+      prop: 'driverName',
+      label: '司机姓名',
+      minWidth: 140,
+      formatter: (row) =>
+        hasAuth('TmsDriverQuery:View') && row.id
+          ? h(
+              RouterLink,
+              {
+                to: `/tms/driver-query/detail/${row.id}`,
+                class:
+                  'text-[var(--el-color-primary)] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2'
+              },
+              () => row.driverName
+            )
+          : row.driverName
+    },
     {
       prop: 'driverType',
       label: '司机类型',
@@ -53,7 +73,11 @@
       prop: 'enabled',
       label: '状态',
       width: 100,
-      dict: { code: 'commonBoolean', display: 'tag', value: (row) => String(row.enabled ?? '') }
+      dict: {
+        code: 'commonEnabledStatus',
+        display: 'tag',
+        value: (row) => (row.enabled == null ? '' : row.enabled ? 'enabled' : 'disabled')
+      }
     }
   ])
 </script>

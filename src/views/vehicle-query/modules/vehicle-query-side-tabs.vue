@@ -34,8 +34,8 @@
 <style scoped lang="scss">
   .vehicle-query-side-tabs {
     width: 136px;
-    height: 100%;
-    min-height: 100%;
+    height: clamp(280px, calc(100vh - 330px), 720px);
+    min-height: 0;
     background: var(--el-bg-color);
     border-right: 1px solid var(--el-border-color-lighter);
 

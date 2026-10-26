@@ -39,7 +39,7 @@ declare global {
       }
 
       namespace ArchiveManage {
-        type AuditStatus = 'pending' | 'approved' | 'rejected'
+        type AuditStatus = 'draft' | 'pending' | 'approved' | 'rejected'
         type VehicleArchiveFieldKey =
           | 'vehicleIdentifiers'
           | 'ownerIdentity'
@@ -89,6 +89,7 @@ declare global {
           registerDate?: string
           issueDate?: string
           invoiceDate?: string
+          purchaseDate?: string
           startUseDate?: string
           serviceYears?: number | null
           approvedPassengerCount?: number | null
@@ -160,6 +161,9 @@ declare global {
           vehiclePhotoUrl?: string
           drivingLicenseFrontUrl?: string
           drivingLicenseBackUrl?: string
+          drivingLicenseBackReverseUrl?: string
+          personVehiclePhotoUrl?: string
+          vehicleHeadPhotoUrl?: string
           operationLicenseUrl?: string
           attachments?: VehicleAttachment[]
 

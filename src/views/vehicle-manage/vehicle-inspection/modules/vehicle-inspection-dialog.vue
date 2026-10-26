@@ -18,7 +18,7 @@
           <ArtTableSingleSelect
             v-model="vehicleSelectValue"
             v-model:selected-data="form.vehicleSelection"
-            :api-fn="fetchVehicleSelectData"
+            :api-fn="fetchApprovedVehicleSelectData"
             :columns="vehicleColumns"
             row-key="id"
             label-key="plateNo"
@@ -81,8 +81,11 @@
   import ArtSectionTitle from '@/components/core/surfaces/art-section-title/index.vue'
   import ArtTable from '@/components/core/tables/art-table/index.vue'
   import type { ColumnOption } from '@/types'
-  import { addVehicleInspection, editVehicleInspection, fetchVehicleArchiveList } from '@vms/api'
-  import { buildSupabasePageRange } from '@/utils/supabase/pagination'
+  import {
+    addVehicleInspection,
+    editVehicleInspection,
+    fetchApprovedVehicleSelectData
+  } from '@vms/api'
   import { getFileExtension } from '@/utils/file'
   import { attachmentTableLink } from '@/components/core/media/art-file-viewer/table-link'
   import { canEditField, canViewField } from '@/utils/field-permission'
@@ -266,21 +269,6 @@
       )
     }
   ])
-
-  const fetchVehicleSelectData = async (params: {
-    page: number
-    pageSize: number
-    keyword?: string
-  }) => {
-    const { from, to } = buildSupabasePageRange({ current: params.page, size: params.pageSize })
-    const { data, total } = await fetchVehicleArchiveList({
-      plateNo: params.keyword,
-      auditStatus: 'approved',
-      from,
-      to
-    })
-    return { data: data ?? [], total: total ?? 0 }
-  }
 
   const handleVehicleChange = (_value: unknown, rows: DataSelectRecord[]): void => {
     const vehicle = rows[0] as VehicleArchive | undefined

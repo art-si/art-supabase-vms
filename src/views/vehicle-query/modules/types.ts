@@ -14,7 +14,13 @@ export type VehicleDriver = Api.Vms.Integration.DriverReference
 export type VehicleQueryTabKey =
   | 'view'
   | 'archive'
+  | 'documents'
   | 'driver'
+  | 'orders'
+  | 'fuel'
+  | 'fuelCard'
+  | 'fuelLedger'
+  | 'costs'
   | 'parts'
   | 'insurance'
   | 'inspection'
