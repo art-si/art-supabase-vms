@@ -73,4 +73,5 @@ test('司机证件与车辆证件共用风险范围，已处理记录不再重�
   assert.equal(canMarkCertificateHandled(driver), false)
   assert.equal(canMarkCertificateHandled(compulsory), true)
   assert.ok(CERTIFICATE_TYPE_OPTIONS.driver.some((option) => option.value === 'driver_license'))
+  assert.equal(certificateTypeLabel('identity_card'), '身份证')
 })

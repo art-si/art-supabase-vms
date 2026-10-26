@@ -1,0 +1,1 @@
+import{s as e}from"./file-Cv2t5Chm.js";var t={onClick:e,disabled:e=>!e.url,title:e=>`预览${e.name?.trim()||`附件`}`};export{t};

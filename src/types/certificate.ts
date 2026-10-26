@@ -7,6 +7,7 @@ export type CertificateType =
   | 'commercial_insurance'
   | 'vehicle_tax'
   | 'annual_inspection'
+  | 'identity_card'
   | 'driver_license'
   | 'professional_qualification'
 

@@ -18,6 +18,7 @@ export const CERTIFICATE_TYPE_OPTIONS: Record<
     { value: 'annual_inspection', label: '审车检验' }
   ],
   driver: [
+    { value: 'identity_card', label: '身份证' },
     { value: 'driver_license', label: '驾驶证' },
     { value: 'professional_qualification', label: '从业资格证' }
   ]
