@@ -3,7 +3,7 @@
     <BusinessWorkspaceHeader
       eyebrow="COMPLIANCE CONTROL"
       title="证件与到期预警"
-      description="统一追踪车辆、司机证件有效期与责任人，续证留存历史，风险处置有据可查。"
+      description="统一追踪车辆和司机证件；旧保险、审车台账在缺少新证件时作为只读回退。"
       icon="ri:shield-check-line"
       :metrics="metrics"
     >
@@ -73,8 +73,10 @@
     canMarkCertificateHandled,
     certificateRiskCounts,
     certificateStatusLabel,
+    certificateStatusTableLabel,
     certificateStatusTone,
-    certificateTypeLabel
+    certificateTypeLabel,
+    isLegacyCertificateRecord
   } from './modules/certificate-policy'
   import CertificateDialog from './modules/certificate-dialog.vue'
 
@@ -146,7 +148,7 @@
     {
       label: '当前筛选',
       value: page.total,
-      description: '全部证件记录',
+      description: '证件记录与旧台账回退',
       icon: 'ri:file-list-3-line'
     },
     {
@@ -159,7 +161,7 @@
     {
       label: '本页即将到期',
       value: counts.value.dueSoon,
-      description: '30 天内需跟进',
+      description: '司机 3 个月内、车辆 30 天内需跟进',
       icon: 'ri:time-line',
       tone: 'warning'
     },
@@ -196,19 +198,30 @@
       {
         prop: 'certificateType',
         label: '证件类型',
-        minWidth: 130,
-        formatter: (row) => certificateTypeLabel(row.certificateType)
+        minWidth: 168,
+        formatter: (row) => (
+          <span class="grid min-w-0 gap-0.5">
+            <span>{certificateTypeLabel(row.certificateType)}</span>
+            {isLegacyCertificateRecord(row) ? (
+              <small class="text-xs text-[var(--el-text-color-secondary)]">旧台账 · 待补录</small>
+            ) : row.isCurrent === false ? (
+              <small class="text-xs text-[var(--el-text-color-secondary)]">历史记录</small>
+            ) : null}
+          </span>
+        )
       },
       { prop: 'certificateNo', label: '证件编号', minWidth: 170 },
       { prop: 'expiresOn', label: '有效期截止', width: 130, sortable: true },
       {
         prop: 'status',
         label: '风险状态',
-        width: 125,
+        width: 126,
         formatter: (row) => (
-          <ElTag type={certificateStatusTone(row.status)} effect="light">
-            {certificateStatusLabel(row.status)}
-          </ElTag>
+          <span class="inline-flex" title={certificateStatusLabel(row.status)}>
+            <ElTag type={certificateStatusTone(row.status)} effect="light">
+              {certificateStatusTableLabel(row.status)}
+            </ElTag>
+          </span>
         )
       },
       { prop: 'responsibleName', label: '责任人', minWidth: 120 },
@@ -225,11 +238,13 @@
         fixed: 'right',
         formatter: (row) => (
           <BusinessTableRowActions>
-            <ArtButtonTable
-              type="edit"
-              permission="CertificateCenter:Edit"
-              onClick={() => openDialog(row)}
-            />
+            {!isLegacyCertificateRecord(row) ? (
+              <ArtButtonTable
+                type="edit"
+                permission="CertificateCenter:Edit"
+                onClick={() => openDialog(row)}
+              />
+            ) : null}
             <ArtButtonMore
               list={rowActions(row)}
               onClick={(item: ButtonMoreItem) => void handleRowAction(String(item.key), row)}
@@ -241,6 +256,16 @@
   }
 
   function rowActions(row: CertificateRecord): ButtonMoreItem[] {
+    if (isLegacyCertificateRecord(row)) {
+      return [
+        {
+          key: 'register',
+          label: '登记新证件',
+          icon: 'ri:file-add-line',
+          auth: 'CertificateCenter:Add'
+        }
+      ]
+    }
     return [
       { key: 'renew', label: '登记续证', icon: 'ri:file-add-line', auth: 'CertificateCenter:Add' },
       ...(canMarkCertificateHandled(row)
@@ -257,7 +282,7 @@
   }
 
   async function handleRowAction(key: string, row: CertificateRecord): Promise<void> {
-    if (key === 'renew') {
+    if (key === 'renew' || key === 'register') {
       openDialog(row, true)
       return
     }

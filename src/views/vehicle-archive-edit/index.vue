@@ -103,7 +103,7 @@
             <header class="vehicle-archive-edit__certificate-heading">
               <div>
                 <ArtSectionTitle :show-line="false">车辆证件影像</ArtSectionTitle>
-                <p>可直接上传或从资源库选择，上传后支持预览、替换和删除</p>
+                <p>证照影像私有存储，仅授权人员可预览、替换和删除</p>
               </div>
               <span>{{ certificateFilledCount }}/{{ visibleCertificateItems.length }} 已完成</span>
             </header>
@@ -134,28 +134,54 @@
               >
                 <ArtUploadImage
                   v-model="form[item.key]"
-                  :resource-tenant-id="form.tenantId"
+                  :resource-tenant-id="documentTenantId"
+                  :upload-request="uploadVehicleDocument"
+                  :show-resource-picker="false"
+                  :file-size="15 * 1024 * 1024"
+                  file-type=".jpg,.jpeg,.png,.webp"
                   :title="item.label"
                   :size="120"
                   :limit="1"
                   :readonly="
-                    !form.tenantId ||
+                    !documentTenantId ||
                     (item.key !== 'vehiclePhotoUrl' && !canEditArchiveField('documents'))
                   "
                 />
-                <ElButton
+                <div
                   v-if="item.key === 'drivingLicenseFrontUrl' || item.key === 'operationLicenseUrl'"
-                  v-auth="'VehicleArchive:Ocr'"
-                  size="small"
-                  plain
-                  :loading="ocrBusyKey === item.key"
-                  :disabled="!form[item.key]"
-                  @click="recognizeCertificate(item.key)"
+                  class="flex flex-wrap gap-2"
                 >
-                  智能识别
-                </ElButton>
+                  <ElButton
+                    v-auth="'VehicleArchive:Ocr'"
+                    size="small"
+                    plain
+                    :loading="ocrBusyKey === item.key && ocrMode === 'ai'"
+                    :disabled="!form[item.key] || ocrBusyKey !== null"
+                    @click="recognizeCertificate(item.key)"
+                  >
+                    智能识别
+                  </ElButton>
+                  <ElButton
+                    v-auth="'VehicleArchive:Ocr'"
+                    size="small"
+                    plain
+                    :loading="ocrBusyKey === item.key && ocrMode === 'local'"
+                    :disabled="!form[item.key] || ocrBusyKey !== null"
+                    @click="recognizeCertificateLocally(item.key)"
+                  >
+                    本地识别
+                  </ElButton>
+                </div>
               </div>
             </div>
+            <ElAlert
+              v-if="ocrError"
+              class="mt-3"
+              type="error"
+              :title="ocrError"
+              show-icon
+              @close="ocrError = ''"
+            />
           </section>
         </ElTabPane>
 
@@ -210,8 +236,12 @@
               </ArtSectionTitle>
               <ArtUploadFile
                 title="上传附件"
-                :resource-tenant-id="form.tenantId"
-                :disabled="!form.tenantId || !canManageArchiveAttachments"
+                :resource-tenant-id="documentTenantId"
+                :upload-request="uploadVehicleDocument"
+                :show-resource-picker="false"
+                :file-size="15 * 1024 * 1024"
+                accept=".jpg,.jpeg,.png,.webp,.pdf"
+                :disabled="!documentTenantId || !canManageArchiveAttachments"
                 :show-file-list="false"
                 :show-tip="false"
                 inline
@@ -273,11 +303,17 @@
           show-icon
           :closable="false"
         />
+        <OcrOriginalText
+          :text="ocrResult?.rawText"
+          description="原始文字供人工核对；只有点击填入才会修改车辆表单。"
+          :rows="5"
+        />
         <ArtTable
           :data="ocrReviewRows"
           :columns="ocrReviewColumns"
           :pagination="false"
           :show-table-header="false"
+          empty-text="没有可自动填入的可靠字段，请对照原图手工填写"
           :height="Math.min(56 + ocrReviewRows.length * 44, 460)"
           empty-height="140px"
         />
@@ -329,10 +365,12 @@
   import ArtSectionTitle from '@/components/core/surfaces/art-section-title/index.vue'
   import ArtUploadImage from '@/components/core/forms/art-upload-image/index.vue'
   import ArtSvgIcon from '@/components/core/base/art-svg-icon/index.vue'
+  import OcrOriginalText from '@/components/business/ocr-original-text/index.vue'
   import type { ColumnOption } from '@/types'
   import {
     addVehicleArchive,
     analyzeVehicleDocumentByAi,
+    analyzeVehicleDocumentLocally,
     editVehicleArchive,
     fetchDefaultTrailer,
     fetchTrailerOptions,
@@ -341,6 +379,7 @@
     fetchDriverOptions,
     fetchVehicleArchiveDetail,
     submitVehicleArchiveForApproval,
+    uploadVehiclePrivateDocument,
     type VmsCarrierReference,
     type VmsDriverReference,
     type VehicleDocumentOcrType,
@@ -351,11 +390,11 @@
   import { useTenantScopeStore } from '@/store/modules/tenant-scope'
   import { useDocumentNumberRule } from '@/hooks/core/useDocumentNumberRule'
   import { useAuth } from '@/hooks/core/useAuth'
-  import { getFileExtension } from '@/utils/file'
+  import { getFileExtension, removeAttachmentRow } from '@/utils/file'
   import { attachmentTableLink } from '@/components/core/media/art-file-viewer/table-link'
   import { canEditField, canViewField } from '@/utils/field-permission'
   import { getFriendlySupabaseErrorMessage } from '@/utils/supabase'
-  import dayjs from 'dayjs'
+  import { formatVehicleAge } from './modules/vehicle-age'
   import {
     createInitialVehicleArchiveForm,
     requiresVehicleArchiveResubmission,
@@ -434,6 +473,7 @@
     color: ComputedRef<Api.DataCenter.DictListItem[]>
     plateColor: ComputedRef<Api.DataCenter.DictListItem[]>
     businessType: ComputedRef<Api.DataCenter.DictListItem[]>
+    usageNature: ComputedRef<Api.DataCenter.DictListItem[]>
     operationStatus: ComputedRef<Api.DataCenter.DictListItem[]>
     purchaseStatus: ComputedRef<Api.DataCenter.DictListItem[]>
     vehicleLevel: ComputedRef<Api.DataCenter.DictListItem[]>
@@ -487,8 +527,10 @@
   ]
   const ocrReviewDialogRef = ref<ArtDialogExpose<VehicleDocumentOcrResult>>()
   const ocrResult = ref<VehicleDocumentOcrResult | null>(null)
+  const ocrError = ref('')
   const ocrDocumentType = ref<VehicleDocumentOcrType>('driving_license')
   const ocrBusyKey = ref<ImageKey | null>(null)
+  const ocrMode = ref<'ai' | 'local' | null>(null)
   const activeImageKey = ref<ImageKey>('drivingLicenseFrontUrl')
   const submitIntent = ref(false)
   const ocrReplaceExisting = ref(false)
@@ -540,10 +582,9 @@
     const driver = getSelectedPrimaryDriver()
     return driver ? [createDriverOption(driver)] : []
   })
-  const selectedSecondaryDriverOptions = computed<FormItemOption[]>(() => {
-    const driver = getSelectedSecondaryDriver()
-    return driver ? [createDriverOption(driver)] : []
-  })
+  const selectedSecondaryDriverOptions = computed<FormItemOption[]>(() =>
+    getSelectedBackupDrivers().map(createDriverOption)
+  )
 
   const options: UnwrapNestedRefs<OptionGroup> = reactive<OptionGroup>({
     vehicleOwnership: computed(() =>
@@ -556,6 +597,7 @@
     color: computed(() => getDictMap.value.vehicleColor ?? []),
     plateColor: computed(() => getDictMap.value.vehiclePlateColor ?? []),
     businessType: computed(() => getDictMap.value.vehicleBusinessType ?? []),
+    usageNature: computed(() => getDictMap.value.vehicleUsageNature ?? []),
     operationStatus: computed(() => getDictMap.value.vehicleOperationStatus ?? []),
     purchaseStatus: computed(() => getDictMap.value.vehiclePurchaseStatus ?? []),
     vehicleLevel: computed(() => getDictMap.value.vehicleLevel ?? []),
@@ -575,19 +617,16 @@
   const createInitialForm = createInitialVehicleArchiveForm
 
   const form = reactive<VehicleArchiveForm>(createInitialForm())
+  const documentTenantId = computed(
+    () =>
+      form.tenantId ?? tenantScopeStore.effectiveTenantId ?? userStore.getUserInfo.tenantId ?? ''
+  )
+  const uploadVehicleDocument = (file: File) =>
+    uploadVehiclePrivateDocument(file, documentTenantId.value)
   watch(
     () => form.purchaseDate,
     (date) => {
-      const purchased = dayjs(date)
-      if (!date || !purchased.isValid() || purchased.isAfter(dayjs())) {
-        form.vehicleAgeDisplay = ''
-        return
-      }
-      const months = dayjs().diff(purchased, 'month')
-      form.vehicleAgeDisplay =
-        months < 12
-          ? `${months} 个月`
-          : `${Math.floor(months / 12)} 年${months % 12 ? ` ${months % 12} 个月` : ''}`
+      form.vehicleAgeDisplay = formatVehicleAge(date)
     },
     { immediate: true }
   )
@@ -757,6 +796,16 @@
                   form.vehicleType = ''
                   form.primaryDriverId = null
                   form.secondaryDriverId = null
+                  form.backupDriverIds = []
+                  form.backupDrivers = []
+                  form.vehiclePhotoUrl = ''
+                  form.drivingLicenseFrontUrl = ''
+                  form.drivingLicenseBackUrl = ''
+                  form.drivingLicenseBackReverseUrl = ''
+                  form.operationLicenseUrl = ''
+                  form.personVehiclePhotoUrl = ''
+                  form.vehicleHeadPhotoUrl = ''
+                  form.attachments = []
                 }
               }
             }
@@ -788,6 +837,8 @@
               form.primaryDriverPhone = ''
               form.secondaryDriverId = null
               form.secondaryDriver = null
+              form.backupDriverIds = []
+              form.backupDrivers = []
               form.secondaryDriverName = ''
               form.secondaryDriverPhone = ''
               driverCache.value = new Map()
@@ -799,6 +850,8 @@
             form.primaryDriverPhone = ''
             form.secondaryDriverId = null
             form.secondaryDriver = null
+            form.backupDriverIds = []
+            form.backupDrivers = []
             form.secondaryDriverName = ''
             form.secondaryDriverPhone = ''
             driverCache.value = new Map()
@@ -821,6 +874,17 @@
         key: 'vehicleOwnership',
         type: 'radioGroup',
         props: { options: options.vehicleOwnership, optionType: 'button' }
+      },
+      {
+        label: '使用性质',
+        key: 'usageNature',
+        type: 'select',
+        description: '新车默认货运；历史档案请按行驶证核对。',
+        props: {
+          options: options.usageNature,
+          clearable: true,
+          placeholder: '请选择使用性质'
+        }
       },
       {
         label: '国产/进口',
@@ -1168,9 +1232,10 @@
       { label: '主司机电话', key: 'primaryDriverPhone', type: 'input', props: { readonly: true } },
       {
         label: '备用司机',
-        key: 'secondaryDriverId',
+        key: 'backupDriverIds',
         type: 'select',
-        span: 8,
+        span: 24,
+        description: '可绑定多名轮班司机；列表首位同步为默认备用司机。',
         api: fetchDriverOptions,
         options: selectedSecondaryDriverOptions.value,
         resultField: 'data',
@@ -1190,37 +1255,16 @@
         props: {
           filterable: true,
           clearable: true,
+          multiple: true,
+          collapseTags: true,
+          collapseTagsTooltip: true,
           disabled: !form.carrierId,
-          placeholder: form.carrierId ? '请选择备用司机' : '请先选择所属承运商',
+          placeholder: form.carrierId ? '请选择一名或多名备用司机' : '请先选择所属承运商',
           onVisibleChange: (visible: boolean) => {
-            if (visible && form.carrierId)
-              void otherFormRef.value?.reloadOptions('secondaryDriverId')
+            if (visible && form.carrierId) void otherFormRef.value?.reloadOptions('backupDriverIds')
           },
-          onChange: (value?: string) => {
-            if (!value) {
-              form.secondaryDriver = null
-              form.secondaryDriverName = ''
-              form.secondaryDriverPhone = ''
-              return
-            }
-            const driver = driverCache.value.get(value)
-            form.secondaryDriver = driver ?? null
-            form.secondaryDriverName = driver?.driverName ?? ''
-            form.secondaryDriverPhone = driver?.phone ?? ''
-          }
+          onChange: (value?: string[]) => syncBackupDriverSelection(value ?? [])
         }
-      },
-      {
-        label: '备用司机姓名',
-        key: 'secondaryDriverName',
-        type: 'input',
-        props: { readonly: true }
-      },
-      {
-        label: '备用司机电话',
-        key: 'secondaryDriverPhone',
-        type: 'input',
-        props: { readonly: true }
       },
       { label: '运营与设备', key: 'otherOperationsSection', type: 'divider', span: 24 },
       { label: '营运线路', key: 'operationRoute', type: 'input' },
@@ -1237,24 +1281,27 @@
   )
 
   function syncPrimaryDriverOptions(result: unknown): unknown {
-    return syncDriverOptions(result, getSelectedPrimaryDriver())
+    const selected = getSelectedPrimaryDriver()
+    return syncDriverOptions(result, selected ? [selected] : [])
   }
 
   function syncSecondaryDriverOptions(result: unknown): unknown {
-    return syncDriverOptions(result, getSelectedSecondaryDriver())
+    return syncDriverOptions(result, getSelectedBackupDrivers())
   }
 
-  function syncDriverOptions(result: unknown, selectedDriver?: DriverOption): unknown {
+  function syncDriverOptions(result: unknown, selectedDrivers: DriverOption[]): unknown {
     if (!result || typeof result !== 'object') return result
 
     const data = (result as { data?: DriverOption[] }).data
     if (Array.isArray(data)) {
-      const nextData =
-        selectedDriver && !data.some((item) => item.id === selectedDriver.id)
-          ? [selectedDriver, ...data]
-          : data
-
-      driverCache.value = new Map(nextData.map((item) => [item.id, item]))
+      const nextData = [
+        ...selectedDrivers.filter((driver) => !data.some((item) => item.id === driver.id)),
+        ...data
+      ]
+      driverCache.value = new Map([
+        ...driverCache.value,
+        ...nextData.map((item): [string, DriverOption] => [item.id, item])
+      ])
       return {
         ...(result as Record<string, unknown>),
         data: nextData
@@ -1272,12 +1319,28 @@
     )
   }
 
-  function getSelectedSecondaryDriver(): DriverOption | undefined {
-    if (!form.secondaryDriverId) return undefined
-    return (
-      driverCache.value.get(form.secondaryDriverId) ??
-      (form.secondaryDriver?.id === form.secondaryDriverId ? form.secondaryDriver : undefined)
-    )
+  function getSelectedBackupDrivers(): DriverOption[] {
+    return (form.backupDriverIds ?? []).flatMap((id) => {
+      const driver =
+        driverCache.value.get(id) ??
+        form.backupDrivers?.find((item) => item.id === id) ??
+        (form.secondaryDriver?.id === id ? form.secondaryDriver : null)
+      return driver ? [driver] : []
+    })
+  }
+
+  function syncBackupDriverSelection(ids: string[]): void {
+    const nextIds = ids.filter((id) => id !== form.primaryDriverId)
+    if (nextIds.length !== ids.length) ElMessage.warning('主司机不能重复选为备用司机')
+    form.backupDriverIds = nextIds
+    form.backupDrivers = nextIds.flatMap((id) => {
+      const driver = driverCache.value.get(id)
+      return driver ? [driver] : []
+    })
+    form.secondaryDriverId = nextIds[0] ?? null
+    form.secondaryDriver = form.backupDrivers[0] ?? null
+    form.secondaryDriverName = form.secondaryDriver?.driverName ?? ''
+    form.secondaryDriverPhone = form.secondaryDriver?.phone ?? ''
   }
 
   function createDriverOption(driver: DriverOption): FormItemOption {
@@ -1358,26 +1421,79 @@
     key: 'drivingLicenseFrontUrl' | 'operationLicenseUrl'
   ): Promise<void> => {
     const url = form[key]
-    if (!url || !hasAuth('VehicleArchive:Ocr')) return
+    if (!url) {
+      ocrError.value = '请先上传要识别的证照照片'
+      return
+    }
+    if (!hasAuth('VehicleArchive:Ocr')) {
+      ocrError.value = '当前账号没有证照识别权限'
+      return
+    }
+    ocrError.value = ''
     ocrBusyKey.value = key
+    ocrMode.value = 'ai'
     try {
+      const documentType =
+        key === 'drivingLicenseFrontUrl' ? 'driving_license' : 'operation_license'
       const { data, error } = await analyzeVehicleDocumentByAi(
         url,
-        key === 'drivingLicenseFrontUrl' ? 'driving_license' : 'operation_license',
-        form.tenantId
+        documentType,
+        documentTenantId.value,
+        isEdit.value ? String(route.params.id) : null
       )
       if (error) throw error
       if (!data) throw new Error('未获取到证照识别结果')
-      ocrDocumentType.value =
-        key === 'drivingLicenseFrontUrl' ? 'driving_license' : 'operation_license'
-      ocrResult.value = data
-      ocrReplaceExisting.value = false
-      await ocrReviewDialogRef.value?.handleOpen(data, { title: '车辆证照识别结果' })
+      if (activeImageKey.value !== key) return
+      await openOcrReview(data, documentType, '车辆证照识别结果')
     } catch (error) {
-      ElMessage.error(getFriendlySupabaseErrorMessage(error, '车辆证照识别失败'))
+      ocrError.value = getFriendlySupabaseErrorMessage(error, '车辆证照识别失败，请检查网络后重试')
     } finally {
       ocrBusyKey.value = null
+      ocrMode.value = null
     }
+  }
+
+  const recognizeCertificateLocally = async (
+    key: 'drivingLicenseFrontUrl' | 'operationLicenseUrl'
+  ): Promise<void> => {
+    const url = form[key]
+    if (!url) {
+      ocrError.value = '请先上传要识别的证照照片'
+      return
+    }
+    if (!hasAuth('VehicleArchive:Ocr') || !canViewArchiveField('documents')) {
+      ocrError.value = '当前账号没有证照识别权限'
+      return
+    }
+    ocrError.value = ''
+    ocrBusyKey.value = key
+    ocrMode.value = 'local'
+    try {
+      const documentType =
+        key === 'drivingLicenseFrontUrl' ? 'driving_license' : 'operation_license'
+      const result = await analyzeVehicleDocumentLocally(url, documentType)
+      if (activeImageKey.value !== key) return
+      await openOcrReview(result, documentType, '本地证照文字识别结果')
+    } catch (error) {
+      ocrError.value = getFriendlySupabaseErrorMessage(
+        error,
+        '本地识别失败，请使用清晰照片重试或手工填写'
+      )
+    } finally {
+      ocrBusyKey.value = null
+      ocrMode.value = null
+    }
+  }
+
+  const openOcrReview = async (
+    result: VehicleDocumentOcrResult,
+    documentType: VehicleDocumentOcrType,
+    title: string
+  ): Promise<void> => {
+    ocrDocumentType.value = documentType
+    ocrResult.value = result
+    ocrReplaceExisting.value = false
+    await ocrReviewDialogRef.value?.handleOpen(result, { title })
   }
 
   const applyOcrResult = (): void => {
@@ -1398,7 +1514,7 @@
       form[row.field] = value
       applied += 1
     }
-    if (applied) form.aiArtifactId = ocrResult.value.artifactId
+    if (applied && ocrResult.value.artifactId) form.aiArtifactId = ocrResult.value.artifactId
     ElMessage.success(applied ? `已填入 ${applied} 个字段，请核对后保存` : '没有需要填入的字段')
     ocrReviewDialogRef.value?.handleClose()
   }
@@ -1451,6 +1567,7 @@
         'vehicleColor',
         'vehiclePlateColor',
         'vehicleBusinessType',
+        'vehicleUsageNature',
         'vehicleOperationStatus',
         'vehiclePurchaseStatus',
         'vehicleLevel',
@@ -1578,6 +1695,14 @@
       form.secondaryDriverName = nextForm.secondaryDriver.driverName
       form.secondaryDriverPhone = nextForm.secondaryDriver.phone ?? ''
     }
+    for (const driver of nextForm.backupDrivers ?? []) {
+      driverCache.value.set(driver.id, driver)
+    }
+    form.backupDriverIds = nextForm.backupDriverIds?.length
+      ? [...nextForm.backupDriverIds]
+      : nextForm.secondaryDriverId
+        ? [nextForm.secondaryDriverId]
+        : []
   }
 
   const validateForms = async (): Promise<boolean> => {
@@ -1650,6 +1775,10 @@
     const resource = resources[0]
     if (!resource) return
     if (!resource.url) return
+    if ((form.attachments ?? []).some((item) => item.url === resource.url)) {
+      ElMessage.info('该附件已在当前记录中')
+      return
+    }
     const fileName = resource.originName || resource.objectName || '附件'
     const nextAttachment: ArchiveAttachment = {
       name: fileName,
@@ -1670,7 +1799,7 @@
         type: 'warning',
         confirmButtonType: 'danger'
       })
-      form.attachments = (form.attachments ?? []).filter((item) => item.url !== row.url)
+      form.attachments = removeAttachmentRow(form.attachments ?? [], row)
     } catch {
       // 用户取消删除时无须提示
     }

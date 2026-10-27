@@ -3,6 +3,8 @@ import * as javaVehicleApi from '@vms/api/providers/java/vehicle'
 import * as supabaseVehicleApi from '@vms/api/providers/supabase/vehicle'
 import { startWorkflow } from '@/api/workflow'
 
+export * from './providers/supabase/vehicle/part-inventory'
+
 export {
   fetchVmsCarrierReferences as fetchCarrierOptions,
   fetchVmsDriverReferences as fetchDriverOptions,
@@ -80,6 +82,8 @@ export const fetchTrailerList = supabaseVehicleApi.fetchTrailerList
 export const fetchTrailerDetail = supabaseVehicleApi.fetchTrailerDetail
 export const fetchTrailerCompanyOptions = supabaseVehicleApi.fetchTrailerCompanyOptions
 export const saveTrailer = supabaseVehicleApi.saveTrailer
+export const uploadTrailerPrivateImage = supabaseVehicleApi.uploadTrailerPrivateImage
+export const uploadVehiclePrivateDocument = supabaseVehicleApi.uploadVehiclePrivateDocument
 export const fetchTrailerOptions = supabaseVehicleApi.fetchTrailerOptions
 export const fetchDefaultTrailer = supabaseVehicleApi.fetchDefaultTrailer
 export const setDefaultTrailer = supabaseVehicleApi.setDefaultTrailer

@@ -189,12 +189,19 @@
   import { useUserStore } from '@/store/modules/user'
   import { attachmentTableLink } from '@/components/core/media/art-file-viewer/table-link'
   import { canViewField } from '@/utils/field-permission'
+  import { formatVehicleAge } from '@vms/views/vehicle-archive-edit/modules/vehicle-age'
 
   defineOptions({ name: 'VehicleArchiveDetailContent' })
 
   type VehicleArchive = Api.Vms.ArchiveManage.VehicleArchive
   type ArchiveAttachment = Api.Vms.ArchiveManage.VehicleArchiveAttachment
-  type ImageKey = 'drivingLicenseFrontUrl' | 'drivingLicenseBackUrl' | 'operationLicenseUrl'
+  type ImageKey =
+    | 'drivingLicenseFrontUrl'
+    | 'drivingLicenseBackUrl'
+    | 'drivingLicenseBackReverseUrl'
+    | 'personVehiclePhotoUrl'
+    | 'vehicleHeadPhotoUrl'
+    | 'operationLicenseUrl'
 
   interface InfoItem {
     label: string
@@ -276,11 +283,17 @@
 
   const basicInfoItems = computed<InfoItem[]>(() => [
     { label: '车牌号', value: archive.value?.plateNo },
+    { label: '购置时间', value: archive.value?.purchaseDate },
+    { label: '车辆年限', value: formatVehicleAge(archive.value?.purchaseDate) },
     { label: '所属公司', value: archive.value?.companyName },
     { label: '自编号', value: archive.value?.selfNo },
     {
       label: '车辆归属',
       value: getDictLabel('vehicleOwnership', archive.value?.vehicleOwnership || 'self_operated')
+    },
+    {
+      label: '使用性质',
+      value: getDictLabel('vehicleUsageNature', archive.value?.usageNature ?? undefined)
     },
     { label: '国产/进口', value: getDictLabel('vehicleOriginType', archive.value?.originType) },
     ...(canViewArchiveField('vehicleIdentifiers')
@@ -402,10 +415,24 @@
     ...(canViewDriverPhone(archive.value?.primaryDriver)
       ? [{ label: '主司机电话', value: archive.value?.primaryDriver?.phone }]
       : []),
-    { label: '辅司机姓名', value: archive.value?.secondaryDriver?.driverName },
-    ...(canViewDriverPhone(archive.value?.secondaryDriver)
-      ? [{ label: '辅司机电话', value: archive.value?.secondaryDriver?.phone }]
-      : []),
+    {
+      label: '备用司机',
+      value:
+        archive.value?.backupDrivers?.map((driver) => driver.driverName).join('、') ||
+        archive.value?.secondaryDriver?.driverName
+    },
+    {
+      label: '备用司机电话',
+      value:
+        archive.value?.backupDrivers
+          ?.filter(canViewDriverPhone)
+          .map((driver) => driver.phone)
+          .filter(Boolean)
+          .join('、') ||
+        (canViewDriverPhone(archive.value?.secondaryDriver)
+          ? archive.value?.secondaryDriver?.phone
+          : undefined)
+    },
     ...(canViewArchiveField('operationRoute')
       ? [{ label: '营运线路', value: archive.value?.operationRoute }]
       : []),
@@ -418,8 +445,11 @@
   ])
 
   const certificateItems: Array<{ key: ImageKey; label: string }> = [
-    { key: 'drivingLicenseFrontUrl', label: '行驶证正页' },
+    { key: 'drivingLicenseFrontUrl', label: '行驶证主页' },
     { key: 'drivingLicenseBackUrl', label: '行驶证副页' },
+    { key: 'drivingLicenseBackReverseUrl', label: '副页背面照' },
+    { key: 'personVehiclePhotoUrl', label: '人车合影' },
+    { key: 'vehicleHeadPhotoUrl', label: '车辆大头照' },
     { key: 'operationLicenseUrl', label: '运营证照片' }
   ]
 

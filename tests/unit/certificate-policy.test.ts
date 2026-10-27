@@ -4,8 +4,11 @@ import type { CertificateRecord } from '../../src/types/certificate'
 import {
   CERTIFICATE_TYPE_OPTIONS,
   canMarkCertificateHandled,
+  certificateStatusLabel,
+  certificateStatusTableLabel,
   certificateRiskCounts,
-  certificateTypeLabel
+  certificateTypeLabel,
+  isLegacyCertificateRecord
 } from '../../src/views/certificate-center/modules/certificate-policy'
 
 const base = {
@@ -51,6 +54,7 @@ test('交强险和商业险为同车独立证件，分别保留到期状态', ()
   })
   assert.equal(certificateTypeLabel(compulsory.certificateType), '交强险保单')
   assert.equal(certificateTypeLabel(commercial.certificateType), '商业险保单')
+  assert.equal(certificateStatusLabel(commercial.status), '待换证（15 天）')
 })
 
 test('司机证件与车辆证件共用风险范围，已处理记录不再重复处置', () => {
@@ -74,4 +78,37 @@ test('司机证件与车辆证件共用风险范围，已处理记录不再重�
   assert.equal(canMarkCertificateHandled(compulsory), true)
   assert.ok(CERTIFICATE_TYPE_OPTIONS.driver.some((option) => option.value === 'driver_license'))
   assert.equal(certificateTypeLabel('identity_card'), '身份证')
+})
+
+test('司机三个月临期计入预警，车辆原有 30 天状态保持独立', () => {
+  const driver: CertificateRecord = {
+    ...base,
+    id: 'driver-qualification',
+    subjectType: 'driver',
+    subjectId: 'driver-b',
+    subjectLabel: '李师傅',
+    certificateType: 'professional_qualification',
+    expiresOn: '2027-01-27',
+    status: 'due_3_months'
+  }
+  assert.equal(certificateStatusLabel(driver.status), '待换证（3 个月）')
+  assert.equal(certificateStatusTableLabel(driver.status), '3 个月内')
+  assert.deepEqual(certificateRiskCounts([driver, commercial]), {
+    expired: 0,
+    dueSoon: 2,
+    handled: 0
+  })
+  assert.equal(certificateStatusLabel('due_30'), '待换证（30 天）')
+})
+
+test('旧保险台账仅作回退风险，不允许直接标记已处理', () => {
+  const fallback: CertificateRecord = {
+    ...commercial,
+    id: 'legacy_insurance:insurance-1:commercial_insurance',
+    sourceKind: 'legacy_insurance',
+    responsibleUserId: '',
+    responsibleName: '待指定'
+  }
+  assert.equal(isLegacyCertificateRecord(fallback), true)
+  assert.equal(canMarkCertificateHandled(fallback), false)
 })

@@ -63,7 +63,7 @@
     fetchInsuranceCompanyOptions,
     fetchVehicleArchiveOptions
   } from '@vms/api'
-  import { getFileExtension } from '@/utils/file'
+  import { getFileExtension, removeAttachmentRow } from '@/utils/file'
   import { attachmentTableLink } from '@/components/core/media/art-file-viewer/table-link'
   import { canEditField, canViewField } from '@/utils/field-permission'
   import {
@@ -423,6 +423,10 @@
     const resource = resources[0]
     if (!resource) return
     if (!resource.url) return
+    if ((form.data.attachments ?? []).some((item) => item.url === resource.url)) {
+      ElMessage.info('该附件已在当前记录中')
+      return
+    }
     const fileName = resource.originName || resource.objectName || '附件'
     form.data.attachments = [
       ...(form.data.attachments ?? []),
@@ -444,7 +448,7 @@
         type: 'warning',
         confirmButtonType: 'danger'
       })
-      form.data.attachments = (form.data.attachments ?? []).filter((item) => item.url !== row.url)
+      form.data.attachments = removeAttachmentRow(form.data.attachments ?? [], row)
     } catch {
       // 用户取消删除时无需提示。
     }

@@ -27,7 +27,7 @@
             empty-text="暂无可选档案"
             empty-description="请先完善对应的车辆或司机档案。"
             show-pagination
-            :disabled="Boolean(recordId || form.renewalOfId)"
+            :disabled="Boolean(recordId || form.renewalOfId || sourcePrefill)"
             @change="handleSubjectChange"
           />
         </template>
@@ -98,7 +98,7 @@
   import ArtTable from '@/components/core/tables/art-table/index.vue'
   import BusinessAttachmentRowActions from '@/components/business/business-attachment-row-actions/index.vue'
   import { attachmentTableLink } from '@/components/core/media/art-file-viewer/table-link'
-  import { getFileExtension } from '@/utils/file'
+  import { getFileExtension, removeAttachmentRow } from '@/utils/file'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import { notifyFriendlyError, useArtFeedback } from '@/hooks/core/useArtFeedback'
   import { useDictionaryOptions } from '@/hooks/core/useDictionaryOptions'
@@ -115,7 +115,7 @@
     saveCertificate,
     uploadCertificateAttachment
   } from '../../../api/providers/supabase/vehicle/certificates'
-  import { CERTIFICATE_TYPE_OPTIONS } from './certificate-policy'
+  import { CERTIFICATE_TYPE_OPTIONS, isLegacyCertificateRecord } from './certificate-policy'
 
   defineOptions({ name: 'VmsCertificateDialog' })
 
@@ -124,6 +124,7 @@
   const dialogRef = ref<ArtDialogExpose<CertificateRecord | undefined>>()
   const formRef = ref<{ validate: () => Promise<boolean>; clearValidate: () => void }>()
   const recordId = ref<string | null>(null)
+  const sourcePrefill = ref(false)
   const subjectTenantId = ref('')
   const selectedSubject = ref<CertificateSubjectOption | null>(null)
   const responsibleOptions = ref<ArtUserSelectOption[]>([])
@@ -186,7 +187,7 @@
       type: 'select',
       options: subjectOptions.value,
       span: 12,
-      disabled: Boolean(recordId.value || form.renewalOfId)
+      disabled: Boolean(recordId.value || form.renewalOfId || sourcePrefill.value)
     },
     { label: form.subjectType === 'vehicle' ? '车辆' : '司机', key: 'subjectId', span: 12 },
     { label: '证件信息', key: 'certificateSection', type: 'divider', span: 24 },
@@ -195,7 +196,7 @@
       key: 'certificateType',
       type: 'select',
       options: certificateOptions.value,
-      disabled: Boolean(recordId.value || form.renewalOfId),
+      disabled: Boolean(recordId.value || form.renewalOfId || sourcePrefill.value),
       span: 12
     },
     {
@@ -299,8 +300,15 @@
       ]
     })
     if (!attachments.length) return
-    form.attachments = uniqBy([...form.attachments, ...attachments], 'url')
-    ElMessage.success(`已添加 ${attachments.length} 份附件`)
+    const additions = uniqBy(attachments, 'url').filter(
+      (item) => !form.attachments.some((existing) => existing.url === item.url)
+    )
+    if (!additions.length) {
+      ElMessage.info('所选附件已在当前记录中')
+      return
+    }
+    form.attachments = [...form.attachments, ...additions]
+    ElMessage.success(`已添加 ${additions.length} 份附件`)
   }
 
   const uploadAttachment = (file: File) => uploadCertificateAttachment(file, subjectTenantId.value)
@@ -312,7 +320,7 @@
         cancelButtonText: '取消',
         type: 'warning'
       })
-      form.attachments = form.attachments.filter((item) => item.url !== row.url)
+      form.attachments = removeAttachmentRow(form.attachments, row)
     } catch {
       // 用户取消操作。
     }
@@ -344,29 +352,38 @@
 
   async function handleOpen(row?: CertificateRecord, renewal = false): Promise<void> {
     Object.assign(form, emptyForm())
-    recordId.value = renewal ? null : (row?.id ?? null)
+    sourcePrefill.value = Boolean(row && isLegacyCertificateRecord(row))
+    recordId.value = renewal || sourcePrefill.value ? null : (row?.id ?? null)
     selectedSubject.value = null
     subjectTenantId.value = ''
     responsibleOptions.value = []
     if (row) {
+      const createFromLegacy = sourcePrefill.value
       Object.assign(form, {
         subjectType: row.subjectType,
         subjectId: row.subjectId,
         certificateType: row.certificateType,
-        certificateNo: renewal ? '' : row.certificateNo,
-        issueDate: renewal ? null : row.issueDate,
-        validFrom: renewal ? null : row.validFrom,
-        expiresOn: renewal ? '' : row.expiresOn,
-        attachments: renewal ? [] : [...row.attachments],
-        responsibleUserId: row.responsibleUserId,
-        renewalOfId: renewal ? row.id : row.renewalOfId
+        certificateNo: renewal || createFromLegacy ? '' : row.certificateNo,
+        issueDate: renewal || createFromLegacy ? null : row.issueDate,
+        validFrom: renewal || createFromLegacy ? null : row.validFrom,
+        expiresOn: renewal || createFromLegacy ? '' : row.expiresOn,
+        attachments: renewal || createFromLegacy ? [] : [...row.attachments],
+        responsibleUserId: createFromLegacy ? '' : row.responsibleUserId,
+        renewalOfId:
+          renewal && !createFromLegacy ? row.id : createFromLegacy ? null : row.renewalOfId
       })
       selectedSubject.value = { id: row.subjectId, label: row.subjectLabel, tenantId: row.tenantId }
       subjectTenantId.value = row.tenantId
       await loadResponsibleOptions(row.subjectType, row.subjectId)
     }
     await dialogRef.value?.handleOpen(row, {
-      title: renewal ? '登记续证' : row ? '编辑证件' : '新增证件',
+      title: sourcePrefill.value
+        ? '从旧台账登记新证件'
+        : renewal
+          ? '登记续证'
+          : row
+            ? '编辑证件'
+            : '新增证件',
       contentMaxHeight: '72vh',
       onConfirm: submit
     })

@@ -22,9 +22,12 @@
   const { hasAuth } = useAuth()
 
   const drivers = computed<VehicleDriver[]>(() =>
-    [props.vehicle.primaryDriver, props.vehicle.secondaryDriver].filter(
-      (driver): driver is VehicleDriver => Boolean(driver?.id)
-    )
+    [
+      props.vehicle.primaryDriver,
+      ...(props.vehicle.backupDrivers?.length
+        ? props.vehicle.backupDrivers
+        : [props.vehicle.secondaryDriver])
+    ].filter((driver): driver is VehicleDriver => Boolean(driver?.id))
   )
 
   const columns = computed<ColumnOption<VehicleDriver>[]>(() => [

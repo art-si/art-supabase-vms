@@ -1,32 +1,41 @@
 <template>
-  <ArtDialog ref="dialogRef" size="md" :show-fullscreen-button="false">
+  <ArtDialog ref="dialogRef" size="md">
     <template #subtitle>保留原流水，追加一笔相反方向的冲正记录；系统会重新计算油卡余额。</template>
-    <div
-      v-if="entry"
-      class="grid gap-2 rounded-[var(--el-border-radius-base)] bg-[var(--el-fill-color-light)] p-4 text-sm sm:grid-cols-2"
-    >
-      <div class="min-w-0">
-        <span class="text-[var(--el-text-color-secondary)]">油卡 / 车辆</span>
-        <strong class="mt-1 block truncate" :title="`${entry.cardNo} / ${entry.plateNo}`">
-          {{ entry.cardNo }} / {{ entry.plateNo }}
-        </strong>
+    <div class="flex flex-col gap-4">
+      <div
+        v-if="entry"
+        class="grid gap-2 rounded-[var(--el-border-radius-base)] bg-[var(--el-fill-color-light)] p-4 text-sm sm:grid-cols-2"
+      >
+        <div class="min-w-0">
+          <span class="text-[var(--el-text-color-secondary)]">油卡 / 车辆</span>
+          <strong class="mt-1 block truncate" :title="`${entry.cardNo} / ${entry.plateNo}`">
+            {{ entry.cardNo }} / {{ entry.plateNo }}
+          </strong>
+        </div>
+        <div class="min-w-0">
+          <span class="text-[var(--el-text-color-secondary)]">原流水金额</span>
+          <strong class="mt-1 block tabular-nums">{{ formatCurrencyValue(entry.amount) }}</strong>
+        </div>
+        <div class="min-w-0">
+          <span class="text-[var(--el-text-color-secondary)]">原流水日期</span>
+          <strong class="mt-1 block">{{ entry.occurredOn }}</strong>
+        </div>
+        <div class="min-w-0">
+          <span class="text-[var(--el-text-color-secondary)]">原流水类型</span>
+          <ArtDictDisplay
+            class="mt-1 block"
+            dict-code="fuelCardEntryType"
+            :value="entry.entryType"
+          />
+        </div>
       </div>
-      <div class="min-w-0">
-        <span class="text-[var(--el-text-color-secondary)]">原流水金额</span>
-        <strong class="mt-1 block tabular-nums">{{ formatCurrencyValue(entry.amount) }}</strong>
-      </div>
-      <div class="min-w-0">
-        <span class="text-[var(--el-text-color-secondary)]">原流水日期</span>
-        <strong class="mt-1 block">{{ entry.occurredOn }}</strong>
-      </div>
-      <div class="min-w-0">
-        <span class="text-[var(--el-text-color-secondary)]">原流水类型</span>
-        <ArtDictDisplay class="mt-1 block" dict-code="fuelCardEntryType" :value="entry.entryType" />
-      </div>
+      <ElAlert
+        type="warning"
+        :closable="false"
+        show-icon
+        title="冲正充值或期初余额会减少当前余额；若余额不足，系统将拒绝，请先核对后续消费。"
+      />
     </div>
-    <p class="mt-4 text-sm text-[var(--el-color-warning)]">
-      冲正充值或期初余额会减少当前余额；若余额不足，系统将拒绝，请先核对后续消费。
-    </p>
     <ArtForm
       ref="formRef"
       v-model="form"
@@ -36,6 +45,7 @@
       label-width="110px"
       :show-reset="false"
       :show-submit="false"
+      class="mt-5"
     />
   </ArtDialog>
 </template>

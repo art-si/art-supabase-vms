@@ -11,7 +11,8 @@ export type CertificateType =
   | 'driver_license'
   | 'professional_qualification'
 
-export type CertificateStatus = 'valid' | 'due_30' | 'due_15' | 'due_today' | 'expired' | 'handled'
+export type CertificateStatus =
+  'valid' | 'due_3_months' | 'due_30' | 'due_15' | 'due_today' | 'expired' | 'handled'
 
 export interface CertificateAttachment {
   name: string
@@ -22,6 +23,8 @@ export interface CertificateAttachment {
 
 export interface CertificateRecord {
   id: string
+  sourceKind?: 'certificate' | 'legacy_insurance' | 'legacy_inspection'
+  isCurrent?: boolean
   tenantId: string
   subjectType: CertificateSubjectType
   subjectId: string

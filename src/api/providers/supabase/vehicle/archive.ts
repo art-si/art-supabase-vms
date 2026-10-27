@@ -7,6 +7,15 @@ import type { ApiRequestOptions } from '@/types/api/request'
 import type { QueryResult } from '@/types/api/response'
 import { loadAllDocumentPages } from '@/utils/business/document-detail-list'
 import {
+  isPrivateAttachmentPath,
+  signPrivateAttachmentPaths
+} from '@/utils/supabase/private-attachment'
+import {
+  VEHICLE_DOCUMENT_BUCKET,
+  privateDocumentPathForWrite,
+  signVmsPrivateDocuments
+} from './private-documents'
+import {
   VEHICLE_REMINDER_VIEWS,
   fetchVehicleReminderViewList,
   fetchVehicleReminderViewRiskOverview
@@ -21,6 +30,60 @@ import {
 } from './types'
 
 const { supabase, keysToSnakeDeep, responseHandle } = useSupabase()
+const VEHICLE_DOCUMENT_FIELDS = [
+  'drivingLicenseFrontUrl',
+  'drivingLicenseBackUrl',
+  'drivingLicenseBackReverseUrl',
+  'operationLicenseUrl',
+  'personVehiclePhotoUrl',
+  'vehicleHeadPhotoUrl'
+] as const
+
+function vehiclePayloadWithPrivatePaths(
+  payload: VehicleArchiveWritePayload
+): VehicleArchiveWritePayload {
+  const next = { ...payload }
+  for (const field of VEHICLE_DOCUMENT_FIELDS) {
+    const value = payload[field]
+    if (typeof value === 'string') {
+      next[field] = privateDocumentPathForWrite(value, VEHICLE_DOCUMENT_BUCKET)
+    }
+  }
+  if (Array.isArray(payload.attachments)) {
+    next.attachments = payload.attachments.map((attachment: unknown) => {
+      if (!attachment || typeof attachment !== 'object' || !('url' in attachment)) return attachment
+      const { url } = attachment
+      return {
+        ...attachment,
+        url:
+          typeof url === 'string' ? privateDocumentPathForWrite(url, VEHICLE_DOCUMENT_BUCKET) : url
+      }
+    })
+  }
+  return next
+}
+
+async function signVehicleArchive(record: VehicleArchive): Promise<VehicleArchive> {
+  const signedImages = await signVmsPrivateDocuments(
+    record,
+    VEHICLE_DOCUMENT_FIELDS,
+    VEHICLE_DOCUMENT_BUCKET
+  )
+  const attachments = signedImages.attachments ?? []
+  const paths = attachments.flatMap((attachment) =>
+    isPrivateAttachmentPath(attachment.url) ? [attachment.url] : []
+  )
+  const signed = await signPrivateAttachmentPaths(VEHICLE_DOCUMENT_BUCKET, paths)
+  return {
+    ...signedImages,
+    attachments: attachments.map((attachment) => ({
+      ...attachment,
+      url: isPrivateAttachmentPath(attachment.url)
+        ? (signed.get(attachment.url) ?? '')
+        : attachment.url
+    }))
+  }
+}
 
 interface VehicleArchiveWriteOptions {
   showMessage?: boolean
@@ -122,10 +185,11 @@ export async function exportVehicleArchiveList(
 }
 
 export async function fetchVehicleArchiveDetail(id: string) {
-  return await responseHandle<VehicleArchive | null>(
+  const result = await responseHandle<VehicleArchive | null>(
     () => supabase.rpc('vms_get_vehicle_archive_secure', { p_id: id }),
     { showErrorMessage: true }
   )
+  return { ...result, data: result.data ? await signVehicleArchive(result.data) : null }
 }
 
 export async function addVehicleArchive(
@@ -133,7 +197,10 @@ export async function addVehicleArchive(
   options: VehicleArchiveWriteOptions = {}
 ) {
   const result = await responseHandle<string>(
-    () => supabase.rpc('vms_create_vehicle_archive_secure', { p_payload: keysToSnakeDeep(params) }),
+    () =>
+      supabase.rpc('vms_create_vehicle_archive_secure', {
+        p_payload: keysToSnakeDeep(vehiclePayloadWithPrivatePaths(params))
+      }),
     { showMessage: options.showMessage ?? true, breakReturn: true }
   )
   return { ...result, data: result.data ? { id: result.data } : null }
@@ -149,7 +216,7 @@ export async function editVehicleArchive(
     () =>
       supabase.rpc('vms_update_vehicle_archive_secure', {
         p_id: id,
-        p_payload: keysToSnakeDeep(payload)
+        p_payload: keysToSnakeDeep(vehiclePayloadWithPrivatePaths(payload))
       }),
     { showMessage: options.showMessage ?? true, breakReturn: true }
   )

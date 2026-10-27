@@ -3,6 +3,7 @@
     <template #subtitle>按行驶证影像核对车辆参数，再补充归属与默认牵引车。</template>
 
     <div class="trailer-dialog">
+      <ElAlert v-if="saveError" :title="saveError" type="error" show-icon :closable="false" />
       <div class="trailer-dialog__identity">
         <span class="trailer-dialog__identity-icon"><ArtSvgIcon icon="ri:truck-line" /></span>
         <div>
@@ -40,13 +41,17 @@
             <ArtUploadImage
               v-model="form[activeImage]"
               :resource-tenant-id="resourceTenantId"
+              :upload-request="uploadTrailerImage"
+              :show-resource-picker="false"
+              :file-size="8 * 1024 * 1024"
+              file-type=".jpg,.jpeg,.png,.webp"
               :title="activeImageLabel"
               width="100%"
               :height="210"
               :limit="1"
             />
           </div>
-          <p class="trailer-dialog__photo-help">支持上传或从资源库选择图片；图片可预览、替换。</p>
+          <p class="trailer-dialog__photo-help">影像私有存储，仅授权人员可预览、替换。</p>
         </section>
 
         <section class="trailer-dialog__details" aria-label="挂车档案信息">
@@ -135,7 +140,7 @@
 </template>
 
 <script setup lang="ts">
-  import { ElButton, ElMessage, type FormRules } from 'element-plus'
+  import { ElAlert, ElButton, ElMessage, type FormRules } from 'element-plus'
   import { pick } from 'lodash-es'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
@@ -151,7 +156,12 @@
   import { vehicleTypeProfileLabel } from '../../vehicle-archive-edit/modules/vehicle-type-catalog'
   import type { VehicleTypeProfile } from '@vms/types/vehicle-type'
   import type { TrailerRecord, TrailerWritePayload } from '@vms/types/trailer'
-  import { fetchVehicleArchiveOptions, fetchTrailerCompanyOptions, saveTrailer } from '@vms/api'
+  import {
+    fetchVehicleArchiveOptions,
+    fetchTrailerCompanyOptions,
+    saveTrailer,
+    uploadTrailerPrivateImage
+  } from '@vms/api'
   import type { TrailerCompanyOption } from '@vms/types/trailer'
   import { replaceReactiveModel } from '@/utils/form/model'
   import { normalizeNullableText, normalizeNullableNumber } from '@/utils/form/normalize'
@@ -159,6 +169,7 @@
   import { useTenantScopeStore } from '@/store/modules/tenant-scope'
   import { useUserStore } from '@/store/modules/user'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
+  import { getFriendlySupabaseErrorMessage } from '@/utils/supabase'
 
   type ImageKey = 'licenseFrontUrl' | 'licenseBackUrl' | 'licenseBackReverseUrl' | 'rearPhotoUrl'
   type TrailerForm = TrailerWritePayload & { id: string | null }
@@ -174,6 +185,7 @@
   const plateColors = useDictionaryOptions('vehiclePlateColor')
   const ownershipOptions = useDictionaryOptions('vehicleOwnership')
   const activeImage = ref<ImageKey>('licenseFrontUrl')
+  const saveError = ref('')
   const recordTenantId = ref<string | null>(null)
   const selectedTractor = ref<Api.Vms.VehicleManage.VehicleOption[]>([])
   const selectedCompany = ref<TrailerCompanyOption[]>([])
@@ -220,6 +232,8 @@
       userStore.getUserInfo.tenantId ??
       undefined
   )
+  const uploadTrailerImage = (file: File) =>
+    uploadTrailerPrivateImage(file, resourceTenantId.value ?? '')
   const activeImageLabel = computed(
     () => imageItems.find((item) => item.key === activeImage.value)?.label ?? ''
   )
@@ -345,12 +359,14 @@
       !form.ownerName?.trim()
     ) {
       activeImage.value = 'licenseFrontUrl'
+      saveError.value = '请填写车牌号、车牌颜色、挂车车型和行驶证所有人，再保存档案'
       ElMessage.warning('请填写车牌号、车牌颜色、挂车车型和行驶证所有人')
       return false
     }
     return true
   }
   const handleSubmit = async (): Promise<boolean> => {
+    saveError.value = ''
     if (!validateRequired()) return false
     const { id, ...values } = toRaw(form)
     const payload: TrailerWritePayload = {
@@ -373,12 +389,17 @@
       emit('success')
       return true
     } catch (error) {
-      notifyFriendlyError(error, '挂车档案保存失败，请检查填写内容后重试')
+      saveError.value = getFriendlySupabaseErrorMessage(
+        error,
+        '挂车档案保存失败，请检查默认牵引车、所属公司与影像后重试'
+      )
+      notifyFriendlyError(error, saveError.value)
       return false
     }
   }
 
   const handleOpen = async (row?: TrailerRecord): Promise<void> => {
+    saveError.value = ''
     recordTenantId.value = row?.tenantId ?? null
     const initial = emptyForm()
     replaceReactiveModel(form, row ? { ...initial, ...pick(row, Object.keys(initial)) } : initial)

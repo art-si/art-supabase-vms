@@ -1,5 +1,5 @@
 <template>
-  <ArtDialog ref="dialogRef" size="lg" :show-fullscreen-button="false">
+  <ArtDialog ref="dialogRef" size="lg">
     <template #subtitle>先录入车辆身份和车型，保存后可继续完善证照、司机与运营资料。</template>
     <div class="grid gap-6 sm:grid-cols-[120px_minmax(0,1fr)]">
       <div class="flex flex-col gap-3">

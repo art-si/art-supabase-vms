@@ -142,17 +142,17 @@
     },
     {
       prop: 'ownership',
-      label: '车辆归属',
+      label: '业务关系',
       minWidth: 120,
       dict: { code: 'vehicleOwnership', display: 'auto' }
     },
     {
       prop: 'companyName',
-      label: '所属公司',
+      label: '所属组织',
       minWidth: 150,
       formatter: (row) => textOrDash(row.companyName)
     },
-    { prop: 'trailerType', label: '挂车车型', minWidth: 170 },
+    { prop: 'trailerType', label: '挂车类型', minWidth: 170 },
     {
       prop: 'curbWeightKg',
       label: '整备质量 (kg)',
@@ -176,7 +176,7 @@
     },
     {
       prop: 'defaultTractorPlateNo',
-      label: '默认牵引车',
+      label: '牵引车',
       minWidth: 140,
       formatter: (row) => textOrDash(row.defaultTractorPlateNo)
     },

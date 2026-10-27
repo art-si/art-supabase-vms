@@ -133,7 +133,7 @@
   import { getFriendlySupabaseErrorMessage } from '@/utils/supabase'
   import { useRecordDeleteGuard } from '@/hooks/core/useRecordDeleteGuard'
   import type { ComputedRef, UnwrapNestedRefs } from 'vue'
-  import { ElMessage, ElTree } from 'element-plus'
+  import { ElMessage, ElTag, ElTree } from 'element-plus'
   import { groupBy } from 'lodash-es'
   import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
   import ArtTreeExpandToggle from '@/components/core/widget/art-tree-expand-toggle/index.vue'
@@ -177,11 +177,15 @@
   } from '@/components/business/business-workspace-header/index.vue'
   import { canViewField, mergeFieldAccessMaps } from '@/utils/field-permission'
   import VehicleQuickCreateDialog from './modules/vehicle-quick-create-dialog.vue'
+  import {
+    vehicleCertificateRiskDisplay,
+    vehicleCertificateRiskNeedsAttention
+  } from './modules/vehicle-certificate-risk'
 
   defineOptions({ name: 'VehicleArchiveManage' })
 
   const { deleteRecords } = useRecordDeleteGuard('mdm_vehicle', '车辆档案')
-  const { hasAllAuth } = useAuth()
+  const { hasAllAuth, hasAuth } = useAuth()
 
   type VehicleArchive = Api.Vms.ArchiveManage.VehicleArchive
   type CarrierOption = VmsCarrierReference
@@ -207,6 +211,7 @@
       tableLayout: 'fixed'
       emptyText: string
       emptyDescription: string
+      rowClassName: ({ row }: { row: Record<string, unknown>; rowIndex: number }) => string
     }
   }
 
@@ -601,6 +606,12 @@
         dict: { code: 'vehicleOperationStatus', display: 'auto' }
       },
       {
+        prop: 'certificateRisk',
+        label: '证件状态',
+        width: 162,
+        formatter: (row) => renderCertificateRisk(row)
+      },
+      {
         prop: 'auditStatus',
         label: '审核状态',
         width: 110,
@@ -642,7 +653,9 @@
       rowKey: 'id',
       tableLayout: 'fixed',
       emptyText: '暂无符合条件的车辆档案',
-      emptyDescription: '可调整筛选条件，或新增车辆档案后完善资料。'
+      emptyDescription: '可调整筛选条件，或新增车辆档案后完善资料。',
+      rowClassName: ({ row }: { row: Record<string, unknown>; rowIndex: number }) =>
+        row.certificateRisk === 'expired' ? 'vehicle-archive-manage__expired' : ''
     }
   })
 
@@ -709,27 +722,69 @@
     overview.total = response.total ?? rows.length
   }
 
-  const renderVehicleIdentity = (row: VehicleArchive) => (
-    <div class="vehicle-archive-manage__vehicle-cell">
-      <div>
-        {row.id ? (
-          <RouterLink
-            class="vehicle-archive-manage__plate-link"
-            to={`/vms/vehicle-archive-detail/${row.id}`}
-            title={`查看车辆 ${row.plateNo || '未录入车牌'} 详情`}
-          >
-            {row.plateNo || '未录入车牌'}
-          </RouterLink>
-        ) : (
-          <strong>{row.plateNo || '未录入车牌'}</strong>
-        )}
-        <span>{row.manufacturer || '厂商待补充'}</span>
+  const renderVehicleIdentity = (row: VehicleArchive) => {
+    const riskDisplay = vehicleCertificateRiskDisplay(row)
+    return (
+      <div class="vehicle-archive-manage__vehicle-cell">
+        <div>
+          {row.id ? (
+            <RouterLink
+              class="vehicle-archive-manage__plate-link"
+              to={`/vms/vehicle-archive-detail/${row.id}`}
+              title={`查看车辆 ${row.plateNo || '未录入车牌'} 详情`}
+            >
+              {row.plateNo || '未录入车牌'}
+            </RouterLink>
+          ) : (
+            <strong>{row.plateNo || '未录入车牌'}</strong>
+          )}
+          {vehicleCertificateRiskNeedsAttention(row.certificateRisk) ? (
+            <ElTag
+              class="vehicle-archive-manage__risk-flag"
+              type={riskDisplay.tone}
+              effect="light"
+              size="small"
+            >
+              {riskDisplay.label}
+            </ElTag>
+          ) : null}
+          <span class="vehicle-archive-manage__manufacturer" title={row.manufacturer}>
+            {row.manufacturer || '厂商待补充'}
+          </span>
+        </div>
+        {canViewField(row.fieldAccess, 'vehicleIdentifiers') ? (
+          <small title={row.vin}>{row.vin || 'VIN 待补充'}</small>
+        ) : null}
       </div>
-      {canViewField(row.fieldAccess, 'vehicleIdentifiers') ? (
-        <small title={row.vin}>{row.vin || 'VIN 待补充'}</small>
-      ) : null}
-    </div>
-  )
+    )
+  }
+
+  const renderCertificateRisk = (row: VehicleArchive) => {
+    const display = vehicleCertificateRiskDisplay(row)
+    const content = (
+      <span class="vehicle-archive-manage__certificate-content">
+        <ElTag type={display.tone} effect="light" size="small">
+          {display.label}
+        </ElTag>
+        <small title={display.detail}>{display.detail}</small>
+      </span>
+    )
+
+    return row.id && hasAuth('CertificateCenter:View') ? (
+      <RouterLink
+        class="vehicle-archive-manage__certificate-link"
+        to={{
+          path: '/vms/certificate-center',
+          query: { subjectType: 'vehicle', subjectId: row.id }
+        }}
+        title={`查看 ${row.plateNo || '车辆'} 的证件`}
+      >
+        {content}
+      </RouterLink>
+    ) : (
+      content
+    )
+  }
 
   const renderOwnership = (row: VehicleArchive) => (
     <div class="vehicle-archive-manage__ownership">
@@ -1045,7 +1100,7 @@
       outline-offset: 2px;
     }
 
-    :deep(.vehicle-archive-manage__vehicle-cell span),
+    :deep(.vehicle-archive-manage__manufacturer),
     :deep(.vehicle-archive-manage__vehicle-cell small),
     :deep(.vehicle-archive-manage__ownership strong),
     :deep(.vehicle-archive-manage__ownership small) {
@@ -1054,16 +1109,58 @@
       white-space: nowrap;
     }
 
-    :deep(.vehicle-archive-manage__vehicle-cell span),
+    :deep(.vehicle-archive-manage__manufacturer),
     :deep(.vehicle-archive-manage__vehicle-cell small),
     :deep(.vehicle-archive-manage__ownership small) {
       font-size: 12px;
       color: var(--el-text-color-secondary);
     }
 
+    :deep(.vehicle-archive-manage__manufacturer) {
+      flex: 1;
+      min-width: 0;
+    }
+
+    :deep(.vehicle-archive-manage__risk-flag) {
+      flex: none;
+      padding-inline: 5px;
+      font-size: 11px;
+    }
+
     :deep(.vehicle-archive-manage__ownership strong) {
       font-weight: 600;
       color: var(--el-text-color-primary);
+    }
+
+    :deep(.vehicle-archive-manage__expired td:first-child) {
+      box-shadow: inset 3px 0 0 var(--el-color-danger);
+    }
+
+    :deep(.vehicle-archive-manage__certificate-link),
+    :deep(.vehicle-archive-manage__certificate-content) {
+      display: grid;
+      gap: 3px;
+      justify-items: start;
+      min-width: 0;
+    }
+
+    :deep(.vehicle-archive-manage__certificate-link) {
+      text-decoration: none;
+
+      &:focus-visible {
+        outline: 2px solid var(--theme-color);
+        outline-offset: 2px;
+      }
+    }
+
+    :deep(.vehicle-archive-manage__certificate-content small) {
+      display: block;
+      max-width: 142px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-size: 11px;
+      color: var(--el-text-color-secondary);
+      white-space: nowrap;
     }
 
     :deep(.vehicle-archive-manage__operation) {
@@ -1073,6 +1170,15 @@
 
       .art-button-table {
         margin-right: 0;
+      }
+    }
+  }
+
+  @media (width <= 1160px) {
+    .vehicle-archive-manage {
+      :deep(.art-search-bar .el-row > .el-col) {
+        flex: 0 0 100%;
+        max-width: 100%;
       }
     }
   }

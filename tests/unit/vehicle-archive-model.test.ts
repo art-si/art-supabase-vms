@@ -34,6 +34,31 @@ test('vehicle archive payload removes display and audit-only fields', () => {
   assert.equal('auditRemark' in payload, false)
 })
 
+test('vehicle archive payload preserves ordered backup driver IDs without display details', () => {
+  const form = createInitialVehicleArchiveForm()
+  form.backupDriverIds = ['backup-2', 'backup-1']
+  form.backupDrivers = [
+    { id: 'backup-2', driverName: '轮班甲' },
+    { id: 'backup-1', driverName: '轮班乙' }
+  ]
+  form.secondaryDriverId = 'backup-2'
+
+  const payload = sanitizeVehicleArchivePayload(form)
+
+  assert.deepEqual(payload.backupDriverIds, ['backup-2', 'backup-1'])
+  assert.equal(payload.secondaryDriverId, 'backup-2')
+  assert.equal('backupDrivers' in payload, false)
+})
+
+test('new vehicle defaults usage nature to freight without changing business type', () => {
+  const form = createInitialVehicleArchiveForm()
+  const payload = sanitizeVehicleArchivePayload(form)
+
+  assert.equal(form.usageNature, 'freight')
+  assert.equal(payload.usageNature, 'freight')
+  assert.equal(payload.businessType, null)
+})
+
 test('vehicle archive payload omits sensitive fields without edit permission', () => {
   const form = createInitialVehicleArchiveForm()
   Object.assign(form, {

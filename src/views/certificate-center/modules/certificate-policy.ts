@@ -26,9 +26,10 @@ export const CERTIFICATE_TYPE_OPTIONS: Record<
 
 export const CERTIFICATE_STATUS_OPTIONS: { value: CertificateStatus; label: string }[] = [
   { value: 'valid', label: '有效' },
-  { value: 'due_30', label: '30 天内到期' },
-  { value: 'due_15', label: '15 天内到期' },
-  { value: 'due_today', label: '今天到期' },
+  { value: 'due_3_months', label: '待换证（3 个月）' },
+  { value: 'due_30', label: '待换证（30 天）' },
+  { value: 'due_15', label: '待换证（15 天）' },
+  { value: 'due_today', label: '待换证（今天）' },
   { value: 'expired', label: '已过期' },
   { value: 'handled', label: '已处理' }
 ]
@@ -45,11 +46,24 @@ export function certificateStatusLabel(status: CertificateStatus): string {
   return CERTIFICATE_STATUS_OPTIONS.find((item) => item.value === status)?.label ?? '未知状态'
 }
 
+export function certificateStatusTableLabel(status: CertificateStatus): string {
+  if (status === 'due_3_months') return '3 个月内'
+  if (status === 'due_30') return '30 天内'
+  if (status === 'due_15') return '15 天内'
+  return certificateStatusLabel(status)
+}
+
 export function certificateStatusTone(
   status: CertificateStatus
 ): 'success' | 'warning' | 'danger' | 'info' {
   if (status === 'expired') return 'danger'
-  if (status === 'due_today' || status === 'due_15' || status === 'due_30') return 'warning'
+  if (
+    status === 'due_today' ||
+    status === 'due_15' ||
+    status === 'due_30' ||
+    status === 'due_3_months'
+  )
+    return 'warning'
   if (status === 'handled') return 'info'
   return 'success'
 }
@@ -62,7 +76,8 @@ export function certificateRiskCounts(rows: CertificateRecord[]): {
   return rows.reduce(
     (counts, row) => {
       if (row.status === 'expired') counts.expired += 1
-      if (['due_today', 'due_15', 'due_30'].includes(row.status)) counts.dueSoon += 1
+      if (['due_today', 'due_15', 'due_30', 'due_3_months'].includes(row.status))
+        counts.dueSoon += 1
       if (row.status === 'handled') counts.handled += 1
       return counts
     },
@@ -71,5 +86,9 @@ export function certificateRiskCounts(rows: CertificateRecord[]): {
 }
 
 export function canMarkCertificateHandled(row: CertificateRecord): boolean {
-  return row.status !== 'handled'
+  return !isLegacyCertificateRecord(row) && row.status !== 'handled'
+}
+
+export function isLegacyCertificateRecord(row: CertificateRecord): boolean {
+  return row.sourceKind === 'legacy_insurance' || row.sourceKind === 'legacy_inspection'
 }

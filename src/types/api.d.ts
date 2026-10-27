@@ -95,8 +95,12 @@ declare global {
           approvedPassengerCount?: number | null
           seatCount?: number | null
           businessType?: string
+          usageNature?: string | null
           isAirConditioned?: boolean
           operationStatus?: string
+          certificateRisk?: 'expired' | 'renewal_due' | 'valid' | 'none'
+          certificateRiskExpiresOn?: string | null
+          certificateRiskType?: import('./certificate').CertificateType | null
           operationStatusChangeDate?: string
           purchaseStatus?: string
           purchaseStatusChangeDate?: string
@@ -148,6 +152,8 @@ declare global {
           primaryDriver?: Api.Vms.Integration.DriverReference | null
           secondaryDriverId?: string | null
           secondaryDriver?: Api.Vms.Integration.DriverReference | null
+          backupDriverIds?: string[]
+          backupDrivers?: Api.Vms.Integration.DriverReference[]
           driverOneName?: string
           driverOnePhone?: string
           driverTwoName?: string

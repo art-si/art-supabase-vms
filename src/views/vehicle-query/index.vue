@@ -548,7 +548,7 @@
       color: var(--el-color-primary);
       background: var(--el-color-primary-light-9);
       border: 1px solid var(--el-color-primary-light-7);
-      border-radius: 4px;
+      border-radius: var(--art-surface-radius);
     }
 
     :deep(.vehicle-query-page__vehicle-cell span),

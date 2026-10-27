@@ -115,6 +115,7 @@
       { label: '核定乘员数（人）', value: props.vehicle.approvedPassengerCount },
       { label: '座位数', value: props.vehicle.seatCount },
       { label: '业务类型', value: props.vehicle.businessType, dictCode: 'vehicleBusinessType' },
+      { label: '使用性质', value: props.vehicle.usageNature, dictCode: 'vehicleUsageNature' },
       { label: '是否空调车', value: formatArtValue(props.vehicle.isAirConditioned, 'boolean') },
       {
         label: '营运状态',
@@ -204,10 +205,24 @@
       ...(canViewField(props.vehicle.primaryDriver?.fieldAccess, 'contactPhone')
         ? [{ label: '主司机电话', value: props.vehicle.primaryDriver?.phone }]
         : []),
-      { label: '辅司机姓名', value: props.vehicle.secondaryDriver?.driverName },
-      ...(canViewField(props.vehicle.secondaryDriver?.fieldAccess, 'contactPhone')
-        ? [{ label: '辅司机电话', value: props.vehicle.secondaryDriver?.phone }]
-        : []),
+      {
+        label: '备用司机',
+        value:
+          props.vehicle.backupDrivers?.map((driver) => driver.driverName).join('、') ||
+          props.vehicle.secondaryDriver?.driverName
+      },
+      {
+        label: '备用司机电话',
+        value:
+          props.vehicle.backupDrivers
+            ?.filter((driver) => canViewField(driver.fieldAccess, 'contactPhone'))
+            .map((driver) => driver.phone)
+            .filter(Boolean)
+            .join('、') ||
+          (canViewField(props.vehicle.secondaryDriver?.fieldAccess, 'contactPhone')
+            ? props.vehicle.secondaryDriver?.phone
+            : undefined)
+      },
       ...(canViewField(props.vehicle.fieldAccess, 'operationRoute')
         ? [{ label: '营运线路', value: props.vehicle.operationRoute }]
         : []),
