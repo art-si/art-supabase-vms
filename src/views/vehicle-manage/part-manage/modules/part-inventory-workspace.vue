@@ -193,7 +193,13 @@
   }
   const columnsFactory = (): ColumnOption<VehiclePartStockMovement>[] => [
     { type: 'globalIndex', label: '序号', width: 70 },
-    { prop: 'postingSeq', label: '记账序号', width: 96, align: 'right', formatter: (row) => <span class="tabular-nums">#{row.postingSeq}</span> },
+    {
+      prop: 'postingSeq',
+      label: '记账序号',
+      width: 96,
+      align: 'right',
+      formatter: (row) => <span class="tabular-nums">#{row.postingSeq}</span>
+    },
     {
       prop: 'partName',
       label: '配件 / 编码',

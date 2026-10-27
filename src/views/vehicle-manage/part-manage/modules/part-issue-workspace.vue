@@ -63,7 +63,14 @@
             :subtitle="`共 ${detail.record.lines.length} 项；归还可分次登记`"
             preserve-content-structure
           >
-            <ElAlert v-if="detail.imageError" class="mb-3" type="warning" :closable="false" show-icon :title="detail.imageError" />
+            <ElAlert
+              v-if="detail.imageError"
+              class="mb-3"
+              type="warning"
+              :closable="false"
+              show-icon
+              :title="detail.imageError"
+            />
             <div class="space-y-3">
               <article
                 v-for="line in detail.record.lines"
@@ -216,16 +223,16 @@
       icon: 'ri:file-list-3-line'
     },
     {
-      label: '本页领用件数',
-      value: overview.rows.reduce((sum, row) => sum + row.issuedQty, 0),
-      description: '当前页领用合计',
+      label: '本页明细项',
+      value: overview.rows.reduce((sum, row) => sum + row.lineCount, 0),
+      description: '当前页物料条目',
       icon: 'ri:tools-line',
       tone: 'primary'
     },
     {
-      label: '本页已归还',
-      value: overview.rows.reduce((sum, row) => sum + row.returnedQty, 0),
-      description: '不含丢失、损坏',
+      label: '有归还记录的单据',
+      value: overview.rows.filter((row) => row.returnedQty > 0).length,
+      description: '当前页已登记归还',
       icon: 'ri:arrow-go-back-line',
       tone: 'success'
     }
@@ -313,7 +320,9 @@
       detail.imagePreviews = {}
       if (paths.length) {
         try {
-          detail.imagePreviews = Object.fromEntries(await signPrivateAttachmentPaths('vms-part-private', paths))
+          detail.imagePreviews = Object.fromEntries(
+            await signPrivateAttachmentPaths('vms-part-private', paths)
+          )
         } catch {
           detail.imageError = '配件照片暂时无法预览，单据和归还操作仍可继续。'
         }
