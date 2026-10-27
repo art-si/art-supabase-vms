@@ -192,6 +192,7 @@
   import PartReturnDialog from './part-return-dialog.vue'
 
   defineOptions({ name: 'VmsPartIssueWorkspace' })
+  const props = defineProps<{ openIssueId?: string }>()
 
   const { hasAuth } = useAuth()
   const tableRef = ref<ArtTableQueryExpose>()
@@ -333,15 +334,25 @@
       detail.loading = false
     }
   }
-  const openDetail = async (row: VehiclePartIssue): Promise<void> => {
-    detail.id = row.id
+  const openDetailById = async (id: string, documentNo = ''): Promise<void> => {
+    detail.id = id
     detail.record = null
+    await nextTick()
     await detailRef.value?.handleOpen(undefined, {
       title: '领用归还详情',
-      subtitle: row.documentNo
+      subtitle: documentNo
     })
-    await loadDetail(row.id)
+    await loadDetail(id)
   }
+  const openDetail = (row: VehiclePartIssue): Promise<void> =>
+    openDetailById(row.id, row.documentNo)
+  watch(
+    () => props.openIssueId,
+    (id) => {
+      if (id) void openDetailById(id)
+    },
+    { immediate: true }
+  )
   const reloadDetail = (): void => {
     if (detail.id) void loadDetail(detail.id)
   }

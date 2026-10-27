@@ -83,6 +83,7 @@
   import PartStockReceiptDialog from './part-stock-receipt-dialog.vue'
 
   defineOptions({ name: 'VmsPartInventoryWorkspace' })
+  const props = defineProps<{ initialPartId?: string }>()
 
   const { hasAuth } = useAuth()
   const tableRef = ref<ArtTableQueryExpose>()
@@ -92,7 +93,14 @@
     loading: false,
     error: null
   })
-  const search = reactive<{ partId?: string }>({ partId: undefined })
+  const search = reactive<{ partId?: string }>({ partId: props.initialPartId })
+  watch(
+    () => props.initialPartId,
+    (partId) => {
+      search.partId = partId
+      void nextTick(() => tableRef.value?.refreshData())
+    }
+  )
   const metrics = computed<BusinessWorkspaceMetric[]>(() => [
     {
       label: '物料种类',
@@ -146,6 +154,12 @@
           </div>
         </div>
       )
+    },
+    {
+      prop: 'categoryName',
+      label: '配件分类',
+      minWidth: 110,
+      formatter: (row) => row.categoryName || '--'
     },
     { prop: 'model', label: '规格型号', minWidth: 120, showOverflowTooltip: true },
     { prop: 'brand', label: '品牌', minWidth: 110, showOverflowTooltip: true },

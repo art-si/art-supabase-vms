@@ -3,11 +3,47 @@ import { normalizeNullableText } from '@/utils/form/normalize'
 
 const { supabase, responseHandle } = useSupabase()
 
+export type VehiclePartReferenceSource =
+  'vms_part_issue_line' | 'vms_part_stock_movement' | 'vms_part_stock'
+
+export interface VehiclePartReferenceDestination {
+  tab: 'issues' | 'inventory'
+  issueId?: string
+  partId?: string
+}
+
+/** Resolve a delete-guard reference to the authorized VMS record it belongs to. */
+export async function fetchVehiclePartReferenceDestination(
+  sourceTable: VehiclePartReferenceSource,
+  recordId: string
+): Promise<VehiclePartReferenceDestination | null> {
+  const id = recordId.split(':').at(-1)
+  if (!id || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+    return null
+  }
+  const { data } = await responseHandle<VehiclePartReferenceDestination | null>(
+    () =>
+      supabase.rpc('vms_get_part_reference_destination_secure', {
+        p_source_table: sourceTable,
+        p_record_id: id
+      }),
+    { breakReturn: true, showErrorMessage: false, errorMessage: '关联配件记录定位失败，请重试' }
+  )
+  if (!data || !['issues', 'inventory'].includes(data.tab)) return null
+  return {
+    tab: data.tab,
+    issueId: typeof data.issueId === 'string' ? data.issueId : undefined,
+    partId: typeof data.partId === 'string' ? data.partId : undefined
+  }
+}
+
 export interface VehiclePartStock {
   id: string
   partId: string
   partCode: string
   partName: string
+  categoryId?: string | null
+  categoryName?: string | null
   model: string | null
   brand: string | null
   unit: string | null
