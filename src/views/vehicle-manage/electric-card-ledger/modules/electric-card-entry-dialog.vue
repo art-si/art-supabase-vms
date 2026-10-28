@@ -40,6 +40,41 @@
       <template #driverName>
         <span>{{ selectedCard?.driverName || '未绑定主司机' }}</span>
       </template>
+      <template #waybillId>
+        <ArtTableSingleSelect
+          v-model="waybillSelectValue"
+          v-model:selected-data="waybillSelection"
+          :api-fn="fetchWaybills"
+          :columns="waybillColumns"
+          row-key="id"
+          label-key="waybillNo"
+          title="选择关联运单"
+          search-placeholder="输入运单号"
+          empty-text="该电卡车辆暂无可关联运单"
+          :disabled="!selectedCard"
+          show-pagination
+          clearable
+          @change="handleWaybillChange"
+        />
+      </template>
+      <template #locationPicker>
+        <ArtAddressPicker
+          v-model:address-detail="form.expenseLocation"
+          v-model:longitude="form.expenseLongitude"
+          v-model:latitude="form.expenseLatitude"
+          v-model:coordinate-system="form.expenseCoordinateSystem"
+          v-model:coordinate-source="form.expenseCoordinateSource"
+          v-model:coordinate-status="form.expenseCoordinateStatus"
+          v-model:geocode-provider="form.expenseGeocodeProvider"
+          v-model:geocoded-at="form.expenseGeocodedAt"
+          detail-label="发生地点"
+          detail-placeholder="搜索/点击地图选择充电地点，或使用当前位置"
+          address-detail-prop="expenseLocation"
+          label-width="118px"
+          hide-region-selector
+          show-locate-button
+        />
+      </template>
     </ArtForm>
     <ElAlert
       v-if="action === 'consume'"
@@ -78,12 +113,15 @@
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
   import ArtTableSingleSelect from '@/components/core/forms/art-data-select/table-single.vue'
+  import ArtAddressPicker from '@/components/core/forms/art-address-picker/index.vue'
+  import ArtDictDisplay from '@/components/core/base/art-dict-display/index.vue'
   import ArtUploadImage from '@/components/core/forms/art-upload-image/index.vue'
   import type {
     DataSelectColumn,
     DataSelectRecord
   } from '@/components/core/forms/art-data-select/types'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
+  import { normalizeCoordinatePair } from '@/utils/geo'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
   import {
     privateAttachmentPathFromSignedUrl,
@@ -92,8 +130,10 @@
   import { formatCurrencyValue } from '@/utils/ui/format'
   import {
     fetchElectricCards,
+    fetchElectricCardWaybillOptions,
     recordElectricCardTransaction,
-    type ElectricCard
+    type ElectricCard,
+    type ElectricCardWaybillOption
   } from '@/api/electric-card'
 
   defineOptions({ name: 'VmsElectricCardEntryDialog' })
@@ -107,6 +147,15 @@
     rechargeChannel: string
     invoiceNo: string
     stationName: string
+    waybillId: string
+    expenseLocation: string
+    expenseLongitude: number | null
+    expenseLatitude: number | null
+    expenseCoordinateSystem: string | null
+    expenseCoordinateSource: string | null
+    expenseCoordinateStatus: string
+    expenseGeocodeProvider: string | null
+    expenseGeocodedAt: string | null
     pileNo: string
     chargeKwh: number | undefined
     unitPrice: number | undefined
@@ -129,6 +178,15 @@
     rechargeChannel: '',
     invoiceNo: '',
     stationName: '',
+    waybillId: '',
+    expenseLocation: '',
+    expenseLongitude: null,
+    expenseLatitude: null,
+    expenseCoordinateSystem: null,
+    expenseCoordinateSource: null,
+    expenseCoordinateStatus: 'pending',
+    expenseGeocodeProvider: null,
+    expenseGeocodedAt: null,
     pileNo: '',
     chargeKwh: undefined,
     unitPrice: undefined,
@@ -137,7 +195,27 @@
   const voucherUrls = ref<string[]>([])
   const cardSelectValue = ref('')
   const cardSelection = ref<ElectricCard[]>([])
+  const waybillSelectValue = ref('')
+  const waybillSelection = ref<ElectricCardWaybillOption[]>([])
   const selectedCard = computed(() => cardSelection.value[0])
+  const fetchWaybills = (params: { page: number; pageSize: number; keyword?: string }) =>
+    fetchElectricCardWaybillOptions({
+      cardId: form.cardId,
+      from: (params.page - 1) * params.pageSize,
+      to: params.page * params.pageSize - 1,
+      keyword: params.keyword
+    })
+  const waybillColumns: DataSelectColumn[] = [
+    { prop: 'waybillNo', label: '运单号', minWidth: 190 },
+    {
+      prop: 'status',
+      label: '状态',
+      minWidth: 100,
+      formatter: (row: DataSelectRecord) => (
+        <ArtDictDisplay dict-code="tmsWaybillStatus" value={row.status} />
+      )
+    }
+  ]
   const cardColumns: DataSelectColumn[] = [
     { prop: 'cardNo', label: '电卡号', minWidth: 170 },
     { prop: 'plateNo', label: '绑定车牌', minWidth: 130 },
@@ -157,8 +235,24 @@
     })
   const handleCardChange = (_value: unknown, rows: DataSelectRecord[]): void => {
     const card = rows[0] as ElectricCard | undefined
-    if (card?.id !== form.cardId) voucherUrls.value = []
+    if (card?.id !== form.cardId) {
+      voucherUrls.value = []
+      form.waybillId = ''
+      waybillSelectValue.value = ''
+      waybillSelection.value = []
+      form.expenseLocation = ''
+      form.expenseLongitude = null
+      form.expenseLatitude = null
+      form.expenseCoordinateSystem = null
+      form.expenseCoordinateSource = null
+      form.expenseCoordinateStatus = 'pending'
+      form.expenseGeocodeProvider = null
+      form.expenseGeocodedAt = null
+    }
     form.cardId = card?.id || ''
+  }
+  const handleWaybillChange = (_value: unknown, rows: DataSelectRecord[]): void => {
+    form.waybillId = (rows[0] as ElectricCardWaybillOption | undefined)?.id || ''
   }
   const uploadVoucher = (file: File) =>
     uploadPrivateAttachment(file, {
@@ -200,12 +294,14 @@
           { label: '发票号', key: 'invoiceNo', type: 'input', props: { maxlength: 80 } }
         ] satisfies FormItem[])
       : ([
+          { label: '关联运单', key: 'waybillId' },
           {
             label: '充电站',
             key: 'stationName',
             type: 'input',
             props: { maxlength: 120, placeholder: '请输入充电站名称' }
           },
+          { label: '', key: 'locationPicker', span: 24, labelWidth: 0 },
           {
             label: '表号/桩号',
             key: 'pileNo',
@@ -262,6 +358,14 @@
   const handleConfirm = async (): Promise<boolean> => {
     try {
       if (!(await validateArtFormForSubmit(formRef.value))) return false
+      const isLocated = action.value === 'consume' && form.expenseCoordinateStatus === 'located'
+      const coordinates = isLocated
+        ? normalizeCoordinatePair(form.expenseLongitude, form.expenseLatitude)
+        : null
+      if (isLocated && (!coordinates || !form.expenseLocation.trim())) {
+        notifyFriendlyError(null, '定位坐标或地址无效，请重新在地图选点或获取当前位置')
+        return false
+      }
       await recordElectricCardTransaction({
         cardId: form.cardId,
         entryType: action.value,
@@ -270,6 +374,19 @@
         chargeKwh: action.value === 'consume' ? form.chargeKwh : null,
         unitPrice: action.value === 'consume' ? form.unitPrice : null,
         stationName: action.value === 'consume' ? form.stationName.trim() : '',
+        waybillId: action.value === 'consume' ? form.waybillId || null : null,
+        expenseLocation: action.value === 'consume' ? form.expenseLocation.trim() : '',
+        expenseLongitude: coordinates?.longitude ?? null,
+        expenseLatitude: coordinates?.latitude ?? null,
+        expenseCoordinateSystem: coordinates ? form.expenseCoordinateSystem : null,
+        expenseCoordinateSource: coordinates ? form.expenseCoordinateSource : null,
+        expenseCoordinateStatus: coordinates
+          ? 'located'
+          : action.value === 'consume'
+            ? form.expenseCoordinateStatus
+            : 'pending',
+        expenseGeocodeProvider: coordinates ? form.expenseGeocodeProvider : null,
+        expenseGeocodedAt: coordinates ? form.expenseGeocodedAt : null,
         pileNo: action.value === 'consume' ? form.pileNo.trim() : '',
         rechargeChannel: action.value === 'recharge' ? form.rechargeChannel.trim() : '',
         invoiceNo: action.value === 'recharge' ? form.invoiceNo.trim() : '',
@@ -302,6 +419,15 @@
       rechargeChannel: '',
       invoiceNo: '',
       stationName: '',
+      waybillId: '',
+      expenseLocation: '',
+      expenseLongitude: null,
+      expenseLatitude: null,
+      expenseCoordinateSystem: null,
+      expenseCoordinateSource: null,
+      expenseCoordinateStatus: 'pending',
+      expenseGeocodeProvider: null,
+      expenseGeocodedAt: null,
       pileNo: '',
       chargeKwh: undefined,
       unitPrice: undefined,
@@ -309,6 +435,8 @@
     })
     cardSelectValue.value = card?.id || ''
     cardSelection.value = card ? [card] : []
+    waybillSelectValue.value = ''
+    waybillSelection.value = []
     voucherUrls.value = []
     await nextTick()
     formRef.value?.clearValidate()

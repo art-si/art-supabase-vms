@@ -50,11 +50,20 @@ test('maintenance payload omits sensitive groups without edit permission', () =>
   assert.equal('attachments' in payload, false)
 })
 
-test('maintenance payload keeps editable sensitive groups', () => {
+test('maintenance edit keeps editable groups but leaves historical cost to the server', () => {
   const payload = sanitizeVehicleMaintenancePayload(createMaintenance())
 
   assert.equal(payload.maintenanceNo, 'MAINTENANCE-001')
-  assert.equal(payload.costAmount, 2680)
+  assert.equal('costAmount' in payload, false)
   assert.equal(payload.items?.length, 1)
   assert.equal(payload.attachments?.length, 1)
+})
+
+test('maintenance create can submit a calculated initial cost', () => {
+  const payload = sanitizeVehicleMaintenancePayload({
+    ...createMaintenance(),
+    id: undefined
+  })
+
+  assert.equal(payload.costAmount, 2680)
 })

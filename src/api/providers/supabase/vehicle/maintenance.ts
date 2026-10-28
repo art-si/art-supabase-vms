@@ -20,6 +20,50 @@ interface SecureVehicleMaintenancePayload {
   fieldAccess?: Api.Vms.VehicleManage.VehicleMaintenanceFieldAccessMap
 }
 
+export interface MaintenanceWorkshopOption {
+  id: string
+  supplierName: string
+  supplierCode?: string
+}
+
+export interface VehicleMaintenanceCostSource {
+  id: string
+  sourceDate: string | null
+  costAmount: number | string | null
+  recognitionStatus: 'unlinked' | 'pending_review' | 'approved'
+  linkedCostId: string | null
+  linkedCostNo: string | null
+}
+
+interface VehicleMaintenanceCostSourcePayload {
+  records: VehicleMaintenanceCostSource[]
+  total: number
+  amountVisible: boolean
+}
+
+export async function fetchVehicleMaintenanceCostSource(id: string) {
+  const result = await responseHandle<VehicleMaintenanceCostSourcePayload>(
+    () => supabase.rpc('vms_list_vehicle_maintenance_cost_ledger_secure', { p_maintenance_id: id }),
+    { showErrorMessage: false }
+  )
+  if (result.error) throw result.error
+  return result.data?.records[0] ?? null
+}
+
+export async function fetchMaintenanceWorkshopOptions(keyword?: string, tenantId?: string | null) {
+  const result = await responseHandle<{ records: MaintenanceWorkshopOption[] }>(
+    () =>
+      supabase.rpc('vms_list_maintenance_workshops_secure', {
+        p_keyword: normalizeNullableText(keyword ?? ''),
+        p_limit: 50,
+        p_tenant_id: tenantId || null
+      }),
+    { showErrorMessage: false }
+  )
+  if (result.error) throw result.error
+  return result.data?.records ?? []
+}
+
 const createVehicleMaintenanceRpcParams = (
   params: VehicleMaintenanceSearchParams & { ids?: string[]; maxRows?: number },
   purpose: 'list' | 'export'

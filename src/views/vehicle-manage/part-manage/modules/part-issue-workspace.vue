@@ -113,13 +113,21 @@
                         Math.max(0, line.issuedQty - line.settledQty)
                       }}</strong></p
                     >
+                    <p
+                      v-if="line.lostQty || line.damagedQty"
+                      class="col-span-2 text-xs text-[var(--el-text-color-secondary)] sm:col-span-4"
+                    >
+                      <span v-if="line.lostQty">丢失 {{ line.lostQty }}</span>
+                      <span v-if="line.lostQty && line.damagedQty" class="mx-2">·</span>
+                      <span v-if="line.damagedQty">损坏 {{ line.damagedQty }}</span>
+                    </p>
                     <p class="col-span-2 text-xs text-[var(--el-text-color-secondary)]"
                       >领用 {{ formatWithDayjs(line.issuedAt) }}</p
                     >
                     <p
                       v-if="line.returnedAt"
                       class="col-span-2 text-xs text-[var(--el-text-color-secondary)]"
-                      >最近归还 {{ formatWithDayjs(line.returnedAt) }}</p
+                      >最近处理 {{ formatWithDayjs(line.returnedAt) }}</p
                     >
                   </div>
                   <ElButton

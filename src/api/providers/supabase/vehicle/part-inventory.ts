@@ -63,6 +63,8 @@ export interface VehiclePartIssueLine {
   unit: string | null
   issuedQty: number
   returnedQty: number
+  lostQty: number
+  damagedQty: number
   settledQty: number
   issuedAt: string
   returnedAt: string | null

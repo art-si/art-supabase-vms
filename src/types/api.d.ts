@@ -486,7 +486,7 @@ declare global {
             }
         >
 
-        type VehicleMaintenanceType = 'repair' | 'maintenance'
+        type VehicleMaintenanceType = 'routine' | 'repair' | 'accident' | 'maintenance'
 
         type VehicleMaintenanceFieldKey =
           'maintenanceIdentifiers' | 'totalCost' | 'maintenanceItems' | 'documents'
@@ -523,8 +523,15 @@ declare global {
           drivingMileage?: number | string | null
           startTime: string
           endTime?: string | null
+          serviceDate?: string | null
+          currentOdometerKm?: number | null
+          reminderMode?: 'time' | 'mileage'
+          nextMaintenanceDate?: string | null
+          nextMaintenanceMileage?: number | null
           costAmount?: number | string | null
           workshop?: string
+          workshopSupplierId?: string | null
+          invoiceNo?: string | null
           externalRepair: boolean
           remark?: string
           items?: VehicleMaintenanceItem[]

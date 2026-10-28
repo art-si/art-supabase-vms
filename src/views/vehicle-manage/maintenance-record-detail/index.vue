@@ -35,7 +35,7 @@
         v-if="canViewTotalCost"
         class="maintenance-record-detail__summary-item flex min-w-0 flex-col gap-2"
       >
-        <span class="text-[var(--el-text-color-secondary)]">费用金额</span>
+        <span class="text-[var(--el-text-color-secondary)]">总费用（元）</span>
         <strong class="text-lg font-semibold wrap-anywhere">{{
           formatSensitiveNumberWithAffix(detail.data?.costAmount, { suffix: ' 元' })
         }}</strong>
@@ -52,6 +52,50 @@
     </section>
 
     <div class="maintenance-record-detail__content art-card-xs mt-3 flex flex-col gap-6 p-5">
+      <ArtPageSection
+        v-if="canViewTotalCost"
+        title="单车成本归集"
+        class="maintenance-record-detail__section"
+      >
+        <ElSkeleton v-if="sourceCost.loading" :rows="2" animated />
+        <div v-else-if="sourceCost.error" class="flex flex-wrap items-center gap-3">
+          <span class="text-sm text-[var(--el-color-danger)]">{{ sourceCost.error }}</span>
+          <ElButton type="primary" link @click="loadCostSource(String(detail.data?.id || ''))"
+            >重试</ElButton
+          >
+        </div>
+        <div
+          v-else-if="sourceCost.data"
+          class="flex flex-wrap items-center gap-3 rounded-lg bg-[var(--el-fill-color-light)] px-4 py-3"
+        >
+          <ElTag
+            :type="sourceCost.data.recognitionStatus === 'approved' ? 'success' : 'warning'"
+            effect="light"
+          >
+            {{ sourceCostStatusLabel }}
+          </ElTag>
+          <span class="text-sm text-[var(--el-text-color-regular)]">
+            {{
+              sourceCost.data.recognitionStatus === 'unlinked'
+                ? '维保费用已记录，等待关联并审核费用单。'
+                : sourceCost.data.recognitionStatus === 'pending_review'
+                  ? '费用单已关联，待审核通过后计入单车成本。'
+                  : '费用单已审核，计入单车成本。'
+            }}
+          </span>
+          <ElButton
+            v-if="sourceCost.data.linkedCostId && canViewFinanceCost"
+            type="primary"
+            link
+            @click="openLinkedCost"
+          >
+            查看关联费用单{{
+              sourceCost.data.linkedCostNo ? ` · ${sourceCost.data.linkedCostNo}` : ''
+            }}
+          </ElButton>
+        </div>
+        <p v-else class="text-sm text-[var(--el-text-color-secondary)]">暂无可归集的维保费用。</p>
+      </ArtPageSection>
       <ArtPageSection title="基础信息" class="maintenance-record-detail__section">
         <ArtDescriptions
           :data="descriptionData"
@@ -110,7 +154,13 @@
   import ArtPageSection from '@/components/core/layouts/art-page-section/index.vue'
   import ArtTable from '@/components/core/tables/art-table/index.vue'
   import type { ColumnOption } from '@/types'
-  import { fetchVehicleMaintenanceDetail } from '@vms/api'
+  import {
+    fetchVehicleMaintenanceCostSource,
+    fetchVehicleMaintenanceDetail,
+    type VehicleMaintenanceCostSource
+  } from '@vms/api'
+  import { getWaybillCostDetailPath } from '@/router/business-paths'
+  import { useAuth } from '@/hooks/core/useAuth'
   import { attachmentTableLink } from '@/components/core/media/art-file-viewer/table-link'
   import { canViewField, formatSensitiveNumberWithAffix } from '@/utils/field-permission'
 
@@ -122,8 +172,29 @@
 
   const route = useRoute()
   const router = useRouter()
+  const { hasAuth } = useAuth()
   const page = reactive<{ loading: boolean; error: Error | null }>({ loading: false, error: null })
   const detail = reactive<{ data?: MaintenanceRecord }>({ data: undefined })
+  const sourceCost = reactive<{
+    loading: boolean
+    error: string
+    data: VehicleMaintenanceCostSource | null
+  }>({
+    loading: false,
+    error: '',
+    data: null
+  })
+  const canViewFinanceCost = computed(() => hasAuth('FinanceWaybillCost:View'))
+  const sourceCostStatusLabel = computed(() => {
+    switch (sourceCost.data?.recognitionStatus) {
+      case 'approved':
+        return '已归集'
+      case 'pending_review':
+        return '待审批'
+      default:
+        return '待归集'
+    }
+  })
   const canViewIdentifiers = computed(() =>
     canViewField(detail.data?.fieldAccess, 'maintenanceIdentifiers')
   )
@@ -146,7 +217,17 @@
       dictCode: 'vehicleMaintenanceType',
       dictDisplay: 'text'
     },
-    { key: 'initiator', label: '发起人', field: 'initiator' },
+    { key: 'initiator', label: '经办人', field: 'initiator' },
+    { key: 'serviceDate', label: '保养维修日期', field: 'serviceDate', format: 'date' },
+    { key: 'currentOdometerKm', label: '当前里程（公里）', field: 'currentOdometerKm' },
+    {
+      key: 'nextMaintenanceDate',
+      label: '下次保养日期',
+      field: 'nextMaintenanceDate',
+      format: 'date'
+    },
+    { key: 'nextMaintenanceMileage', label: '下次保养里程', field: 'nextMaintenanceMileage' },
+    { key: 'invoiceNo', label: '发票号', field: 'invoiceNo' },
     { key: 'workshop', label: '维修厂', field: 'workshop' },
     { key: 'startTime', label: '开始时间', field: 'startTime', format: 'datetime' },
     { key: 'endTime', label: '结束时间', field: 'endTime', format: 'datetime' },
@@ -154,7 +235,7 @@
       ? [
           {
             key: 'costAmount',
-            label: '费用金额',
+            label: '总费用（元）',
             field: 'costAmount',
             formatter: (value: unknown) =>
               formatSensitiveNumberWithAffix(value as number | string | null | undefined, {
@@ -235,6 +316,7 @@
       detail.data = data
         ? { ...data, items: data.items ?? [], attachments: data.attachments ?? [] }
         : undefined
+      if (detail.data && canViewTotalCost.value) void loadCostSource(id)
     } catch (error) {
       page.error =
         error instanceof Error
@@ -245,6 +327,25 @@
     } finally {
       page.loading = false
     }
+  }
+
+  const loadCostSource = async (id: string): Promise<void> => {
+    if (!id) return
+    sourceCost.loading = true
+    sourceCost.error = ''
+    try {
+      sourceCost.data = await fetchVehicleMaintenanceCostSource(id)
+    } catch (error) {
+      sourceCost.error = getFriendlySupabaseErrorMessage(error, '成本归集状态加载失败，请重试')
+    } finally {
+      sourceCost.loading = false
+    }
+  }
+
+  const openLinkedCost = (): void => {
+    const costId = sourceCost.data?.linkedCostId
+    if (!costId || !canViewFinanceCost.value) return
+    void router.push(getWaybillCostDetailPath(costId))
   }
 
   const goBack = (): void => {

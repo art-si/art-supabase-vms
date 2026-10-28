@@ -168,6 +168,10 @@ export const deleteVehicleAccident = supabaseVehicleApi.deleteVehicleAccident
 export const deleteVehicleAccidentBatch = supabaseVehicleApi.deleteVehicleAccidentBatch
 
 export const fetchVehicleMaintenanceList = supabaseVehicleApi.fetchVehicleMaintenanceList
+export const fetchMaintenanceWorkshopOptions = supabaseVehicleApi.fetchMaintenanceWorkshopOptions
+export const fetchVehicleMaintenanceCostSource =
+  supabaseVehicleApi.fetchVehicleMaintenanceCostSource
+export type { VehicleMaintenanceCostSource } from './providers/supabase/vehicle/maintenance'
 export const exportVehicleMaintenanceList = supabaseVehicleApi.exportVehicleMaintenanceList
 export const fetchVehicleMaintenanceDetail = supabaseVehicleApi.fetchVehicleMaintenanceDetail
 export const addVehicleMaintenance = supabaseVehicleApi.addVehicleMaintenance

@@ -21,7 +21,10 @@ export function buildVehicleQuerySummary(
 ): LoadedVehicleQuerySummary {
   const latestInsurance = getLatestByDate(records.insurance, (item) => item.createTime)
   const latestInspection = getLatestByDate(records.inspection, (item) => item.expireDate)
-  const latestMaintenance = getLatestByDate(records.maintenance, (item) => item.startTime)
+  const latestMaintenance = getLatestByDate(
+    records.maintenance,
+    (item) => item.serviceDate || item.startTime
+  )
   const latestMileage = getLatestByDate(records.mileage, (item) => item.endTime || item.startTime)
 
   const summary: VehicleQuerySummary = {
@@ -31,8 +34,14 @@ export function buildVehicleQuerySummary(
     runningMileage:
       normalizeNullableNumber(latestMileage?.endMileage) ??
       normalizeNullableNumber(latestMileage?.runningMileage),
-    nextMaintenanceDate: getNextMaintenanceDate(latestMaintenance),
-    nextMaintenanceMileage: getNextMaintenanceMileage(latestMaintenance, records.mileage)
+    nextMaintenanceDate:
+      latestMaintenance?.reminderMode != null
+        ? (latestMaintenance.nextMaintenanceDate ?? null)
+        : getNextMaintenanceDate(latestMaintenance),
+    nextMaintenanceMileage:
+      latestMaintenance?.reminderMode != null
+        ? normalizeNullableNumber(latestMaintenance.nextMaintenanceMileage)
+        : getNextMaintenanceMileage(latestMaintenance, records.mileage)
   }
 
   return {
@@ -40,7 +49,7 @@ export function buildVehicleQuerySummary(
     coverage: {
       insuranceReady: Boolean(summary.commercialExpireDate || summary.compulsoryExpireDate),
       inspectionReady: Boolean(summary.inspectionExpireDate),
-      maintenanceReady: Boolean(latestMaintenance?.startTime)
+      maintenanceReady: Boolean(latestMaintenance?.serviceDate || latestMaintenance?.startTime)
     }
   }
 }

@@ -36,14 +36,47 @@
           </ArtTableSingleSelect>
         </template>
         <template #initiatorEmployeeId>
-          <ArtEmployeeSelect
-            :model-value="form.data.initiatorEmployeeId ?? undefined"
-            :selected-data="selectedInitiator"
-            :tenant-id="form.data.tenantId ?? tenantScopeStore.effectiveTenantId ?? undefined"
-            title="选择发起人"
-            placeholder="请选择发起人"
-            @change="handleInitiatorChange"
-          />
+          <div class="min-w-0">
+            <ArtEmployeeSelect
+              :model-value="form.data.initiatorEmployeeId ?? undefined"
+              :selected-data="selectedInitiator"
+              :tenant-id="form.data.tenantId ?? tenantScopeStore.effectiveTenantId ?? undefined"
+              title="选择经办人"
+              placeholder="请选择经办人"
+              @change="handleInitiatorChange"
+            />
+            <p
+              v-if="form.data.initiator && !form.data.initiatorEmployeeId"
+              class="mt-1 text-xs text-[var(--el-text-color-secondary)]"
+            >
+              历史经办人：{{ form.data.initiator }}；重新选择后可关联员工花名册。
+            </p>
+          </div>
+        </template>
+        <template #workshopSupplierId>
+          <div class="min-w-0">
+            <ArtTableSingleSelect
+              :model-value="form.data.workshopSupplierId ?? undefined"
+              :selected-data="selectedWorkshop"
+              :api-fn="fetchWorkshopSelectData"
+              :columns="workshopColumns"
+              row-key="id"
+              label-key="supplierName"
+              title="选择维修厂"
+              subtitle="仅显示供应商分组为“维修厂”的资料。"
+              placeholder="选择维修厂（选填）"
+              empty-text="暂无维修厂供应商"
+              empty-description="请先在供应商档案中维护“维修厂”分组及供应商。"
+              clearable
+              @change="handleWorkshopChange"
+            />
+            <p
+              v-if="form.data.workshop && !form.data.workshopSupplierId"
+              class="mt-1 text-xs text-[var(--el-text-color-secondary)]"
+            >
+              历史维修厂：{{ form.data.workshop }}；重新选择后可绑定供应商档案。
+            </p>
+          </div>
         </template>
         <template #mileageRecordId>
           <ArtTableSingleSelect
@@ -79,6 +112,15 @@
           :show-table-header="false"
           empty-height="160px"
         />
+        <div
+          v-if="canViewMaintenanceField('totalCost')"
+          class="mt-3 flex justify-end gap-3 text-sm text-[var(--el-text-color-regular)]"
+        >
+          <span>项目费用合计</span>
+          <strong class="text-base text-[var(--el-text-color-primary)]"
+            >¥{{ totalCost.toFixed(2) }}</strong
+          >
+        </div>
       </section>
 
       <section v-if="canViewDocuments" class="maintenance-record-dialog__section">
@@ -89,6 +131,9 @@
             上传
           </ElButton>
         </div>
+        <p class="mb-3 text-xs leading-5 text-[var(--el-text-color-secondary)]">
+          可上传维修单、发票照片等凭证；请在附件名称中标明凭证类型，便于后续核对。
+        </p>
         <ArtTable
           :data="form.data.attachments"
           :columns="attachmentColumns"
@@ -137,7 +182,8 @@
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import { notifyFriendlyError, useArtFeedback } from '@/hooks/core/useArtFeedback'
   import type { ComputedRef, UnwrapNestedRefs } from 'vue'
-  import { cloneDeep } from 'lodash-es'
+  import { cloneDeep, isEqual } from 'lodash-es'
+  import dayjs from 'dayjs'
   import type { FormRules } from 'element-plus'
   import { ElButton, ElInput, ElInputNumber, ElMessage } from 'element-plus'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
@@ -160,11 +206,12 @@
   import {
     addVehicleMaintenance,
     editVehicleMaintenance,
+    fetchMaintenanceWorkshopOptions,
     fetchApprovedVehicleSelectData,
     fetchVehicleMileageList
   } from '@vms/api'
   import { buildSupabasePageRange } from '@/utils/supabase/pagination'
-  import { getFileExtension, removeAttachmentRow } from '@/utils/file'
+  import { removeAttachmentRow } from '@/utils/file'
   import { attachmentTableLink } from '@/components/core/media/art-file-viewer/table-link'
   import { useUserStore } from '@/store/modules/user'
   import { useDictionaryOptions } from '@/hooks/core/useDictionaryOptions'
@@ -174,6 +221,13 @@
     EDITABLE_VEHICLE_MAINTENANCE_ACCESS,
     sanitizeVehicleMaintenancePayload
   } from './maintenance-record-model'
+  import {
+    createInitialAttachmentForm,
+    useVehicleAttachmentDialog,
+    type VehicleAttachmentFormData as AttachmentFormData,
+    type VehicleAttachmentGroup as AttachmentGroup,
+    type VehicleFormExpose as FormExpose
+  } from '../../vehicle-attachment-dialog'
 
   defineOptions({ name: 'MaintenanceRecordDialog' })
 
@@ -185,31 +239,11 @@
   type VehicleArchive = Api.Vms.ArchiveManage.VehicleArchive
   type Attachment = Api.Vms.VehicleManage.VehicleAttachment
 
-  interface FormExpose {
-    validate: () => Promise<boolean>
-    clearValidate: () => void
-  }
-
   interface FormGroup {
     data: MaintenanceRecord
     items: ComputedRef<FormItem[]>
     rules: ComputedRef<FormRules<MaintenanceRecord>>
     vehicleSelection: VehicleArchive[]
-  }
-
-  interface AttachmentFormData {
-    name: string
-    file: string
-    fileName: string
-    url: string
-    fileType?: string
-    fileSize?: string
-  }
-
-  interface AttachmentGroup {
-    data: AttachmentFormData
-    items: ComputedRef<FormItem[]>
-    rules: ComputedRef<FormRules<AttachmentFormData>>
   }
 
   interface Emits {
@@ -219,13 +253,17 @@
   const emit = defineEmits<Emits>()
   const userStore = useUserStore()
   const tenantScopeStore = useTenantScopeStore()
-  const maintenanceTypeOptions = useDictionaryOptions('vehicleMaintenanceType')
+  const maintenanceTypeDictionary = useDictionaryOptions('vehicleMaintenanceType')
+  const maintenanceTypeOptions = computed(() =>
+    maintenanceTypeDictionary.filter((option) => option.value !== 'maintenance')
+  )
   const booleanOptions = useDictionaryOptions<boolean>('commonBoolean', (value) => value === 'true')
   const dialogRef = ref<ArtDialogExpose<MaintenanceRecord | undefined>>()
   const attachmentDialogRef = ref<ArtDialogExpose<void>>()
   const formRef = ref<FormExpose>()
   const maintenanceNumber = useDocumentNumberRule('vehicle.maintenance')
   const attachmentFormRef = ref<FormExpose>()
+  const originalItems = ref<MaintenanceItem[]>([])
 
   const createInitialItem = (): MaintenanceItem => ({
     itemName: '',
@@ -248,10 +286,17 @@
       userStore.getUserInfo.hrEmployee?.employeeName ?? userStore.getUserInfo.nickName ?? '',
     initiatorEmployeeId: userStore.getUserInfo.hrEmployeeId ?? null,
     mileageRecordId: null,
-    startTime: '',
+    startTime: dayjs().format('YYYY-MM-DD HH:mm:ss'),
     endTime: '',
+    serviceDate: dayjs().format('YYYY-MM-DD'),
+    currentOdometerKm: null,
+    reminderMode: 'time',
+    nextMaintenanceDate: dayjs().add(3, 'month').format('YYYY-MM-DD'),
+    nextMaintenanceMileage: null,
     costAmount: null,
     workshop: '',
+    workshopSupplierId: null,
+    invoiceNo: '',
     externalRepair: false,
     remark: '',
     items: [createInitialItem()],
@@ -279,15 +324,6 @@
     return null
   }
 
-  const createInitialAttachmentForm = (): AttachmentFormData => ({
-    name: '',
-    file: '',
-    fileName: '',
-    url: '',
-    fileType: '',
-    fileSize: ''
-  })
-
   const dateTimeProps = {
     type: 'datetime',
     valueFormat: 'YYYY-MM-DD HH:mm:ss',
@@ -300,6 +336,11 @@
     controlsPosition: 'right',
     class: '!w-full'
   }
+
+  const reminderModeOptions = [
+    { label: '按时间（3 个月）', value: 'time' },
+    { label: '按里程（10,000 公里）', value: 'mileage' }
+  ]
 
   const form: UnwrapNestedRefs<FormGroup> = reactive<FormGroup>({
     data: createInitialForm(),
@@ -317,20 +358,63 @@
             maxlength: 80,
             ...maintenanceNumber.inputProps(Boolean(form.data.id), '请输入维修单号', true)
           },
-          description: maintenanceNumber.description.value
+          description: form.data.id ? undefined : maintenanceNumber.description.value
         },
         {
           label: '维修类型',
           key: 'maintenanceType',
           type: 'select',
-          props: { options: maintenanceTypeOptions }
+          props: { options: maintenanceTypeOptions.value }
         },
-        { label: '发起人', key: 'initiatorEmployeeId' },
+        { label: '经办人', key: 'initiatorEmployeeId' },
         { label: '关联行驶记录', key: 'mileageRecordId', span: 24 },
         { label: '开始时间', key: 'startTime', type: 'date', props: dateTimeProps },
         { label: '结束时间', key: 'endTime', type: 'date', props: dateTimeProps },
-        { label: '费用金额', key: 'costAmount', type: 'number', props: moneyProps },
-        { label: '维修厂', key: 'workshop', type: 'input', props: { maxlength: 120 } },
+        { label: '里程与保养提醒', key: 'reminderSection', type: 'divider', span: 24 },
+        {
+          label: '保养维修日期',
+          key: 'serviceDate',
+          type: 'date',
+          props: { type: 'date', valueFormat: 'YYYY-MM-DD', class: '!w-full' }
+        },
+        {
+          label: '当前里程（公里）',
+          key: 'currentOdometerKm',
+          type: 'number',
+          props: { min: 0, precision: 1, class: '!w-full' }
+        },
+        {
+          label: '提醒方式',
+          key: 'reminderMode',
+          type: 'select',
+          props: { options: reminderModeOptions }
+        },
+        ...(form.data.reminderMode === 'time'
+          ? [
+              {
+                label: '下次保养日期',
+                key: 'nextMaintenanceDate',
+                type: 'date',
+                props: { type: 'date', valueFormat: 'YYYY-MM-DD', disabled: true, class: '!w-full' }
+              }
+            ]
+          : [
+              {
+                label: '下次保养里程',
+                key: 'nextMaintenanceMileage',
+                type: 'number',
+                props: { min: 0, disabled: true, class: '!w-full' }
+              }
+            ]),
+        { label: '费用与票据', key: 'costSection', type: 'divider', span: 24 },
+        {
+          label: '总费用（元）',
+          key: 'costAmount',
+          type: 'number',
+          props: { ...moneyProps, disabled: true }
+        },
+        { label: '维修厂', key: 'workshopSupplierId' },
+        { label: '发票号', key: 'invoiceNo', type: 'input', props: { maxlength: 100 } },
         {
           label: '外部维修',
           key: 'externalRepair',
@@ -364,9 +448,48 @@
           ? [{ required: true, message: '请输入维修单号', trigger: 'blur' }]
           : [],
       maintenanceType: [{ required: true, message: '请选择维修类型', trigger: 'change' }],
-      startTime: [{ required: true, message: '请选择开始时间', trigger: 'change' }]
+      startTime: [{ required: true, message: '请选择开始时间', trigger: 'change' }],
+      serviceDate: form.data.id
+        ? []
+        : [{ required: true, message: '请选择保养维修日期', trigger: 'change' }],
+      currentOdometerKm: form.data.id
+        ? []
+        : [{ required: true, message: '请填写当前里程', trigger: 'change' }]
     }))
   })
+
+  const totalCost = computed(
+    () =>
+      Math.round(
+        (form.data.items ?? []).reduce((sum, item) => sum + Number(item.totalAmount || 0), 0) * 100
+      ) / 100
+  )
+
+  watch(
+    () => [
+      form.data.items,
+      form.data.serviceDate,
+      form.data.currentOdometerKm,
+      form.data.reminderMode
+    ],
+    () => {
+      if (
+        canEditMaintenanceItems.value &&
+        (!form.data.id || !isEqual(toRaw(form.data.items ?? []), originalItems.value))
+      ) {
+        form.data.costAmount = totalCost.value
+      }
+      form.data.nextMaintenanceDate =
+        form.data.reminderMode === 'time' && form.data.serviceDate
+          ? dayjs(form.data.serviceDate).add(3, 'month').format('YYYY-MM-DD')
+          : null
+      form.data.nextMaintenanceMileage =
+        form.data.reminderMode === 'mileage' && form.data.currentOdometerKm != null
+          ? Number(form.data.currentOdometerKm) + 10000
+          : null
+    },
+    { deep: true }
+  )
 
   const attachment: UnwrapNestedRefs<AttachmentGroup> = reactive<AttachmentGroup>({
     data: createInitialAttachmentForm(),
@@ -402,6 +525,27 @@
       dict: { code: 'vehicleOperationStatus', display: 'auto' }
     }
   ]
+
+  const workshopColumns: DataSelectColumn[] = [
+    { prop: 'supplierCode', label: '供应商编码', minWidth: 150 },
+    { prop: 'supplierName', label: '维修厂名称', minWidth: 220 }
+  ]
+
+  const selectedWorkshop = computed(() =>
+    form.data.workshopSupplierId
+      ? [{ id: form.data.workshopSupplierId, supplierName: form.data.workshop || '' }]
+      : []
+  )
+
+  const fetchWorkshopSelectData = async (params: { keyword?: string }) => {
+    const rows = await fetchMaintenanceWorkshopOptions(params.keyword, form.data.tenantId)
+    return { data: rows, total: rows.length }
+  }
+
+  const handleWorkshopChange = (_value: unknown, rows: DataSelectRecord[]): void => {
+    form.data.workshopSupplierId = String(rows[0]?.id || '') || null
+    form.data.workshop = String(rows[0]?.supplierName || '')
+  }
 
   const mileageColumns: DataSelectColumn[] = [
     { prop: 'startTime', label: '发车时间', minWidth: 180 },
@@ -579,6 +723,10 @@
     const vehicle = rows[0] as VehicleArchive | undefined
     const nextTenantId = vehicle?.tenantId ?? tenantScopeStore.effectiveTenantId ?? undefined
     if (nextTenantId !== form.data.tenantId) {
+      if ((form.data.attachments?.length ?? 0) > 0) {
+        form.data.attachments = []
+        ElMessage.warning('车辆所属租户已变化，原有附件已清空，请重新上传')
+      }
       form.data.initiatorEmployeeId =
         nextTenantId === userStore.getUserInfo.tenantId
           ? (userStore.getUserInfo.hrEmployeeId ?? null)
@@ -587,6 +735,8 @@
         nextTenantId === userStore.getUserInfo.tenantId
           ? (userStore.getUserInfo.hrEmployee?.employeeName ?? userStore.getUserInfo.nickName ?? '')
           : ''
+      form.data.workshopSupplierId = null
+      form.data.workshop = ''
     }
     form.data.tenantId = nextTenantId
     form.data.vehicleId = vehicle?.id ?? null
@@ -626,6 +776,7 @@
   const replaceForm = (data: MaintenanceRecord): void => {
     Object.assign(form.data, createInitialForm(), cloneDeep(toRaw(data)))
     form.data.items = form.data.items?.length ? form.data.items : [createInitialItem()]
+    originalItems.value = cloneDeep(toRaw(form.data.items))
     form.data.attachments ??= []
     form.vehicleSelection = form.data.vehicleId
       ? [
@@ -644,11 +795,8 @@
     formRef.value?.clearValidate()
   }
 
-  const resetAttachmentForm = async (): Promise<void> => {
-    Object.assign(attachment.data, createInitialAttachmentForm())
-    await nextTick()
-    attachmentFormRef.value?.clearValidate()
-  }
+  const { resetAttachmentForm, handleAttachmentFileChange, handleAttachmentConfirm } =
+    useVehicleAttachmentDialog(form, attachment, attachmentFormRef)
 
   const addItem = (): void => {
     form.data.items = [...(form.data.items ?? []), createInitialItem()]
@@ -668,52 +816,15 @@
     })
   }
 
-  const handleAttachmentFileChange = (
-    resources: Api.DataCenter.Resources.ResourceListItem[]
-  ): void => {
-    const resource = resources[0]
-    if (!resource) return
-    if (!resource.url) return
-    const fileName = resource.originName || resource.objectName || '附件'
-    attachment.data.file = resource.url
-    attachment.data.fileName = fileName
-    attachment.data.url = resource.url
-    attachment.data.fileType = getFileExtension(fileName, resource.suffix)
-    attachment.data.fileSize = resource.sizeInfo
-    if (!attachment.data.name) attachment.data.name = fileName
-    attachmentFormRef.value?.clearValidate()
-    ElMessage.success('附件已选择')
-  }
-
-  const handleAttachmentConfirm = async (): Promise<boolean> => {
-    try {
-      if (!(await validateArtFormForSubmit(attachmentFormRef.value))) return false
-    } catch (error) {
-      notifyFriendlyError(error, '附件校验未完成，请稍后重试', 'warning')
-      return false
-    }
-
-    if ((form.data.attachments ?? []).some((item) => item.url === attachment.data.url)) {
-      ElMessage.info('该附件已在当前记录中')
-      return false
-    }
-    form.data.attachments = [
-      ...(form.data.attachments ?? []),
-      {
-        name: attachment.data.name,
-        url: attachment.data.url,
-        fileType: attachment.data.fileType,
-        fileSize: attachment.data.fileSize
-      }
-    ]
-    return true
-  }
-
   const normalizePayload = (): MaintenanceRecord =>
     sanitizeVehicleMaintenancePayload({
       ...toRaw(form.data),
       vehicleId: form.data.vehicleId || null,
       endTime: form.data.endTime || null,
+      costAmount:
+        !form.data.id || (form.data.items ?? []).some((item) => item.totalAmount != null)
+          ? totalCost.value
+          : form.data.costAmount,
       items: (form.data.items ?? []).filter((item) => item.itemName || item.partName),
       attachments: form.data.attachments ?? []
     })
@@ -723,6 +834,32 @@
       if (!(await validateArtFormForSubmit(formRef.value))) return false
     } catch (error) {
       notifyFriendlyError(error, '表单校验未完成，请稍后重试', 'warning')
+      return false
+    }
+
+    if (
+      canEditMaintenanceItems.value &&
+      (form.data.items ?? []).some(
+        (item) =>
+          !item.itemName &&
+          !item.partName &&
+          (item.totalAmount != null ||
+            item.laborAmount != null ||
+            item.partPrice != null ||
+            item.quantity != null)
+      )
+    ) {
+      ElMessage.warning('请为已填写费用的项目补充项目名称或配件名称')
+      return false
+    }
+
+    if (
+      canEditMaintenanceItems.value &&
+      (form.data.items ?? []).some(
+        (item) => (item.itemName || item.partName) && item.totalAmount == null
+      )
+    ) {
+      ElMessage.warning('请填写项目清单中每项的合计费用')
       return false
     }
 

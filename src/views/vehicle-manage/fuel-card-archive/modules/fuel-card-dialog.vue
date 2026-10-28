@@ -72,6 +72,7 @@
           missing-tenant-placeholder="请先选择绑定车辆"
           title="选择卡归属人"
           :placeholder="editingCard ? '选择卡归属人（选填）' : '留空则带入车辆主司机'"
+          @change="handleOwnerChange"
         />
       </template>
       <template #openerEmployeeId>
@@ -115,6 +116,7 @@
   import {
     createFuelCard,
     fetchFuelCardEmployeeOptions,
+    fetchFuelCardOwnerSuggestion,
     updateFuelCard,
     type FuelCard,
     type FuelCardFuelType
@@ -164,6 +166,8 @@
   )
   const selectedOwner = ref<EmployeeIntegrationItem[]>([])
   const selectedOpener = ref<EmployeeIntegrationItem[]>([])
+  let ownerSuggestionRequest = 0
+  let ownerTouched = false
   const uploadCardImage = (file: File) =>
     uploadPrivateAttachment(file, {
       bucket: 'vms-fuel-card-private',
@@ -223,14 +227,43 @@
     ]
   }
 
+  const handleOwnerChange = (): void => {
+    ownerTouched = true
+  }
+  const populateOwnerFromVehicle = async (vehicleId: string, request: number): Promise<void> => {
+    try {
+      const suggestion = await fetchFuelCardOwnerSuggestion(vehicleId)
+      if (request !== ownerSuggestionRequest || form.vehicleId !== vehicleId || ownerTouched) return
+      if (!suggestion || suggestion.tenantId !== selectedVehicleTenantId.value) return
+      form.ownerEmployeeId = suggestion.employeeId
+      selectedOwner.value = [
+        {
+          id: suggestion.employeeId,
+          tenantId: suggestion.tenantId,
+          employeeNo: '',
+          employeeName: suggestion.employeeName,
+          employmentStatus: ''
+        }
+      ]
+    } catch (error) {
+      if (request === ownerSuggestionRequest && form.vehicleId === vehicleId && !ownerTouched) {
+        notifyFriendlyError(error, '主司机花名册带入失败，请手动选择卡归属人')
+      }
+    }
+  }
   const handleVehicleChange = (_value: unknown, rows: DataSelectRecord[]): void => {
     const vehicle = rows[0] as Api.Vms.ArchiveManage.VehicleArchive | undefined
     if (vehicle?.id !== form.vehicleId) {
+      const request = ++ownerSuggestionRequest
+      ownerTouched = false
       form.ownerEmployeeId = undefined
       form.openerEmployeeId = undefined
       selectedOwner.value = []
       selectedOpener.value = []
       cardImageUrl.value = ''
+      form.vehicleId = vehicle?.id || ''
+      if (vehicle?.id) void populateOwnerFromVehicle(vehicle.id, request)
+      return
     }
     form.vehicleId = vehicle?.id || ''
   }
@@ -286,6 +319,8 @@
   ): EmployeeIntegrationItem[] =>
     id && name ? [{ id, tenantId, employeeNo: '', employeeName: name, employmentStatus: '' }] : []
   const handleOpen = async (card?: FuelCard): Promise<void> => {
+    ++ownerSuggestionRequest
+    ownerTouched = false
     editingCard.value = card || null
     Object.assign(form, {
       cardNo: card?.cardNo || '',

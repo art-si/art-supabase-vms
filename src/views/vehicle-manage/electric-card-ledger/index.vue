@@ -47,6 +47,11 @@
     </ArtTableQuery>
     <ElectricCardEntryDialog ref="entryDialogRef" @success="tableRef?.refreshCreate()" />
     <ElectricCardReversalDialog ref="reversalDialogRef" @success="tableRef?.refreshUpdate()" />
+    <CardEntryVoucherDialog
+      ref="voucherDialogRef"
+      kind="electric"
+      @success="tableRef?.refreshUpdate()"
+    />
     <ArtDrawer ref="detailRef" size="md" :show-footer="false">
       <div v-if="selectedEntry" class="space-y-4">
         <div class="rounded-[var(--el-border-radius-base)] bg-[var(--el-fill-color-light)] p-5">
@@ -99,6 +104,14 @@
           <div
             ><dt class="text-xs text-[var(--el-text-color-secondary)]">充电站</dt
             ><dd class="mt-1 font-medium">{{ selectedEntry.stationName || '--' }}</dd></div
+          >
+          <div
+            ><dt class="text-xs text-[var(--el-text-color-secondary)]">关联运单</dt
+            ><dd class="mt-1 font-medium break-all">{{ selectedEntry.waybillNo || '--' }}</dd></div
+          >
+          <div class="sm:col-span-2"
+            ><dt class="text-xs text-[var(--el-text-color-secondary)]">发生地点</dt
+            ><dd class="mt-1 break-words">{{ selectedEntry.expenseLocation || '--' }}</dd></div
           >
           <div
             ><dt class="text-xs text-[var(--el-text-color-secondary)]">表号/桩号</dt
@@ -203,6 +216,7 @@
   } from '@/api/electric-card'
   import ElectricCardEntryDialog from './modules/electric-card-entry-dialog.vue'
   import ElectricCardReversalDialog from './modules/electric-card-reversal-dialog.vue'
+  import CardEntryVoucherDialog from '../components/card-entry-voucher-dialog.vue'
 
   defineOptions({ name: 'VmsElectricCardLedger' })
 
@@ -222,6 +236,7 @@
     handleOpen: (type: 'recharge' | 'consume', card?: ElectricCard) => Promise<void>
   }>()
   const reversalDialogRef = ref<{ handleOpen: (entry: ElectricCardEntry) => Promise<void> }>()
+  const voucherDialogRef = ref<{ handleOpen: (entry: ElectricCardEntry) => Promise<void> }>()
   const detailRef = ref<ArtDrawerExpose<ElectricCardEntry>>()
   const selectedEntry = ref<ElectricCardEntry | null>(null)
   const voucherPreviews = ref<string[]>([])
@@ -423,6 +438,19 @@
       formatter: (row) => row.stationName || '--'
     },
     {
+      prop: 'waybillNo',
+      label: '关联运单',
+      minWidth: 170,
+      formatter: (row) => row.waybillNo || '--'
+    },
+    {
+      prop: 'expenseLocation',
+      label: '发生地点',
+      minWidth: 180,
+      showOverflowTooltip: true,
+      formatter: (row) => row.expenseLocation || '--'
+    },
+    {
       prop: 'chargeKwh',
       label: '充电数',
       width: 106,
@@ -465,20 +493,32 @@
     {
       prop: 'operation',
       label: '操作',
-      width: 96,
+      width: 168,
       fixed: 'right',
-      formatter: (row) =>
-        hasAuth('ElectricCardLedger:Reverse') && row.entryType !== 'reversal' && !row.isReversed ? (
-          <ElButton
-            link
-            type="warning"
-            onClick={() => void reversalDialogRef.value?.handleOpen(row)}
-          >
-            冲正
-          </ElButton>
-        ) : (
-          '--'
-        )
+      formatter: (row) => (
+        <div class="flex items-center justify-end gap-2">
+          {hasAuth('ElectricCardLedger:AttachVoucher') && row.voucherPaths.length < 5 && (
+            <ElButton
+              link
+              type="primary"
+              onClick={() => void voucherDialogRef.value?.handleOpen(row)}
+            >
+              补传凭证
+            </ElButton>
+          )}
+          {hasAuth('ElectricCardLedger:Reverse') &&
+            row.entryType !== 'reversal' &&
+            !row.isReversed && (
+              <ElButton
+                link
+                type="warning"
+                onClick={() => void reversalDialogRef.value?.handleOpen(row)}
+              >
+                冲正
+              </ElButton>
+            )}
+        </div>
+      )
     }
   ]
   const fetchTableData = (params: TableParams) =>

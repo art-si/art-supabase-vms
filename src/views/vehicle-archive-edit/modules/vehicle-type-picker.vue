@@ -1,5 +1,5 @@
 <template>
-  <ArtDialog ref="dialogRef" size="xl" :loading="loading" :show-fullscreen-button="false">
+  <ArtDialog ref="dialogRef" size="xl" :loading="loading">
     <template #subtitle
       >选择已有启用规格的车型分类，容积和载重将随规格自动带入。待配置分类暂不可选。</template
     >

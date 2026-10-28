@@ -19,8 +19,9 @@
     <div class="vehicle-archive-manage__workspace">
       <ArtSectionCard
         class="vehicle-archive-manage__navigation"
+        :class="{ 'is-expanded': navigationExpanded }"
         title="车辆分类"
-        subtitle="按车辆归属和车型筛选"
+        :subtitle="navigationKey === 'all' ? '按车辆归属和车型筛选' : `当前：${navigationLabel}`"
         aria-label="按车辆归属和车型筛选"
         :show-scrollbar="false"
         body-class="vehicle-archive-manage__navigation-body"
@@ -35,6 +36,20 @@
         @retry="loadNavigation"
       >
         <template #actions>
+          <ElButton
+            class="vehicle-archive-manage__navigation-toggle"
+            text
+            :aria-expanded="navigationExpanded"
+            aria-label="展开或收起车辆分类"
+            @click="navigationExpanded = !navigationExpanded"
+          >
+            <span class="art-icon-label">
+              <ArtSvgIcon
+                :icon="navigationExpanded ? 'ri:arrow-up-s-line' : 'ri:arrow-down-s-line'"
+              />
+              {{ navigationExpanded ? '收起分类' : '展开分类' }}
+            </span>
+          </ElButton>
           <ArtTreeExpandToggle
             :tree="navigationTreeRef"
             :data="navigationTree"
@@ -242,6 +257,8 @@
   const navigationRows = ref<VehicleArchiveNavigationItem[]>([])
   const navigationTreeRef = ref<InstanceType<typeof ElTree>>()
   const navigationKeyword = ref('')
+  const navigationExpanded = ref(false)
+  const navigationLabel = ref('')
   const navigationLoading = ref(false)
   const navigationError = shallowRef<Error | null>(null)
   const navigationKey = ref('all')
@@ -322,6 +339,8 @@
 
   const handleNavigationClick = (node?: NavigationNode): void => {
     navigationKey.value = node?.key ?? 'all'
+    navigationLabel.value = node?.label ?? ''
+    navigationExpanded.value = false
     selectedNavigation.value = { ownership: node?.ownership, vehicleType: node?.vehicleType }
     if (!node) navigationTreeRef.value?.setCurrentKey(undefined)
     tableQueryRef.value?.clearSelection()
@@ -908,6 +927,10 @@
     gap: 12px;
     min-width: 0;
 
+    &__navigation-toggle {
+      display: none;
+    }
+
     &__workspace {
       display: grid;
       flex: 1;
@@ -1176,21 +1199,51 @@
 
   @media (width <= 1160px) {
     .vehicle-archive-manage {
-      :deep(.art-search-bar .el-row > .el-col) {
-        flex: 0 0 100%;
-        max-width: 100%;
-      }
-    }
-  }
+      height: auto;
+      min-height: var(--art-full-height);
 
-  @media (width <= 900px) {
-    .vehicle-archive-manage {
       &__workspace {
-        grid-template-columns: minmax(0, 1fr);
+        display: flex;
+        flex: 1 0 auto;
+        flex-direction: column;
       }
 
       &__navigation {
-        height: 260px;
+        height: auto;
+
+        :deep(.art-section-card__header) {
+          margin-bottom: 0;
+        }
+
+        :deep(.vehicle-archive-manage__navigation-body) {
+          display: none;
+        }
+
+        &.is-expanded {
+          height: 260px;
+
+          :deep(.art-section-card__header) {
+            margin-bottom: var(--art-space-4);
+          }
+
+          :deep(.vehicle-archive-manage__navigation-body) {
+            display: flex;
+          }
+        }
+      }
+
+      &__navigation-toggle {
+        display: inline-flex;
+      }
+
+      :deep(.art-table-query) {
+        flex: 1 0 auto;
+        min-height: 520px;
+      }
+
+      :deep(.art-search-bar .el-row > .el-col) {
+        flex: 0 0 100%;
+        max-width: 100%;
       }
     }
   }

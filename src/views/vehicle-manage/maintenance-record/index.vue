@@ -221,7 +221,33 @@
         width: 110,
         dict: { code: 'vehicleMaintenanceType', display: 'auto' }
       },
-      { prop: 'initiator', label: '发起人', width: 120 },
+      { prop: 'initiator', label: '经办人', width: 120 },
+      {
+        prop: 'serviceDate',
+        label: '保养维修日期',
+        width: 140,
+        formatter: (row) => row.serviceDate || '—'
+      },
+      {
+        prop: 'currentOdometerKm',
+        label: '当前里程（公里）',
+        width: 150,
+        align: 'right',
+        formatter: (row) => formatMileage(row.currentOdometerKm)
+      },
+      {
+        prop: 'nextMaintenanceDate',
+        label: '下次保养日期',
+        width: 145,
+        formatter: (row) => row.nextMaintenanceDate || '—'
+      },
+      {
+        prop: 'nextMaintenanceMileage',
+        label: '下次保养里程',
+        width: 145,
+        align: 'right',
+        formatter: (row) => formatMileage(row.nextMaintenanceMileage)
+      },
       {
         prop: 'tripStartTime',
         label: '行驶时间',
@@ -267,7 +293,7 @@
         ? [
             {
               prop: 'costAmount',
-              label: '费用金额',
+              label: '总费用（元）',
               width: 120,
               align: 'right',
               formatter: (row: MaintenanceRecord) =>
@@ -312,7 +338,11 @@
       ? [{ key: 'maintenanceNo', title: '维修单号', required: true }]
       : []),
     { key: 'maintenanceType', title: '维修类型' },
-    { key: 'initiator', title: '发起人' },
+    { key: 'initiator', title: '经办人' },
+    { key: 'serviceDate', title: '保养维修日期' },
+    { key: 'currentOdometerKm', title: '当前里程（公里）' },
+    { key: 'nextMaintenanceDate', title: '下次保养日期' },
+    { key: 'nextMaintenanceMileage', title: '下次保养里程' },
     { key: 'tripStartTime', title: '行驶时间' },
     { key: 'driverName', title: '司机' },
     { key: 'waybillNo', title: '运单号' },
@@ -322,7 +352,7 @@
     { key: 'startTime', title: '开始时间' },
     { key: 'endTime', title: '结束时间' },
     ...(canViewField(effectiveFieldAccess.value, 'totalCost')
-      ? [{ key: 'costAmount', title: '费用金额' }]
+      ? [{ key: 'costAmount', title: '总费用（元）' }]
       : []),
     { key: 'workshop', title: '维修厂' },
     { key: 'remark', title: '备注' }

@@ -49,7 +49,15 @@ export interface VehicleQuerySummaryRecords {
     'createTime' | 'commercialExpireDate' | 'compulsoryExpireDate'
   >[]
   inspection: Pick<VehicleInspection, 'expireDate'>[]
-  maintenance: Pick<VehicleMaintenanceRecord, 'startTime'>[]
+  maintenance: Pick<
+    VehicleMaintenanceRecord,
+    | 'startTime'
+    | 'serviceDate'
+    | 'currentOdometerKm'
+    | 'nextMaintenanceDate'
+    | 'nextMaintenanceMileage'
+    | 'reminderMode'
+  >[]
   mileage: Pick<
     VehicleMileageRecord,
     'endTime' | 'startTime' | 'endMileage' | 'runningMileage' | 'startMileage'

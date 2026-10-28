@@ -47,6 +47,11 @@
     </ArtTableQuery>
     <FuelCardEntryDialog ref="entryDialogRef" @success="tableRef?.refreshCreate()" />
     <FuelCardReversalDialog ref="reversalDialogRef" @success="tableRef?.refreshUpdate()" />
+    <CardEntryVoucherDialog
+      ref="voucherDialogRef"
+      kind="fuel"
+      @success="tableRef?.refreshUpdate()"
+    />
     <FuelStatementDrawer ref="statementDrawerRef" />
     <ArtDrawer ref="detailRef" size="md" :show-footer="false">
       <div v-if="selectedEntry" class="space-y-4">
@@ -277,6 +282,7 @@
   } from '@/api/fuel-card'
   import FuelCardEntryDialog from './modules/fuel-card-entry-dialog.vue'
   import FuelCardReversalDialog from './modules/fuel-card-reversal-dialog.vue'
+  import CardEntryVoucherDialog from '../components/card-entry-voucher-dialog.vue'
   import FuelStatementDrawer from './modules/fuel-statement-drawer.vue'
 
   defineOptions({ name: 'VmsFuelCardLedger' })
@@ -298,6 +304,7 @@
   const tableRef = ref<ArtTableQueryExpose>()
   const entryDialogRef = ref<{ handleOpen: (type: 'recharge' | 'consume') => Promise<void> }>()
   const reversalDialogRef = ref<{ handleOpen: (entry: FuelCardEntry) => Promise<void> }>()
+  const voucherDialogRef = ref<{ handleOpen: (entry: FuelCardEntry) => Promise<void> }>()
   const statementDrawerRef = ref<{ handleOpen: () => Promise<void> }>()
   const detailRef = ref<ArtDrawerExpose<FuelCardEntry>>()
   const selectedEntry = ref<FuelCardEntry | null>(null)
@@ -493,15 +500,7 @@
       label: '凭证图片',
       width: 130,
       formatter: (row) =>
-        row.sourceCostId ? (
-          hasAuth('FinanceWaybillCost:View') ? (
-            <ElButton link type="primary" onClick={() => openSourceCost(row)}>
-              查看费用单
-            </ElButton>
-          ) : (
-            '费用单关联'
-          )
-        ) : row.voucherPaths.length ? (
+        row.voucherPaths.length ? (
           <ElButton
             link
             type="primary"
@@ -524,6 +523,14 @@
               <span>{row.voucherPaths.length} 张</span>
             </span>
           </ElButton>
+        ) : row.sourceCostId ? (
+          hasAuth('FinanceWaybillCost:View') ? (
+            <ElButton link type="primary" onClick={() => openSourceCost(row)}>
+              查看费用单
+            </ElButton>
+          ) : (
+            '费用单关联'
+          )
         ) : (
           '--'
         )
@@ -611,28 +618,38 @@
     {
       prop: 'operation',
       label: '操作',
-      width: 96,
+      width: 168,
       fixed: 'right',
-      formatter: (row) =>
-        row.sourceCostId ? (
-          hasAuth('FinanceWaybillCost:View') ? (
+      formatter: (row) => (
+        <div class="flex items-center justify-end gap-2">
+          {row.sourceCostId && hasAuth('FinanceWaybillCost:View') && (
             <ElButton link type="primary" onClick={() => openSourceCost(row)}>
               费用单
             </ElButton>
-          ) : (
-            <span title="运单费用联动流水，请在运单费用中处理">费用联动</span>
-          )
-        ) : hasAuth('FuelCardLedger:Reverse') && row.entryType !== 'reversal' && !row.isReversed ? (
-          <ElButton
-            link
-            type="warning"
-            onClick={() => void reversalDialogRef.value?.handleOpen(row)}
-          >
-            冲正
-          </ElButton>
-        ) : (
-          '--'
-        )
+          )}
+          {hasAuth('FuelCardLedger:AttachVoucher') && row.voucherPaths.length < 5 && (
+            <ElButton
+              link
+              type="primary"
+              onClick={() => void voucherDialogRef.value?.handleOpen(row)}
+            >
+              补传凭证
+            </ElButton>
+          )}
+          {!row.sourceCostId &&
+            hasAuth('FuelCardLedger:Reverse') &&
+            row.entryType !== 'reversal' &&
+            !row.isReversed && (
+              <ElButton
+                link
+                type="warning"
+                onClick={() => void reversalDialogRef.value?.handleOpen(row)}
+              >
+                冲正
+              </ElButton>
+            )}
+        </div>
+      )
     }
   ]
   const fetchTableData = (params: TableParams) =>
@@ -653,7 +670,7 @@
   const loadVoucherThumbs = async (entries: FuelCardEntry[]): Promise<void> => {
     const request = ++voucherThumbRequest
     voucherThumbs.value = {}
-    const candidates = entries.filter((entry) => !entry.sourceCostId && entry.voucherPaths.length)
+    const candidates = entries.filter((entry) => entry.voucherPaths.length)
     if (!candidates.length) return
     try {
       const paths = uniqBy(candidates, (entry) => entry.voucherPaths[0]).map(

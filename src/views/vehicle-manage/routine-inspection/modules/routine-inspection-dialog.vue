@@ -139,13 +139,20 @@
     fetchApprovedVehicleSelectData
   } from '@vms/api'
   import { useDictionaryOptions } from '@/hooks/core/useDictionaryOptions'
-  import { getFileExtension, removeAttachmentRow } from '@/utils/file'
+  import { removeAttachmentRow } from '@/utils/file'
   import { attachmentTableLink } from '@/components/core/media/art-file-viewer/table-link'
   import { canEditField, canViewField } from '@/utils/field-permission'
   import {
     EDITABLE_VEHICLE_ROUTINE_INSPECTION_ACCESS,
     sanitizeVehicleRoutineInspectionPayload
   } from './routine-inspection-model'
+  import {
+    createInitialAttachmentForm,
+    useVehicleAttachmentDialog,
+    type VehicleAttachmentFormData as AttachmentFormData,
+    type VehicleAttachmentGroup as AttachmentGroup,
+    type VehicleFormExpose as FormExpose
+  } from '../../vehicle-attachment-dialog'
 
   defineOptions({ name: 'RoutineInspectionDialog' })
 
@@ -155,31 +162,11 @@
   type VehicleArchive = Api.Vms.ArchiveManage.VehicleArchive
   type Attachment = Api.Vms.VehicleManage.VehicleAttachment
 
-  interface FormExpose {
-    validate: () => Promise<boolean>
-    clearValidate: () => void
-  }
-
   interface FormGroup {
     data: RoutineInspection
     items: ComputedRef<FormItem[]>
     rules: ComputedRef<FormRules<RoutineInspection>>
     vehicleSelection: VehicleArchive[]
-  }
-
-  interface AttachmentFormData {
-    name: string
-    file: string
-    fileName: string
-    url: string
-    fileType?: string
-    fileSize?: string
-  }
-
-  interface AttachmentGroup {
-    data: AttachmentFormData
-    items: ComputedRef<FormItem[]>
-    rules: ComputedRef<FormRules<AttachmentFormData>>
   }
 
   interface Emits {
@@ -218,15 +205,6 @@
     handlingMethod: '',
     remark: '',
     attachments: []
-  })
-
-  const createInitialAttachmentForm = (): AttachmentFormData => ({
-    name: '',
-    file: '',
-    fileName: '',
-    url: '',
-    fileType: '',
-    fileSize: ''
   })
 
   const dateTimeProps = {
@@ -445,11 +423,8 @@
     formRef.value?.clearValidate()
   }
 
-  const resetAttachmentForm = async (): Promise<void> => {
-    Object.assign(attachment.data, createInitialAttachmentForm())
-    await nextTick()
-    attachmentFormRef.value?.clearValidate()
-  }
+  const { resetAttachmentForm, handleAttachmentFileChange, handleAttachmentConfirm } =
+    useVehicleAttachmentDialog(form, attachment, attachmentFormRef)
 
   const openAttachmentDialog = async (): Promise<void> => {
     if (!canEditField(currentFieldAccess.value, 'documents')) return
@@ -460,47 +435,6 @@
       onConfirm: handleAttachmentConfirm,
       onReset: () => void resetAttachmentForm()
     })
-  }
-
-  const handleAttachmentFileChange = (
-    resources: Api.DataCenter.Resources.ResourceListItem[]
-  ): void => {
-    const resource = resources[0]
-    if (!resource) return
-    if (!resource.url) return
-    const fileName = resource.originName || resource.objectName || '附件'
-    attachment.data.file = resource.url
-    attachment.data.fileName = fileName
-    attachment.data.url = resource.url
-    attachment.data.fileType = getFileExtension(fileName, resource.suffix)
-    attachment.data.fileSize = resource.sizeInfo
-    if (!attachment.data.name) attachment.data.name = fileName
-    attachmentFormRef.value?.clearValidate()
-    ElMessage.success('附件已选择')
-  }
-
-  const handleAttachmentConfirm = async (): Promise<boolean> => {
-    try {
-      if (!(await validateArtFormForSubmit(attachmentFormRef.value))) return false
-    } catch (error) {
-      notifyFriendlyError(error, '附件校验未完成，请稍后重试', 'warning')
-      return false
-    }
-
-    if ((form.data.attachments ?? []).some((item) => item.url === attachment.data.url)) {
-      ElMessage.info('该附件已在当前记录中')
-      return false
-    }
-    form.data.attachments = [
-      ...(form.data.attachments ?? []),
-      {
-        name: attachment.data.name,
-        url: attachment.data.url,
-        fileType: attachment.data.fileType,
-        fileSize: attachment.data.fileSize
-      }
-    ]
-    return true
   }
 
   const removeAttachment = async (row: Attachment): Promise<void> => {

@@ -54,3 +54,25 @@ test('vehicle query summary does not turn masked mileage into a number', () => {
     maintenanceReady: false
   })
 })
+
+test('vehicle query summary uses the configured next maintenance reminder', () => {
+  const result = buildVehicleQuerySummary({
+    insurance: [],
+    inspection: [],
+    maintenance: [
+      {
+        startTime: '2026-10-01',
+        serviceDate: '2026-10-01',
+        currentOdometerKm: 120000,
+        reminderMode: 'mileage',
+        nextMaintenanceDate: null,
+        nextMaintenanceMileage: 130000
+      }
+    ],
+    mileage: []
+  })
+
+  assert.equal(result.summary.nextMaintenanceDate, null)
+  assert.equal(result.summary.nextMaintenanceMileage, 130000)
+  assert.equal(result.coverage.maintenanceReady, true)
+})

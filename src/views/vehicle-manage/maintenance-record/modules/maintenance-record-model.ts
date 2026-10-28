@@ -35,6 +35,8 @@ export function sanitizeVehicleMaintenancePayload(
   ] as const) {
     delete payload[key]
   }
+  // 服务端仅在项目清单变更时重新核算；普通编辑保留历史费用。
+  if (params.id) delete payload.costAmount
   return params.id
     ? omitNonEditableFieldGroups(payload, params.fieldAccess, SENSITIVE_PAYLOAD_KEYS)
     : payload

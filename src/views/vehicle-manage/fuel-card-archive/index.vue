@@ -122,7 +122,7 @@
       </template>
     </ArtTableQuery>
     <FuelCardDialog ref="dialogRef" @success="tableRef?.refreshCreate()" />
-    <ArtDrawer ref="detailRef" :show-footer="false" :show-fullscreen-button="false" size="md">
+    <ArtDrawer ref="detailRef" :show-footer="false" size="md">
       <div v-if="selectedCard" class="space-y-4">
         <img
           v-if="imagePreviews[selectedCard.imagePath || '']"

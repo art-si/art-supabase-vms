@@ -91,7 +91,32 @@
       minWidth: 130,
       dict: { code: 'vehicleMaintenanceType', display: 'auto' }
     },
-    { prop: 'initiator', label: '发起人', minWidth: 130 },
+    { prop: 'initiator', label: '经办人', minWidth: 130 },
+    {
+      prop: 'serviceDate',
+      label: '保养维修日期',
+      minWidth: 145,
+      formatter: (row) => row.serviceDate || '—'
+    },
+    {
+      prop: 'currentOdometerKm',
+      label: '当前里程（公里）',
+      minWidth: 165,
+      formatter: (row) => (row.currentOdometerKm == null ? '—' : String(row.currentOdometerKm))
+    },
+    {
+      prop: 'nextMaintenanceDate',
+      label: '下次保养日期',
+      minWidth: 145,
+      formatter: (row) => row.nextMaintenanceDate || '—'
+    },
+    {
+      prop: 'nextMaintenanceMileage',
+      label: '下次保养里程',
+      minWidth: 145,
+      formatter: (row) =>
+        row.nextMaintenanceMileage == null ? '—' : String(row.nextMaintenanceMileage)
+    },
     {
       prop: 'startTime',
       label: '维修保养时间',

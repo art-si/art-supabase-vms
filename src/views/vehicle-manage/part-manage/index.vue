@@ -25,11 +25,17 @@
       class="min-h-0 flex-1"
     />
     <InstalledPartsWorkspace v-else-if="canInstalled" class="min-h-0 flex-1" />
-    <ElEmpty v-else description="当前账号无权查看车辆配件记录，请联系管理员配置权限。" />
+    <ArtEmptyState
+      v-else
+      class="art-card-xs flex-1"
+      title="暂无查看权限"
+      description="当前账号无权查看车辆配件记录，请联系管理员配置权限。"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
+  import ArtEmptyState from '@/components/core/feedback/art-empty-state/index.vue'
   import InstalledPartsWorkspace from './modules/installed-parts-workspace.vue'
   import PartInventoryWorkspace from './modules/part-inventory-workspace.vue'
   import PartIssueWorkspace from './modules/part-issue-workspace.vue'
