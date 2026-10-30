@@ -148,7 +148,7 @@
                   v-auth="'VehicleArchive:TypeDelete'"
                   type="danger"
                   plain
-                  :disabled="saving"
+                  :disabled="saving || deleteBusy"
                   @click="handleDelete"
                 >
                   <template #icon><ArtSvgIcon icon="ri:delete-bin-line" /></template>
@@ -158,11 +158,10 @@
                   v-auth="selectedId ? 'VehicleArchive:TypeEdit' : 'VehicleArchive:TypeAdd'"
                   type="primary"
                   :loading="saving"
+                  :disabled="deleteBusy || !formControlsReady"
                   @click="handleSave"
                 >
-                  <template #icon>
-                    <ArtSvgIcon :icon="selectedId ? 'ri:save-3-line' : 'ri:add-line'" />
-                  </template>
+                  <ArtSvgIcon :icon="selectedId ? 'ri:save-3-line' : 'ri:add-line'" />
                   {{ selectedId ? '保存更改' : '创建规格' }}
                 </ElButton>
               </template>
@@ -288,15 +287,24 @@
         </template>
       </ArtWorkspaceSplitter>
     </ArtAsyncState>
+    <MasterDataDeleteGuard :key="guardKey" ref="deleteGuardRef" />
   </div>
 </template>
 
 <script setup lang="ts">
   import { replaceReactiveModel } from '@/utils/form/model'
   import ArtEmptyState from '@/components/core/feedback/art-empty-state/index.vue'
-  import { ElButton, ElImage, ElInputNumber, ElTreeV2, type TreeV2Instance } from 'element-plus'
+  import {
+    ElButton,
+    ElImage,
+    ElInputNumber,
+    ElMessage,
+    ElTreeV2,
+    type TreeV2Instance
+  } from 'element-plus'
   import { ElAutoResizer } from 'element-plus/es/components/table-v2/index.mjs'
   import { useElementSize, useWindowSize } from '@vueuse/core'
+  import { groupBy } from 'lodash-es'
   import type { FormRules } from 'element-plus'
   import ArtAsyncState from '@/components/core/feedback/art-async-state/index.vue'
   import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
@@ -306,8 +314,14 @@
   import ArtSvgIcon from '@/components/core/base/art-svg-icon/index.vue'
   import ArtDictDisplay from '@/components/core/base/art-dict-display/index.vue'
   import ArtIconButton from '@/components/core/widget/art-icon-button/index.vue'
-  import VehicleTypeArt from './vehicle-type-art.vue'
-  import { useArtFeedback } from '@/hooks/core/useArtFeedback'
+  import VehicleTypeArt from '@/components/business/vehicle-type-profile-picker/vehicle-type-art.vue'
+  import MasterDataDeleteGuard, {
+    type MasterDataDeleteDependencyMeta,
+    type MasterDataDeleteResource
+  } from '@/components/business/master-data-delete-guard/index.vue'
+  import { recordDeleteGuardOptions, useRecordDeleteGuard } from '@/hooks/core/useRecordDeleteGuard'
+  import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
+  import { useTenantOperationGuard } from '@/hooks/core/useTenantOperationGuard'
   import { useDictionaryOptions } from '@/hooks/core/useDictionaryOptions'
   import { useAuth } from '@/hooks/core/useAuth'
   import { useTenantScopeStore } from '@/store/modules/tenant-scope'
@@ -315,6 +329,7 @@
   import { storeToRefs } from 'pinia'
   import {
     deleteVehicleTypeProfile,
+    fetchVehicleTypeDeleteReferences,
     fetchVehicleTypeProfiles,
     saveVehicleTypeProfile
   } from '@vms/api'
@@ -347,8 +362,13 @@
     children?: VehicleTypeTreeNode[]
   }
 
+  const props = defineProps<{ tenantId?: string | null }>()
   const emit = defineEmits<{ changed: [] }>()
-  const { confirmAction } = useArtFeedback()
+  const captureTenantOperation = useTenantOperationGuard()
+  const { deleteGuardRef, deleteRecord, deleteBusy } = useRecordDeleteGuard(
+    'vehicle_type_profile',
+    '车型规格'
+  )
   const { hasAuth } = useAuth()
   const tenantScopeStore = useTenantScopeStore()
   const userStore = useUserStore()
@@ -361,7 +381,11 @@
     (getDictMap.value.vehicleTypeCategory ?? []).map((option) => option.value).filter(Boolean)
   )
   const selectedTenantId = computed(
-    () => effectiveTenantId.value || userStore.getUserInfo.tenantId || ''
+    () => props.tenantId || effectiveTenantId.value || userStore.getUserInfo.tenantId || ''
+  )
+  const guardKey = computed(
+    () =>
+      `${selectedTenantId.value}:${effectiveTenantId.value}:${tenantScopeStore.revision}:${userStore.getUserInfo.userId}`
   )
   const selectedCategory = ref<VehicleTypeCategory>('半挂车')
   const selectedId = ref<string>()
@@ -371,8 +395,13 @@
   const saving = ref(false)
   const error = ref<Error | null>(null)
   const formRef = ref<InstanceType<typeof ArtForm>>()
+  const formControlsReady = computed(() => Boolean(formRef.value?.controlsReady))
   const treeRef = ref<TreeV2Instance>()
   const rightWorkspaceRef = ref<HTMLElement>()
+  let contextRevision = 0
+  let loadSequence = 0
+  let saveSequence = 0
+  let loadController: AbortController | undefined
   const TREE_STACK_BREAKPOINT = 1099
   const { width: viewportWidth, height: viewportHeight } = useWindowSize()
   const { height: rightWorkspaceHeight } = useElementSize(rightWorkspaceRef)
@@ -394,10 +423,14 @@
     hasAuth(selectedId.value ? 'VehicleArchive:TypeEdit' : 'VehicleArchive:TypeAdd')
   )
 
+  const profilesByCategory = computed(() => {
+    const groups = new Map(Object.entries(groupBy(profiles.value, 'category')))
+    for (const rows of groups.values())
+      rows.sort((a, b) => a.sort - b.sort || a.id.localeCompare(b.id))
+    return groups
+  })
   const categoryProfiles = (category: VehicleTypeCategory): VehicleTypeProfile[] =>
-    profiles.value
-      .filter((profile) => profile.category === category)
-      .sort((a, b) => a.sort - b.sort || a.id.localeCompare(b.id))
+    profilesByCategory.value.get(category) ?? []
 
   const categoryNodeKey = (category: VehicleTypeCategory): string => `category:${category}`
   const profileNodeKey = (id: string): string => `profile:${id}`
@@ -577,88 +610,284 @@
     })
   }
 
+  const captureContext = () => {
+    const tenantId = selectedTenantId.value
+    const revision = contextRevision
+    const isCurrentTenantOperation = captureTenantOperation()
+    return {
+      tenantId,
+      isCurrent: () =>
+        revision === contextRevision &&
+        selectedTenantId.value === tenantId &&
+        isCurrentTenantOperation()
+    }
+  }
+
   const loadProfiles = async (): Promise<void> => {
-    if (!selectedTenantId.value) return
+    const context = captureContext()
+    const requestId = ++loadSequence
+    loadController?.abort()
+    const controller = new AbortController()
+    loadController = controller
+    if (!context.tenantId) {
+      loading.value = false
+      return
+    }
+    const isCurrent = () =>
+      requestId === loadSequence && !controller.signal.aborted && context.isCurrent()
     loading.value = true
     error.value = null
     try {
-      const result = await fetchVehicleTypeProfiles({
-        tenantId: selectedTenantId.value,
-        includeDisabled: true
-      })
+      const result = await fetchVehicleTypeProfiles(
+        { tenantId: context.tenantId, includeDisabled: true },
+        { signal: controller.signal }
+      )
+      if (!isCurrent()) return
       if (result.error) throw result.error
-      profiles.value = result.data ?? []
-      const current = profiles.value.find((profile) => profile.id === selectedId.value)
+      const rows = result.data ?? []
+      if (rows.some((profile) => profile.tenantId !== context.tenantId))
+        throw new Error('车型配置租户不一致，请刷新后重试')
+      profiles.value = rows
+      const current = rows.find((profile) => profile.id === selectedId.value)
       if (current) selectProfile(current)
       else selectCategory(selectedCategory.value)
     } catch (cause) {
+      if (!isCurrent()) return
       error.value = cause instanceof Error ? cause : new Error('车型配置加载失败')
     } finally {
-      loading.value = false
+      if (isCurrent()) {
+        loading.value = false
+        loadController = undefined
+      }
     }
   }
 
   const handleSave = async (): Promise<void> => {
-    if (!selectedTenantId.value || !canEdit.value || saving.value) return
-    try {
-      await formRef.value?.validate()
-    } catch {
+    const context = captureContext()
+    const rowId = selectedId.value
+    const row = profiles.value.find((profile) => profile.id === rowId)
+    const category = selectedCategory.value
+    const permission = rowId ? 'VehicleArchive:TypeEdit' : 'VehicleArchive:TypeAdd'
+    if (
+      !context.tenantId ||
+      !canEdit.value ||
+      !formControlsReady.value ||
+      saving.value ||
+      deleteBusy.value ||
+      (rowId && row?.tenantId !== context.tenantId)
+    )
       return
-    }
+    const saveId = ++saveSequence
+    const isCurrent = () =>
+      saveId === saveSequence &&
+      context.isCurrent() &&
+      selectedId.value === rowId &&
+      selectedCategory.value === category &&
+      hasAuth(permission)
     saving.value = true
     try {
-      const result = await saveVehicleTypeProfile({
-        id: selectedId.value,
-        ...(isAllTenants.value ? { tenantId: selectedTenantId.value } : {}),
-        category: selectedCategory.value,
-        lengthM: form.lengthM,
-        volumeM3: form.volumeM3,
-        loadTons: form.loadTons,
-        status: form.status,
-        sort: form.sort,
-        schemeColor: form.schemeColor || null,
-        tagStyle: form.tagStyle || null,
-        remark: form.remark || null,
-        imageUrl: form.imageUrl || null
-      })
+      try {
+        await formRef.value?.validate()
+      } catch {
+        return
+      }
+      if (!isCurrent()) return
+      const result = await saveVehicleTypeProfile(
+        {
+          id: rowId,
+          ...(isAllTenants.value ? { tenantId: row?.tenantId ?? context.tenantId } : {}),
+          category,
+          lengthM: form.lengthM,
+          volumeM3: form.volumeM3,
+          loadTons: form.loadTons,
+          status: form.status,
+          sort: form.sort,
+          schemeColor: form.schemeColor || null,
+          tagStyle: form.tagStyle || null,
+          remark: form.remark || null,
+          imageUrl: form.imageUrl || null
+        },
+        { showMessage: false, showErrorMessage: false }
+      )
+      if (!isCurrent()) return
       if (result.error) throw result.error
-      selectedId.value = result.data?.id
+      if (!result.data?.id || result.data.tenantId !== context.tenantId)
+        throw new Error('车型规格保存结果不完整，请刷新后重试')
+      selectedId.value = result.data.id
       await loadProfiles()
+      if (!context.isCurrent() || saveId !== saveSequence || !hasAuth(permission)) return
+      if (error.value) {
+        notifyFriendlyError(error.value, '车型规格已保存，但列表刷新失败，请重试')
+        return
+      }
+      ElMessage.success('车型规格已保存')
       emit('changed')
+    } catch (cause) {
+      if (context.isCurrent() && saveId === saveSequence)
+        notifyFriendlyError(cause, '车型规格保存失败，请检查配置后重试')
     } finally {
-      saving.value = false
+      if (saveId === saveSequence) saving.value = false
     }
   }
 
   const handleDelete = async (): Promise<void> => {
-    if (!selectedId.value || saving.value) return
-    try {
-      await confirmAction(
-        '确定删除当前车型规格吗？已被车辆档案使用的配置不能删除。',
-        '删除车型配置',
-        {
-          confirmButtonText: '删除',
-          cancelButtonText: '取消',
-          type: 'warning'
-        }
+    const context = captureContext()
+    const row = profiles.value.find((profile) => profile.id === selectedId.value)
+    if (!row || row.tenantId !== context.tenantId || saving.value || deleteBusy.value) return
+    const resource: MasterDataDeleteResource = {
+      id: row.id,
+      label: vehicleTypeProfileLabel(row),
+      status: row.status === '1' ? 'enabled' : 'disabled',
+      statusDictCode: 'commonEnabledStatus'
+    }
+    const driverIds = new Map<string, string>()
+    const referenceMeta: Record<string, Partial<MasterDataDeleteDependencyMeta>> = {
+      mdm_vehicle: {
+        label: '车辆档案',
+        statusDictCode: 'vehicleOperationStatus',
+        routeName: 'VehicleArchiveDetail',
+        applicationCode: 'vms',
+        routePath: '/vms/vehicle-archive-manage',
+        canNavigate: () => hasAuth('VehicleArchive:View'),
+        routeParams: (record) => ({ id: record.targetId })
+      },
+      vehicle_trailer: {
+        label: '挂车档案',
+        routeName: 'TrailerManage',
+        applicationCode: 'vms',
+        routePath: '/vms/trailer-manage',
+        canNavigate: () => hasAuth('TrailerManage:View')
+      },
+      tms_driver_commission_rule: {
+        label: '司机佣金规则',
+        routeName: 'TmsDriver',
+        applicationCode: 'tms',
+        routePath: '/tms/basic-data/driver',
+        canNavigate: () => hasAuth('TmsDriver:View'),
+        routeQuery: (record) => ({
+          driverId: driverIds.get(record.targetId) ?? '',
+          commissionRuleId: record.targetId
+        })
+      }
+    }
+    const inspectReferences = async (
+      resources: MasterDataDeleteResource[],
+      constraint?: string
+    ): Promise<boolean> => {
+      if (!context.isCurrent() || selectedId.value !== row.id) {
+        ElMessage.error('车型规格或租户已变化，删除已停止，请重新选择')
+        return true
+      }
+      if (!deleteGuardRef.value) {
+        ElMessage.error('关联校验尚未就绪，请刷新页面后重试删除')
+        return true
+      }
+      const options = recordDeleteGuardOptions(
+        { table: 'vehicle_type_profile', ids: resources.map((item) => item.id), constraint },
+        '车型规格',
+        resources,
+        referenceMeta
       )
-    } catch {
-      return
+      const fetchDependencies = options.fetchDependencies
+      if (!fetchDependencies) {
+        ElMessage.error('关联校验暂不可用，请刷新页面后重试删除')
+        return true
+      }
+      return deleteGuardRef.value.inspect({
+        ...options,
+        resolveResources: async () => {
+          if (!context.isCurrent() || selectedId.value !== row.id)
+            throw new Error('车型规格或租户已变化，请重新检查')
+          const current = profiles.value.find((profile) => profile.id === row.id)
+          if (!current || current.tenantId !== context.tenantId)
+            throw new Error('车型规格或租户已变化，请重新检查')
+          return [{ ...resource, label: vehicleTypeProfileLabel(current) }]
+        },
+        fetchDependencies: async (resourceIds) => {
+          if (!context.isCurrent()) throw new Error('租户范围已变化，请重新检查')
+          const requiredViews = [
+            ['VehicleArchive:View', '车辆档案'],
+            ['TrailerManage:View', '挂车档案'],
+            ['TmsDriver:View', '司机佣金规则']
+          ] as const
+          const missing = requiredViews.filter(([permission]) => !hasAuth(permission))
+          if (missing.length)
+            throw new Error(
+              `缺少${missing.map(([, label]) => label).join('、')}查看权限，请联系管理员授权后重试`
+            )
+          const references = await fetchDependencies(resourceIds)
+          if (!context.isCurrent()) throw new Error('租户范围已变化，请重新检查')
+          const enriched = await fetchVehicleTypeDeleteReferences(references, context.tenantId)
+          if (!context.isCurrent()) throw new Error('租户范围已变化，请重新检查')
+          driverIds.clear()
+          enriched.driverIds.forEach((driverId, ruleId) => driverIds.set(ruleId, driverId))
+          return enriched.records
+        }
+      })
     }
-    saving.value = true
-    try {
-      const result = await deleteVehicleTypeProfile(selectedId.value)
-      if (result.error) throw result.error
-      selectedId.value = undefined
-      await loadProfiles()
-      emit('changed')
-    } finally {
-      saving.value = false
-    }
+    await deleteRecord({
+      resource,
+      permission: 'VehicleArchive:TypeDelete',
+      inspectReferences,
+      confirmMessage: `确定删除车型规格“${resource.label}”吗？删除后无法恢复。`,
+      failureMessage: '车型规格删除失败，请重新检查关联后重试',
+      remove: async () => {
+        if (!context.isCurrent() || selectedId.value !== row.id)
+          throw new Error('车型规格或租户已变化，删除已停止，请重新选择')
+        const result = await deleteVehicleTypeProfile(row.id, {
+          showMessage: false,
+          showErrorMessage: false
+        })
+        if (result.error) throw result.error
+        if (result.data !== true) throw new Error('车型规格未删除，请刷新后核对记录与权限')
+      },
+      onDeleted: async () => {
+        if (!context.isCurrent() || selectedId.value !== row.id) return
+        selectedId.value = undefined
+        await loadProfiles()
+        if (!context.isCurrent()) return
+        if (error.value) throw error.value
+        ElMessage.success('车型配置已删除')
+        emit('changed')
+      }
+    })
   }
 
-  watch(selectedTenantId, () => void loadProfiles())
-  onMounted(() => void loadProfiles())
+  watch(
+    [
+      selectedTenantId,
+      effectiveTenantId,
+      isAllTenants,
+      () => tenantScopeStore.revision,
+      () => userStore.getUserInfo.userId,
+      () => userStore.getUserInfo.tenantId
+    ],
+    () => {
+      contextRevision++
+      loadSequence++
+      loadController?.abort()
+      loadController = undefined
+      saveSequence++
+      saving.value = false
+      loading.value = false
+      error.value = null
+      profiles.value = []
+      selectedId.value = undefined
+      selectedCategory.value = '半挂车'
+      expandedKeys.value = []
+      Object.assign(form, initialForm())
+      formRef.value?.clearValidate()
+      treeRef.value?.setExpandedKeys([])
+      if (selectedTenantId.value) void loadProfiles()
+    },
+    { immediate: true, flush: 'sync' }
+  )
+  onBeforeUnmount(() => {
+    contextRevision++
+    loadSequence++
+    saveSequence++
+    loadController?.abort()
+  })
 </script>
 
 <style scoped lang="scss">

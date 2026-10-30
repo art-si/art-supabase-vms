@@ -138,3 +138,10 @@ export async function markCertificateHandled(id: string) {
     { showMessage: true, breakReturn: true }
   )
 }
+
+export async function revokeCertificate(id: string, reason: string) {
+  return await responseHandle<CertificateRecord>(
+    () => supabase.rpc('vms_revoke_certificate_secure', { p_id: id, p_reason: reason }),
+    { showMessage: true, breakReturn: true }
+  )
+}

@@ -18,6 +18,17 @@ test('vehicle certificate risk makes an expired document visible without treatin
 
 test('vehicle certificate risk distinguishes due renewal, valid, and no record', () => {
   assert.equal(vehicleCertificateRiskDisplay({ certificateRisk: 'renewal_due' }).label, '待换证')
+  assert.deepEqual(
+    vehicleCertificateRiskDisplay({
+      certificateRisk: 'revoked',
+      certificateRiskType: 'compulsory_insurance'
+    }),
+    {
+      label: '已作废',
+      detail: '交强险保单',
+      tone: 'danger'
+    }
+  )
   assert.equal(vehicleCertificateRiskDisplay({ certificateRisk: 'valid' }).label, '有效')
   assert.deepEqual(vehicleCertificateRiskDisplay({}), {
     label: '未登记',
@@ -28,6 +39,7 @@ test('vehicle certificate risk distinguishes due renewal, valid, and no record',
 
 test('identity cell highlights only risks that need action within the visible first columns', () => {
   assert.equal(vehicleCertificateRiskNeedsAttention('expired'), true)
+  assert.equal(vehicleCertificateRiskNeedsAttention('revoked'), true)
   assert.equal(vehicleCertificateRiskNeedsAttention('renewal_due'), true)
   assert.equal(vehicleCertificateRiskNeedsAttention('valid'), false)
   assert.equal(vehicleCertificateRiskNeedsAttention('none'), false)

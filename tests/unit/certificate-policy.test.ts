@@ -4,6 +4,7 @@ import type { CertificateRecord } from '../../src/types/certificate'
 import {
   CERTIFICATE_TYPE_OPTIONS,
   canMarkCertificateHandled,
+  canRenewCertificate,
   certificateStatusLabel,
   certificateStatusTableLabel,
   certificateRiskCounts,
@@ -25,7 +26,11 @@ const base = {
   responsibleName: '车管员',
   renewalOfId: null,
   handledAt: null,
-  handledBy: null
+  handledBy: null,
+  revokedAt: null,
+  revokedOn: null,
+  revokedBy: null,
+  revokedReason: null
 } satisfies Omit<CertificateRecord, 'id' | 'certificateType' | 'status'>
 
 const compulsory: CertificateRecord = {
@@ -50,7 +55,8 @@ test('交强险和商业险为同车独立证件，分别保留到期状态', ()
   assert.deepEqual(certificateRiskCounts([compulsory, commercial]), {
     expired: 1,
     dueSoon: 1,
-    handled: 0
+    handled: 0,
+    revoked: 0
   })
   assert.equal(certificateTypeLabel(compulsory.certificateType), '交强险保单')
   assert.equal(certificateTypeLabel(commercial.certificateType), '商业险保单')
@@ -72,7 +78,8 @@ test('司机证件与车辆证件共用风险范围，已处理记录不再重�
   assert.deepEqual(certificateRiskCounts([compulsory, commercial, driver]), {
     expired: 1,
     dueSoon: 1,
-    handled: 1
+    handled: 1,
+    revoked: 0
   })
   assert.equal(canMarkCertificateHandled(driver), false)
   assert.equal(canMarkCertificateHandled(compulsory), true)
@@ -96,7 +103,8 @@ test('司机三个月临期计入预警，车辆原有 30 天状态保持独立'
   assert.deepEqual(certificateRiskCounts([driver, commercial]), {
     expired: 0,
     dueSoon: 2,
-    handled: 0
+    handled: 0,
+    revoked: 0
   })
   assert.equal(certificateStatusLabel('due_30'), '待换证（30 天）')
 })
@@ -111,4 +119,70 @@ test('旧保险台账仅作回退风险，不允许直接标记已处理', () =>
   }
   assert.equal(isLegacyCertificateRecord(fallback), true)
   assert.equal(canMarkCertificateHandled(fallback), false)
+  assert.equal(canRenewCertificate(fallback), false)
+})
+
+test('作废证件保留独立状态，不再进入续证已处理操作', () => {
+  const revoked: CertificateRecord = {
+    ...commercial,
+    status: 'revoked',
+    revokedAt: '2026-10-29T03:00:00Z',
+    revokedOn: '2026-10-29',
+    revokedBy: 'user-a',
+    revokedReason: '遗失作废'
+  }
+  assert.equal(certificateStatusLabel(revoked.status), '已作废')
+  assert.equal(canMarkCertificateHandled(revoked), false)
+  assert.deepEqual(certificateRiskCounts([commercial, revoked]), {
+    expired: 0,
+    dueSoon: 1,
+    handled: 0,
+    revoked: 1
+  })
+})
+
+test('关联有效新证后，历史旧证不再计入当前补证和临期风险', () => {
+  const oldRevoked: CertificateRecord = {
+    ...commercial,
+    id: 'old-driver-license',
+    subjectType: 'driver',
+    certificateType: 'driver_license',
+    status: 'revoked',
+    isCurrent: false,
+    revokedAt: '2026-10-30T01:00:00Z',
+    revokedOn: '2026-10-30',
+    revokedBy: 'user-a',
+    revokedReason: '遗失作废'
+  }
+  const replacement: CertificateRecord = {
+    ...oldRevoked,
+    id: 'replacement-driver-license',
+    status: 'due_3_months',
+    isCurrent: true,
+    renewalOfId: oldRevoked.id,
+    revokedAt: null,
+    revokedOn: null,
+    revokedBy: null,
+    revokedReason: null
+  }
+
+  assert.deepEqual(
+    certificateRiskCounts([
+      oldRevoked,
+      replacement,
+      { ...compulsory, isCurrent: false },
+      { ...commercial, isCurrent: false }
+    ]),
+    { expired: 0, dueSoon: 1, handled: 0, revoked: 0 }
+  )
+  assert.equal(certificateStatusLabel(oldRevoked.status), '已作废')
+  assert.equal(canRenewCertificate(oldRevoked), false)
+  assert.equal(canRenewCertificate(replacement), true)
+  assert.equal(canRenewCertificate({ ...oldRevoked, isCurrent: true }), true)
+  assert.deepEqual(certificateRiskCounts([{ ...oldRevoked, isCurrent: true }]), {
+    expired: 0,
+    dueSoon: 0,
+    handled: 0,
+    revoked: 1
+  })
 })

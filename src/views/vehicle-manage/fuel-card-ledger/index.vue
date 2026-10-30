@@ -320,6 +320,13 @@
     entryType: undefined,
     occurredRange: []
   })
+  watch(
+    () => route.query.cardId,
+    (id) => {
+      search.cardId = typeof id === 'string' ? id : undefined
+      void nextTick(() => tableRef.value?.getData())
+    }
+  )
   const ledgerViewOptions = [
     { label: '全部流水', value: 'all' },
     { label: '充值记录', value: 'recharge' },
@@ -332,11 +339,9 @@
   }
   const refreshSelectedCardBalance = async (): Promise<void> => {
     const requestId = ++balanceRequestId
+    selectedCardBalance.value = null
     const cardId = search.cardId
-    if (!cardId) {
-      selectedCardBalance.value = null
-      return
-    }
+    if (!cardId) return
     try {
       const page = await fetchFuelCardList({ current: 1, size: 1, cardId })
       if (requestId === balanceRequestId) selectedCardBalance.value = page.data[0]?.balance ?? null

@@ -134,12 +134,11 @@
         <p class="mb-3 text-xs leading-5 text-[var(--el-text-color-secondary)]">
           可上传维修单、发票照片等凭证；请在附件名称中标明凭证类型，便于后续核对。
         </p>
-        <ArtTable
-          :data="form.data.attachments"
-          :columns="attachmentColumns"
-          :pagination="undefined"
-          :show-table-header="false"
-          empty-height="160px"
+        <VehicleAttachmentTable
+          :attachments="form.data.attachments ?? []"
+          :name-min-width="180"
+          :removable="canEditDocuments"
+          @remove="removeAttachment"
         />
       </section>
     </div>
@@ -178,9 +177,9 @@
 </template>
 
 <script setup lang="tsx">
-  import BusinessAttachmentRowActions from '@/components/business/business-attachment-row-actions/index.vue'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
-  import { notifyFriendlyError, useArtFeedback } from '@/hooks/core/useArtFeedback'
+  import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
+  import { useDraftAttachmentRemoval } from '@/hooks/core/useDraftAttachmentRemoval'
   import type { ComputedRef, UnwrapNestedRefs } from 'vue'
   import { cloneDeep, isEqual } from 'lodash-es'
   import dayjs from 'dayjs'
@@ -211,8 +210,6 @@
     fetchVehicleMileageList
   } from '@vms/api'
   import { buildSupabasePageRange } from '@/utils/supabase/pagination'
-  import { removeAttachmentRow } from '@/utils/file'
-  import { attachmentTableLink } from '@/components/core/media/art-file-viewer/table-link'
   import { useUserStore } from '@/store/modules/user'
   import { useDictionaryOptions } from '@/hooks/core/useDictionaryOptions'
   import { useTenantScopeStore } from '@/store/modules/tenant-scope'
@@ -228,16 +225,14 @@
     type VehicleAttachmentGroup as AttachmentGroup,
     type VehicleFormExpose as FormExpose
   } from '../../vehicle-attachment-dialog'
+  import VehicleAttachmentTable from '../../vehicle-attachment-table.vue'
 
   defineOptions({ name: 'MaintenanceRecordDialog' })
-
-  const { confirmAction } = useArtFeedback()
 
   type MaintenanceRecord = Api.Vms.VehicleManage.VehicleMaintenanceRecord
   type MaintenanceItem = Api.Vms.VehicleManage.VehicleMaintenanceItem
   type MaintenanceFieldKey = Api.Vms.VehicleManage.VehicleMaintenanceFieldKey
   type VehicleArchive = Api.Vms.ArchiveManage.VehicleArchive
-  type Attachment = Api.Vms.VehicleManage.VehicleAttachment
 
   interface FormGroup {
     data: MaintenanceRecord
@@ -691,32 +686,6 @@
       : [])
   ])
 
-  const attachmentColumns = computed<ColumnOption<Attachment>[]>(() => [
-    { type: 'globalIndex', label: '序号', width: 56 },
-    { prop: 'name', label: '附件名称', minWidth: 180, link: attachmentTableLink },
-    {
-      prop: 'fileType',
-      label: '格式类型',
-      width: 110,
-      dict: { code: 'FILE_EXTENSION_LABEL_MAP', display: 'text' }
-    },
-    { prop: 'fileSize', label: '附件大小', width: 110 },
-    {
-      prop: 'operation',
-      label: '操作',
-      width: 144,
-      fixed: 'right',
-      formatter: (row) => (
-        <BusinessAttachmentRowActions
-          file={row}
-          removable={canEditDocuments.value}
-          removeLabel="删除附件"
-          onRemove={() => void removeAttachment(row)}
-        />
-      )
-    }
-  ])
-
   const getBooleanDictOptions = () => booleanOptions
 
   const handleVehicleChange = (_value: unknown, rows: DataSelectRecord[]): void => {
@@ -899,19 +868,14 @@
     })
   }
 
-  const removeAttachment = async (row: Attachment): Promise<void> => {
-    try {
-      await confirmAction(`确定删除附件“${row.name}”吗？`, '删除确认', {
-        confirmButtonText: '删除',
-        cancelButtonText: '取消',
-        type: 'warning',
-        confirmButtonType: 'danger'
-      })
-      form.data.attachments = removeAttachmentRow(form.data.attachments ?? [], row)
-    } catch {
-      // 用户取消删除时无需提示。
-    }
-  }
+  const removeAttachment = useDraftAttachmentRemoval<Api.Vms.VehicleManage.VehicleAttachment>({
+    getAttachments: () => form.data.attachments,
+    setAttachments: (rows) => {
+      form.data.attachments = rows
+    },
+    canRemove: () => canEditDocuments.value,
+    getContext: () => [form.data.id, form.data.tenantId, form.data.vehicleId]
+  })
 
   defineExpose({
     handleOpen,

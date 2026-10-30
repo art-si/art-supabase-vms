@@ -76,12 +76,11 @@
             上传
           </ElButton>
         </div>
-        <ArtTable
-          :data="form.data.attachments"
-          :columns="attachmentColumns"
-          :pagination="undefined"
-          :show-table-header="false"
-          empty-height="160px"
+        <VehicleAttachmentTable
+          :attachments="form.data.attachments ?? []"
+          name-label="事故附件名称"
+          :removable="canEditDocuments"
+          @remove="removeAttachment"
         />
       </section>
     </div>
@@ -121,11 +120,11 @@
 </template>
 
 <script setup lang="tsx">
-  import BusinessAttachmentRowActions from '@/components/business/business-attachment-row-actions/index.vue'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import { normalizeNullableNumber } from '@/utils/form/normalize'
 
-  import { notifyFriendlyError, useArtFeedback } from '@/hooks/core/useArtFeedback'
+  import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
+  import { useDraftAttachmentRemoval } from '@/hooks/core/useDraftAttachmentRemoval'
   import type { ComputedRef, UnwrapNestedRefs } from 'vue'
   import { cloneDeep } from 'lodash-es'
   import type { FormRules } from 'element-plus'
@@ -145,16 +144,12 @@
     DataSelectRecord
   } from '@/components/core/forms/art-data-select/types'
   import ArtSectionTitle from '@/components/core/surfaces/art-section-title/index.vue'
-  import ArtTable from '@/components/core/tables/art-table/index.vue'
-  import type { ColumnOption } from '@/types'
   import {
     addVehicleAccident,
     editVehicleAccident,
     fetchApprovedVehicleSelectData,
     type VmsDriverReference
   } from '@vms/api'
-  import { removeAttachmentRow } from '@/utils/file'
-  import { attachmentTableLink } from '@/components/core/media/art-file-viewer/table-link'
   import { useDictionaryOptions } from '@/hooks/core/useDictionaryOptions'
   import { canEditField, canViewField } from '@/utils/field-permission'
   import {
@@ -168,15 +163,13 @@
     type VehicleAttachmentGroup as AttachmentGroup,
     type VehicleFormExpose as FormExpose
   } from '../../vehicle-attachment-dialog'
+  import VehicleAttachmentTable from '../../vehicle-attachment-table.vue'
 
   defineOptions({ name: 'AccidentRecordDialog' })
-
-  const { confirmAction } = useArtFeedback()
 
   type AccidentRecord = Api.Vms.VehicleManage.VehicleAccidentRecord
   type AccidentFieldKey = Api.Vms.VehicleManage.VehicleAccidentFieldKey
   type VehicleArchive = Api.Vms.ArchiveManage.VehicleArchive
-  type Attachment = Api.Vms.VehicleManage.VehicleAttachment
 
   interface FormGroup {
     data: AccidentRecord
@@ -422,32 +415,6 @@
     }
   ]
 
-  const attachmentColumns = computed<ColumnOption<Attachment>[]>(() => [
-    { type: 'globalIndex', label: '序号', width: 56 },
-    { prop: 'name', label: '事故附件名称', link: attachmentTableLink },
-    {
-      prop: 'fileType',
-      label: '格式类型',
-      width: 110,
-      dict: { code: 'FILE_EXTENSION_LABEL_MAP', display: 'text' }
-    },
-    { prop: 'fileSize', label: '附件大小', width: 110 },
-    {
-      prop: 'operation',
-      label: '操作',
-      width: 144,
-      fixed: 'right',
-      formatter: (row) => (
-        <BusinessAttachmentRowActions
-          file={row}
-          removable={canEditDocuments.value}
-          removeLabel="删除附件"
-          onRemove={() => void removeAttachment(row)}
-        />
-      )
-    }
-  ])
-
   const getBooleanDictOptions = () => booleanOptions
 
   const getProcessedDictOptions = () => processedOptions
@@ -570,19 +537,14 @@
     })
   }
 
-  const removeAttachment = async (row: Attachment): Promise<void> => {
-    try {
-      await confirmAction(`确定删除附件“${row.name}”吗？`, '删除确认', {
-        confirmButtonText: '删除',
-        cancelButtonText: '取消',
-        type: 'warning',
-        confirmButtonType: 'danger'
-      })
-      form.data.attachments = removeAttachmentRow(form.data.attachments ?? [], row)
-    } catch {
-      // 用户取消删除时无需提示。
-    }
-  }
+  const removeAttachment = useDraftAttachmentRemoval<Api.Vms.VehicleManage.VehicleAttachment>({
+    getAttachments: () => form.data.attachments,
+    setAttachments: (rows) => {
+      form.data.attachments = rows
+    },
+    canRemove: () => canEditDocuments.value,
+    getContext: () => [form.data.id, form.data.tenantId, form.data.vehicleId]
+  })
 
   defineExpose({
     handleOpen,

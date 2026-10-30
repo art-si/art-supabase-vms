@@ -62,7 +62,8 @@
 <script setup lang="tsx">
   import BusinessAttachmentRowActions from '@/components/business/business-attachment-row-actions/index.vue'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
-  import { notifyFriendlyError, useArtFeedback } from '@/hooks/core/useArtFeedback'
+  import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
+  import { useDraftAttachmentRemoval } from '@/hooks/core/useDraftAttachmentRemoval'
   import type { ComputedRef, UnwrapNestedRefs } from 'vue'
   import { cloneDeep } from 'lodash-es'
   import type { FormRules } from 'element-plus'
@@ -86,7 +87,7 @@
     editVehicleInspection,
     fetchApprovedVehicleSelectData
   } from '@vms/api'
-  import { getFileExtension, removeAttachmentRow } from '@/utils/file'
+  import { getFileExtension } from '@/utils/file'
   import { attachmentTableLink } from '@/components/core/media/art-file-viewer/table-link'
   import { canEditField, canViewField } from '@/utils/field-permission'
   import {
@@ -95,8 +96,6 @@
   } from './vehicle-inspection-model'
 
   defineOptions({ name: 'VehicleInspectionDialog' })
-
-  const { confirmAction } = useArtFeedback()
 
   type VehicleInspection = Api.Vms.VehicleManage.VehicleInspection
   type VehicleArchive = Api.Vms.ArchiveManage.VehicleArchive
@@ -369,19 +368,14 @@
     ElMessage.success('附件已添加')
   }
 
-  const removeAttachment = async (row: Attachment): Promise<void> => {
-    try {
-      await confirmAction(`确定删除附件“${row.name}”吗？`, '删除确认', {
-        confirmButtonText: '删除',
-        cancelButtonText: '取消',
-        type: 'warning',
-        confirmButtonType: 'danger'
-      })
-      form.data.attachments = removeAttachmentRow(form.data.attachments ?? [], row)
-    } catch {
-      // 用户取消删除时无需提示。
-    }
-  }
+  const removeAttachment = useDraftAttachmentRemoval<Attachment>({
+    getAttachments: () => form.data.attachments,
+    setAttachments: (rows) => {
+      form.data.attachments = rows
+    },
+    canRemove: () => canEditDocuments.value,
+    getContext: () => [form.data.id, form.data.tenantId, form.data.vehicleId]
+  })
 
   defineExpose({
     handleOpen,

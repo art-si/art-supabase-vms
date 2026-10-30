@@ -98,7 +98,7 @@ declare global {
           usageNature?: string | null
           isAirConditioned?: boolean
           operationStatus?: string
-          certificateRisk?: 'expired' | 'renewal_due' | 'valid' | 'none'
+          certificateRisk?: 'revoked' | 'expired' | 'renewal_due' | 'valid' | 'none'
           certificateRiskExpiresOn?: string | null
           certificateRiskType?: import('./certificate').CertificateType | null
           operationStatusChangeDate?: string

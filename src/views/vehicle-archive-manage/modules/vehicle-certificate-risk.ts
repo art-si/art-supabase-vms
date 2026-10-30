@@ -1,7 +1,7 @@
 import type { CertificateType } from '../../../types/certificate'
 import { certificateTypeLabel } from '../../certificate-center/modules/certificate-policy'
 
-export type VehicleCertificateRisk = 'expired' | 'renewal_due' | 'valid' | 'none'
+export type VehicleCertificateRisk = 'revoked' | 'expired' | 'renewal_due' | 'valid' | 'none'
 
 export interface VehicleCertificateRiskSummary {
   certificateRisk?: VehicleCertificateRisk
@@ -10,7 +10,7 @@ export interface VehicleCertificateRiskSummary {
 }
 
 export function vehicleCertificateRiskNeedsAttention(risk?: VehicleCertificateRisk): boolean {
-  return risk === 'expired' || risk === 'renewal_due'
+  return risk === 'revoked' || risk === 'expired' || risk === 'renewal_due'
 }
 
 export function vehicleCertificateRiskDisplay(summary: VehicleCertificateRiskSummary): {
@@ -23,6 +23,7 @@ export function vehicleCertificateRiskDisplay(summary: VehicleCertificateRiskSum
     ? `${certificateTypeLabel(summary.certificateRiskType)}${summary.certificateRiskExpiresOn ? ` · ${summary.certificateRiskExpiresOn}` : ''}`
     : '尚未登记车辆证件'
 
+  if (risk === 'revoked') return { label: '已作废', detail, tone: 'danger' }
   if (risk === 'expired') return { label: '已过期', detail, tone: 'danger' }
   if (risk === 'renewal_due') return { label: '待换证', detail, tone: 'warning' }
   if (risk === 'valid') return { label: '有效', detail, tone: 'success' }

@@ -258,7 +258,7 @@
           </section>
         </ElTabPane>
         <ElTabPane v-if="hasAuth('VehicleArchive:TabTypes')" label="车型" name="types" lazy>
-          <VehicleTypeTab />
+          <VehicleTypeTab :key="vehicleTypeContextKey" :tenant-id="form.tenantId" />
         </ElTabPane>
       </ElTabs>
       <ArtEmptyState
@@ -349,7 +349,7 @@
   import BusinessAttachmentRowActions from '@/components/business/business-attachment-row-actions/index.vue'
   import { replaceReactiveModel } from '@/utils/form/model'
   import { focusFirstInvalidFormField } from '@/utils/form/validation'
-  import { useArtFeedback } from '@/hooks/core/useArtFeedback'
+  import { useDraftAttachmentRemoval } from '@/hooks/core/useDraftAttachmentRemoval'
   import type { ComputedRef, Ref, UnwrapNestedRefs } from 'vue'
   import type { FormRules } from 'element-plus'
   import { ElAlert, ElButton, ElCheckbox, ElMessage, ElTabPane, ElTabs } from 'element-plus'
@@ -390,7 +390,7 @@
   import { useTenantScopeStore } from '@/store/modules/tenant-scope'
   import { useDocumentNumberRule } from '@/hooks/core/useDocumentNumberRule'
   import { useAuth } from '@/hooks/core/useAuth'
-  import { getFileExtension, removeAttachmentRow } from '@/utils/file'
+  import { getFileExtension } from '@/utils/file'
   import { attachmentTableLink } from '@/components/core/media/art-file-viewer/table-link'
   import { canEditField, canViewField } from '@/utils/field-permission'
   import { getFriendlySupabaseErrorMessage } from '@/utils/supabase'
@@ -412,8 +412,6 @@
   import type { VehicleTypeProfile } from './modules/vehicle-type-catalog'
 
   defineOptions({ name: 'VehicleArchiveEdit' })
-
-  const { confirmAction } = useArtFeedback()
 
   type ArchiveAttachment = Api.Vms.ArchiveManage.VehicleArchiveAttachment
   type CarrierOption = VmsCarrierReference
@@ -620,6 +618,10 @@
   const documentTenantId = computed(
     () =>
       form.tenantId ?? tenantScopeStore.effectiveTenantId ?? userStore.getUserInfo.tenantId ?? ''
+  )
+  const vehicleTypeContextKey = computed(
+    () =>
+      `${documentTenantId.value}:${tenantScopeStore.effectiveTenantId}:${tenantScopeStore.isAllTenants}:${tenantScopeStore.revision}:${userStore.getUserInfo.userId}:${userStore.getUserInfo.tenantId}`
   )
   const uploadVehicleDocument = (file: File) =>
     uploadVehiclePrivateDocument(file, documentTenantId.value)
@@ -1790,20 +1792,14 @@
     ElMessage.success('附件已添加')
   }
 
-  const removeAttachment = async (row: ArchiveAttachment): Promise<void> => {
-    if (!canManageArchiveAttachments.value) return
-    try {
-      await confirmAction(`确定删除附件“${row.name}”吗？`, '删除确认', {
-        confirmButtonText: '删除',
-        cancelButtonText: '取消',
-        type: 'warning',
-        confirmButtonType: 'danger'
-      })
-      form.attachments = removeAttachmentRow(form.attachments ?? [], row)
-    } catch {
-      // 用户取消删除时无须提示
-    }
-  }
+  const removeAttachment = useDraftAttachmentRemoval<ArchiveAttachment>({
+    getAttachments: () => form.attachments,
+    setAttachments: (rows) => {
+      form.attachments = rows
+    },
+    canRemove: () => canManageArchiveAttachments.value,
+    getContext: () => [form.id, form.tenantId]
+  })
 
   const goBack = (): void => {
     void router.push('/vms/vehicle-archive-manage')

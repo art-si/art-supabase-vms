@@ -12,7 +12,7 @@ export type CertificateType =
   | 'professional_qualification'
 
 export type CertificateStatus =
-  'valid' | 'due_3_months' | 'due_30' | 'due_15' | 'due_today' | 'expired' | 'handled'
+  'valid' | 'due_3_months' | 'due_30' | 'due_15' | 'due_today' | 'expired' | 'handled' | 'revoked'
 
 export interface CertificateAttachment {
   name: string
@@ -40,6 +40,10 @@ export interface CertificateRecord {
   renewalOfId: string | null
   handledAt: string | null
   handledBy: string | null
+  revokedAt: string | null
+  revokedOn: string | null
+  revokedBy: string | null
+  revokedReason: string | null
   status: CertificateStatus
 }
 

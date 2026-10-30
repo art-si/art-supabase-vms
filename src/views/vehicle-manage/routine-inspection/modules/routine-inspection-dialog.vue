@@ -64,12 +64,11 @@
             上传
           </ElButton>
         </div>
-        <ArtTable
-          :data="form.data.attachments"
-          :columns="attachmentColumns"
-          :pagination="undefined"
-          :show-table-header="false"
-          empty-height="160px"
+        <VehicleAttachmentTable
+          :attachments="form.data.attachments ?? []"
+          :name-min-width="180"
+          :removable="canEditField(currentFieldAccess, 'documents')"
+          @remove="removeAttachment"
         />
       </section>
     </div>
@@ -109,9 +108,9 @@
 </template>
 
 <script setup lang="tsx">
-  import BusinessAttachmentRowActions from '@/components/business/business-attachment-row-actions/index.vue'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
-  import { notifyFriendlyError, useArtFeedback } from '@/hooks/core/useArtFeedback'
+  import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
+  import { useDraftAttachmentRemoval } from '@/hooks/core/useDraftAttachmentRemoval'
   import type { ComputedRef, UnwrapNestedRefs } from 'vue'
   import { cloneDeep } from 'lodash-es'
   import type { FormRules } from 'element-plus'
@@ -131,16 +130,12 @@
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
   import { useDocumentNumberRule } from '@/hooks/core/useDocumentNumberRule'
   import ArtSectionTitle from '@/components/core/surfaces/art-section-title/index.vue'
-  import ArtTable from '@/components/core/tables/art-table/index.vue'
-  import type { ColumnOption } from '@/types'
   import {
     addVehicleRoutineInspection,
     editVehicleRoutineInspection,
     fetchApprovedVehicleSelectData
   } from '@vms/api'
   import { useDictionaryOptions } from '@/hooks/core/useDictionaryOptions'
-  import { removeAttachmentRow } from '@/utils/file'
-  import { attachmentTableLink } from '@/components/core/media/art-file-viewer/table-link'
   import { canEditField, canViewField } from '@/utils/field-permission'
   import {
     EDITABLE_VEHICLE_ROUTINE_INSPECTION_ACCESS,
@@ -153,14 +148,12 @@
     type VehicleAttachmentGroup as AttachmentGroup,
     type VehicleFormExpose as FormExpose
   } from '../../vehicle-attachment-dialog'
+  import VehicleAttachmentTable from '../../vehicle-attachment-table.vue'
 
   defineOptions({ name: 'RoutineInspectionDialog' })
 
-  const { confirmAction } = useArtFeedback()
-
   type RoutineInspection = Api.Vms.VehicleManage.VehicleRoutineInspectionRecord
   type VehicleArchive = Api.Vms.ArchiveManage.VehicleArchive
-  type Attachment = Api.Vms.VehicleManage.VehicleAttachment
 
   interface FormGroup {
     data: RoutineInspection
@@ -357,32 +350,6 @@
     }
   ]
 
-  const attachmentColumns: ColumnOption<Attachment>[] = [
-    { type: 'globalIndex', label: '序号', width: 56 },
-    { prop: 'name', label: '附件名称', minWidth: 180, link: attachmentTableLink },
-    {
-      prop: 'fileType',
-      label: '格式类型',
-      width: 110,
-      dict: { code: 'FILE_EXTENSION_LABEL_MAP', display: 'text' }
-    },
-    { prop: 'fileSize', label: '附件大小', width: 110 },
-    {
-      prop: 'operation',
-      label: '操作',
-      width: 144,
-      fixed: 'right',
-      formatter: (row) => (
-        <BusinessAttachmentRowActions
-          file={row}
-          removable={canEditField(currentFieldAccess.value, 'documents')}
-          removeLabel="删除附件"
-          onRemove={() => void removeAttachment(row)}
-        />
-      )
-    }
-  ]
-
   const handleVehicleChange = (_value: unknown, rows: DataSelectRecord[]): void => {
     const vehicle = rows[0] as VehicleArchive | undefined
     const targetTenantId = vehicle?.tenantId || tenantScopeStore.effectiveTenantId || undefined
@@ -437,19 +404,14 @@
     })
   }
 
-  const removeAttachment = async (row: Attachment): Promise<void> => {
-    try {
-      await confirmAction(`确定删除附件“${row.name}”吗？`, '删除确认', {
-        confirmButtonText: '删除',
-        cancelButtonText: '取消',
-        type: 'warning',
-        confirmButtonType: 'danger'
-      })
-      form.data.attachments = removeAttachmentRow(form.data.attachments ?? [], row)
-    } catch {
-      // 用户取消删除时无需提示。
-    }
-  }
+  const removeAttachment = useDraftAttachmentRemoval<Api.Vms.VehicleManage.VehicleAttachment>({
+    getAttachments: () => form.data.attachments,
+    setAttachments: (rows) => {
+      form.data.attachments = rows
+    },
+    canRemove: () => canEditField(currentFieldAccess.value, 'documents'),
+    getContext: () => [form.data.id, form.data.tenantId, form.data.vehicleId]
+  })
 
   const normalizePayload = (): RoutineInspection => {
     const payload = sanitizeVehicleRoutineInspectionPayload({ ...toRaw(form.data) })

@@ -17,7 +17,13 @@ export type {
   VmsHrEmployeeReference
 } from '@vms/api/integration'
 
-const vehicleApi = isJavaApi ? javaVehicleApi : supabaseVehicleApi
+// 字面量默认分支供打包器裁剪；其余环境值保留既有解析规则。
+const vehicleApi =
+  import.meta.env.VITE_API_PROVIDER === 'supabase'
+    ? supabaseVehicleApi
+    : isJavaApi
+      ? javaVehicleApi
+      : supabaseVehicleApi
 
 export const fetchInsuranceCompanyList = vehicleApi.fetchInsuranceCompanyList
 export const exportInsuranceCompanyList = vehicleApi.exportInsuranceCompanyList
@@ -62,6 +68,7 @@ export type { VehicleArchiveNavigationItem } from '@vms/api/providers/supabase/v
 export const exportVehicleArchiveList = supabaseVehicleApi.exportVehicleArchiveList
 export const fetchVehicleArchiveDetail = supabaseVehicleApi.fetchVehicleArchiveDetail
 export const fetchVehicleTypeProfiles = supabaseVehicleApi.fetchVehicleTypeProfiles
+export { fetchVehicleTypeDeleteReferences } from './providers/supabase/vehicle/type-profile-delete-references'
 export const saveVehicleTypeProfile = supabaseVehicleApi.saveVehicleTypeProfile
 export const deleteVehicleTypeProfile = supabaseVehicleApi.deleteVehicleTypeProfile
 export const addVehicleArchive = supabaseVehicleApi.addVehicleArchive

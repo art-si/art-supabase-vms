@@ -6,6 +6,7 @@
       :closable="false"
       show-icon
       :title="`${entry?.cardNo || '当前卡'} · 已有 ${entry?.voucherPaths.length || 0} 张，最多 5 张`"
+      :description="entry?.referenceNo ? `业务凭证号：${entry.referenceNo}` : undefined"
     />
     <div class="mt-5">
       <span class="mb-2 block text-sm font-medium">补传图片</span>
@@ -48,6 +49,7 @@
     id: string
     tenantId: string
     cardNo: string
+    referenceNo?: string | null
     voucherPaths: string[]
   }
 

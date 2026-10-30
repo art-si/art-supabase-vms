@@ -98,9 +98,10 @@
   import ArtTable from '@/components/core/tables/art-table/index.vue'
   import BusinessAttachmentRowActions from '@/components/business/business-attachment-row-actions/index.vue'
   import { attachmentTableLink } from '@/components/core/media/art-file-viewer/table-link'
-  import { getFileExtension, removeAttachmentRow } from '@/utils/file'
+  import { getFileExtension } from '@/utils/file'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
-  import { notifyFriendlyError, useArtFeedback } from '@/hooks/core/useArtFeedback'
+  import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
+  import { useDraftAttachmentRemoval } from '@/hooks/core/useDraftAttachmentRemoval'
   import { useDictionaryOptions } from '@/hooks/core/useDictionaryOptions'
   import type {
     CertificateAttachment,
@@ -120,7 +121,6 @@
   defineOptions({ name: 'VmsCertificateDialog' })
 
   const emit = defineEmits<{ success: [] }>()
-  const { confirmAction } = useArtFeedback()
   const dialogRef = ref<ArtDialogExpose<CertificateRecord | undefined>>()
   const formRef = ref<{ validate: () => Promise<boolean>; clearValidate: () => void }>()
   const recordId = ref<string | null>(null)
@@ -313,18 +313,15 @@
 
   const uploadAttachment = (file: File) => uploadCertificateAttachment(file, subjectTenantId.value)
 
-  async function removeAttachment(row: CertificateAttachment): Promise<void> {
-    try {
-      await confirmAction(`确定移除附件“${row.name}”吗？`, '移除附件', {
-        confirmButtonText: '移除',
-        cancelButtonText: '取消',
-        type: 'warning'
-      })
-      form.attachments = removeAttachmentRow(form.attachments, row)
-    } catch {
-      // 用户取消操作。
-    }
-  }
+  const removeAttachment = useDraftAttachmentRemoval<CertificateAttachment>({
+    getAttachments: () => form.attachments,
+    setAttachments: (rows) => {
+      form.attachments = rows
+    },
+    canRemove: () => true,
+    getContext: () => [recordId.value, form.subjectType, form.subjectId, subjectTenantId.value],
+    action: '移除'
+  })
 
   async function submit(): Promise<boolean> {
     try {

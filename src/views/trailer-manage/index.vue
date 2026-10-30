@@ -1,5 +1,9 @@
 <template>
   <div class="trailer-manage art-full-height">
+    <MasterDeleteProcessingNotice
+      :table="tableQueryRef"
+      action-hint="请核对关联挂车；解除车型引用后返回原页面继续删除。"
+    />
     <BusinessWorkspaceHeader
       eyebrow="FLEET ASSET CONTROL"
       title="挂车管理"
@@ -60,13 +64,15 @@
   import type { ColumnOption } from '@/types'
   import { buildSupabasePageRange } from '@/utils/supabase/pagination'
   import { formatWithDayjs } from '@/utils/time'
-  import { fetchTrailerList } from '@vms/api'
+  import { fetchTrailerDetail, fetchTrailerList } from '@vms/api'
   import type { TrailerRecord } from '@vms/types/trailer'
   import TrailerDialog from './modules/trailer-dialog.vue'
+  import MasterDeleteProcessingNotice from '@/components/business/master-delete-processing-notice/index.vue'
 
   defineOptions({ name: 'TrailerManage' })
 
   const { hasAuth } = useAuth()
+  const route = useRoute()
   const canView = computed(() => hasAuth('TrailerManage:View'))
   const tableQueryRef = ref<ArtTableQueryExpose>()
   const dialogRef = ref<{ handleOpen: (row?: TrailerRecord) => Promise<void> }>()
@@ -107,10 +113,24 @@
     }
   ])
 
-  const fetchTableData = (params: { current: number; size: number; plateNo?: string }) => {
+  const referenceRecordId = computed(() =>
+    typeof route.query.recordId === 'string' && route.query.fromMasterDelete === '1'
+      ? route.query.recordId
+      : ''
+  )
+  const fetchTableData = async (params: { current: number; size: number; plateNo?: string }) => {
+    if (referenceRecordId.value) {
+      const result = await fetchTrailerDetail(referenceRecordId.value)
+      return {
+        data: result.data ? [result.data] : [],
+        total: result.data ? 1 : 0,
+        error: result.error
+      }
+    }
     const { from, to } = buildSupabasePageRange({ current: params.current, size: params.size })
-    return fetchTrailerList({ from, to, plateNo: params.plateNo })
+    return await fetchTrailerList({ from, to, plateNo: params.plateNo })
   }
+  watch(referenceRecordId, () => void tableQueryRef.value?.refreshData())
   const textOrDash = (value: string | number | null | undefined) =>
     value == null || value === '' ? '—' : String(value)
   const licenseStatus = (row: TrailerRecord) => {

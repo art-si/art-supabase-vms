@@ -116,6 +116,7 @@
           options: [
             { label: '全部状态', value: '' },
             { label: '待接单', value: 'pending' },
+            { label: '已接单', value: 'accepted' },
             { label: '运输中', value: 'transporting' },
             { label: '已签收', value: 'signed' },
             { label: '已完成', value: 'completed' }
@@ -153,6 +154,18 @@
         label: '计划发车',
         minWidth: 158,
         formatter: (row: OwnVehicleTaskRecord) => formatWithDayjs(row.plannedDepartureAt) ?? '—'
+      },
+      {
+        prop: 'actualDepartureAt',
+        label: '实际发车',
+        minWidth: 158,
+        formatter: (row: OwnVehicleTaskRecord) => formatWithDayjs(row.actualDepartureAt) ?? '—'
+      },
+      {
+        prop: 'actualArrivalAt',
+        label: '实际到达',
+        minWidth: 158,
+        formatter: (row: OwnVehicleTaskRecord) => formatWithDayjs(row.actualArrivalAt) ?? '—'
       },
       {
         prop: 'distanceKm',

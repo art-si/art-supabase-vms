@@ -253,7 +253,7 @@
     () => route.query.cardId,
     (id) => {
       search.cardId = typeof id === 'string' ? id : undefined
-      void nextTick(() => tableRef.value?.refreshData())
+      void nextTick(() => tableRef.value?.getData())
     }
   )
   const refreshSelectedCardBalance = async (): Promise<void> => {
@@ -279,7 +279,7 @@
   ]
   const handleLedgerViewChange = (value: string | number | boolean): void => {
     search.entryType = value === 'all' ? undefined : (value as ElectricCardEntryType)
-    void nextTick(() => tableRef.value?.refreshData())
+    void nextTick(() => tableRef.value?.getData())
   }
   const searchItems = computed<SearchFormItem[]>(() => [
     {

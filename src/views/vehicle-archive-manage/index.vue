@@ -674,7 +674,9 @@
       emptyText: '暂无符合条件的车辆档案',
       emptyDescription: '可调整筛选条件，或新增车辆档案后完善资料。',
       rowClassName: ({ row }: { row: Record<string, unknown>; rowIndex: number }) =>
-        row.certificateRisk === 'expired' ? 'vehicle-archive-manage__expired' : ''
+        row.certificateRisk === 'expired' || row.certificateRisk === 'revoked'
+          ? 'vehicle-archive-manage__expired'
+          : ''
     }
   })
 

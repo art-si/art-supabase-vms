@@ -31,7 +31,8 @@ export const CERTIFICATE_STATUS_OPTIONS: { value: CertificateStatus; label: stri
   { value: 'due_15', label: '待换证（15 天）' },
   { value: 'due_today', label: '待换证（今天）' },
   { value: 'expired', label: '已过期' },
-  { value: 'handled', label: '已处理' }
+  { value: 'handled', label: '已处理' },
+  { value: 'revoked', label: '已作废' }
 ]
 
 export function certificateTypeLabel(type: CertificateType): string {
@@ -64,7 +65,7 @@ export function certificateStatusTone(
     status === 'due_3_months'
   )
     return 'warning'
-  if (status === 'handled') return 'info'
+  if (status === 'handled' || status === 'revoked') return 'info'
   return 'success'
 }
 
@@ -72,21 +73,28 @@ export function certificateRiskCounts(rows: CertificateRecord[]): {
   expired: number
   dueSoon: number
   handled: number
+  revoked: number
 } {
   return rows.reduce(
     (counts, row) => {
-      if (row.status === 'expired') counts.expired += 1
-      if (['due_today', 'due_15', 'due_30', 'due_3_months'].includes(row.status))
+      const isCurrent = row.isCurrent !== false
+      if (isCurrent && row.status === 'expired') counts.expired += 1
+      if (isCurrent && row.status === 'revoked') counts.revoked += 1
+      if (isCurrent && ['due_today', 'due_15', 'due_30', 'due_3_months'].includes(row.status))
         counts.dueSoon += 1
       if (row.status === 'handled') counts.handled += 1
       return counts
     },
-    { expired: 0, dueSoon: 0, handled: 0 }
+    { expired: 0, dueSoon: 0, handled: 0, revoked: 0 }
   )
 }
 
 export function canMarkCertificateHandled(row: CertificateRecord): boolean {
-  return !isLegacyCertificateRecord(row) && row.status !== 'handled'
+  return !isLegacyCertificateRecord(row) && row.status !== 'handled' && row.status !== 'revoked'
+}
+
+export function canRenewCertificate(row: CertificateRecord): boolean {
+  return !isLegacyCertificateRecord(row) && row.isCurrent !== false
 }
 
 export function isLegacyCertificateRecord(row: CertificateRecord): boolean {

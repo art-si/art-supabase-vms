@@ -12,6 +12,7 @@
 
     <ArtTableQuery
       v-if="canView"
+      :key="subjectContextKey"
       ref="tableRef"
       v-model="search"
       :search-items="searchItems"
@@ -42,7 +43,7 @@
 <script setup lang="tsx">
   import { computed, reactive, ref, watch } from 'vue'
   import { useRoute } from 'vue-router'
-  import { ElTag } from 'element-plus'
+  import { ElMessage, ElTag } from 'element-plus'
   import type { ColumnOption } from '@/types'
   import type { SearchFormItem } from '@/components/core/forms/art-search-bar/index.vue'
   import type {
@@ -66,11 +67,13 @@
   import type { CertificateRecord, CertificateSearchParams } from '../../types/certificate'
   import {
     fetchCertificateList,
-    markCertificateHandled
+    markCertificateHandled,
+    revokeCertificate
   } from '../../api/providers/supabase/vehicle/certificates'
   import {
     CERTIFICATE_STATUS_OPTIONS,
     canMarkCertificateHandled,
+    canRenewCertificate,
     certificateRiskCounts,
     certificateStatusLabel,
     certificateStatusTableLabel,
@@ -84,7 +87,7 @@
 
   type TableParams = CertificateSearchParams & Pick<Api.Common.PaginationParams, 'current' | 'size'>
 
-  const { confirmAction } = useArtFeedback()
+  const { confirmAction, promptReason } = useArtFeedback()
   const { hasAuth } = useAuth()
   const canView = computed(() => hasAuth('CertificateCenter:View'))
   const route = useRoute()
@@ -105,12 +108,23 @@
     status: '',
     keyword: ''
   })
+  const subjectContextKey = ref(`${search.subjectType}:${search.subjectId}`)
   watch(
-    () => [route.query.subjectType, route.query.subjectId],
+    () => [route.path, route.query.subjectType, route.query.subjectId],
     () => {
-      Object.assign(search, { subjectType: routeSubjectType(), subjectId: routeSubjectId() })
-      void tableRef.value?.refreshContext()
-    }
+      if (route.path !== '/vms/certificate-center') return
+      const subjectType = routeSubjectType()
+      const subjectId = routeSubjectId()
+      const nextContextKey = `${subjectType}:${subjectId}`
+      if (subjectContextKey.value === nextContextKey) return
+
+      tableRef.value?.cancelRequest()
+      Object.assign(search, { subjectType, subjectId, status: '', keyword: '' })
+      page.rows = []
+      page.total = 0
+      subjectContextKey.value = nextContextKey
+    },
+    { flush: 'post' }
   )
   const searchItems: SearchFormItem[] = [
     {
@@ -152,9 +166,9 @@
       icon: 'ri:file-list-3-line'
     },
     {
-      label: '本页已过期',
-      value: counts.value.expired,
-      description: '需立即核对并续证',
+      label: '本页需补证',
+      value: counts.value.expired + counts.value.revoked,
+      description: '当前证件已过期或已作废，需登记新证',
       icon: 'ri:error-warning-line',
       tone: 'danger'
     },
@@ -217,7 +231,14 @@
         label: '风险状态',
         width: 126,
         formatter: (row) => (
-          <span class="inline-flex" title={certificateStatusLabel(row.status)}>
+          <span
+            class="inline-flex"
+            title={
+              row.status === 'revoked' && row.revokedReason
+                ? `作废原因：${row.revokedReason}`
+                : certificateStatusLabel(row.status)
+            }
+          >
             <ElTag type={certificateStatusTone(row.status)} effect="light">
               {certificateStatusTableLabel(row.status)}
             </ElTag>
@@ -238,7 +259,7 @@
         fixed: 'right',
         formatter: (row) => (
           <BusinessTableRowActions>
-            {!isLegacyCertificateRecord(row) ? (
+            {!isLegacyCertificateRecord(row) && row.status !== 'revoked' ? (
               <ArtButtonTable
                 type="edit"
                 permission="CertificateCenter:Edit"
@@ -267,7 +288,16 @@
       ]
     }
     return [
-      { key: 'renew', label: '登记续证', icon: 'ri:file-add-line', auth: 'CertificateCenter:Add' },
+      ...(canRenewCertificate(row)
+        ? [
+            {
+              key: 'renew',
+              label: '登记续证',
+              icon: 'ri:file-add-line',
+              auth: 'CertificateCenter:Add'
+            }
+          ]
+        : []),
       ...(canMarkCertificateHandled(row)
         ? [
             {
@@ -277,13 +307,47 @@
               auth: 'CertificateCenter:Handle'
             }
           ]
+        : []),
+      ...(row.status !== 'revoked' && row.status !== 'handled' && row.isCurrent !== false
+        ? [
+            {
+              key: 'revoke',
+              label: '作废证件',
+              icon: 'ri:forbid-line',
+              auth: 'CertificateCenter:Revoke'
+            }
+          ]
         : [])
     ]
   }
 
   async function handleRowAction(key: string, row: CertificateRecord): Promise<void> {
+    if (key === 'renew' && !canRenewCertificate(row)) {
+      ElMessage.warning('该证件已由新证替代，请查看当前证件后再续证')
+      return
+    }
     if (key === 'renew' || key === 'register') {
       openDialog(row, true)
+      return
+    }
+    if (key === 'revoke') {
+      try {
+        const reason = await promptReason(
+          `作废后保留“${row.subjectLabel} · ${certificateTypeLabel(row.certificateType)}”的历史记录，停止该证提醒，并阻止使用该证派车；登记有效新证后恢复资格。`,
+          '作废证件',
+          {
+            confirmButtonText: '确认作废',
+            placeholder: '请填写证件作废原因',
+            emptyMessage: '请填写证件作废原因'
+          }
+        )
+        await revokeCertificate(row.id, reason)
+        await tableRef.value?.refreshUpdate()
+      } catch (error) {
+        if (error !== 'cancel' && error !== 'close') {
+          notifyFriendlyError(error, '作废失败，请刷新证件记录后重试')
+        }
+      }
       return
     }
     if (key !== 'handle') return
