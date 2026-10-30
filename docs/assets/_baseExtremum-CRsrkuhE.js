@@ -1,1 +1,0 @@
-import{ot as e}from"./_baseUniq-QbINKJ6Z.js";function t(e,t){return e>t}function n(t,n,r){for(var i=-1,a=t.length;++i<a;){var o=t[i],s=n(o);if(s!=null&&(c===void 0?s===s&&!e(s):r(s,c)))var c=s,l=o}return l}export{t as n,n as t};

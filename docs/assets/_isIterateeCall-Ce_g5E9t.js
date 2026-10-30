@@ -1,0 +1,1 @@
+import{G as e,K as t,U as n,rt as r}from"./_baseUniq-8jtP9ue6.js";function i(i,a,o){if(!r(o))return!1;var s=typeof a;return(s==`number`?n(o)&&t(a,o.length):s==`string`&&a in o)?e(o[a],i):!1}export{i as t};

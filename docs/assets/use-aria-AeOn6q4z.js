@@ -1,0 +1,1 @@
+import{_i as e}from"./sys-BMJ_PSHD.js";import{t}from"./pick-BhgQTEBT.js";var n=e({ariaLabel:String,ariaOrientation:{type:String,values:[`horizontal`,`vertical`,`undefined`]},ariaControls:String}),r=e=>t(n,e);export{r as t};

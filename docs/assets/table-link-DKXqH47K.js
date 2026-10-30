@@ -1,0 +1,1 @@
+import{c as e,o as t}from"./file-T12ig3Cw.js";var n={onClick:t,disabled:t=>!e(t.url,window.location.href),title:t=>e(t.url,window.location.href)?`预览${t.name?.trim()||`附件`}`:`附件地址不可用，请重新上传或联系提供者`};export{n as t};
