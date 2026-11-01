@@ -15,25 +15,6 @@
         :gutter="20"
         label-width="120px"
       >
-        <template #vehicleId>
-          <ArtTableSingleSelect
-            v-model="vehicleSelectValue"
-            v-model:selected-data="form.vehicleSelection"
-            :api-fn="fetchApprovedVehicleSelectData"
-            :columns="vehicleColumns"
-            row-key="id"
-            label-key="plateNo"
-            description-key="companyName"
-            title="选择车辆"
-            search-placeholder="输入车牌号或所属公司"
-            empty-text="暂无可选车辆"
-            empty-description="请先维护车辆档案并确保车辆已启用。"
-            show-pagination
-            @change="handleVehicleChange"
-          >
-            <template #empty><VehicleDataSourceEmptyActions source="vehicle" /></template>
-          </ArtTableSingleSelect>
-        </template>
         <template #driverId>
           <VmsDriverSelect
             :model-value="form.data.driverId"
@@ -97,28 +78,14 @@
         :span="24"
         label-width="150px"
       >
-        <template #file>
-          <div class="accident-attachment-dialog__upload">
-            <ArtUploadFile
-              :title="attachmentTenantId ? '选择上传文件' : '请先选择车辆'"
-              :resource-tenant-id="attachmentTenantId"
-              :disabled="!attachmentTenantId"
-              :show-file-list="false"
-              :show-tip="false"
-              @resource-change="handleAttachmentFileChange"
-            />
-            <div v-if="attachment.data.fileName" class="accident-attachment-dialog__file">
-              <span>{{ attachment.data.fileName }}</span>
-              <ArtSvgIcon v-if="attachment.data.url" icon="ri:check-line" />
-            </div>
-          </div>
-        </template>
       </ArtForm>
     </div>
   </ArtDialog>
 </template>
 
 <script setup lang="tsx">
+  import ArtSvgIcon from '@/components/core/base/art-svg-icon/index.vue'
+  import { h } from 'vue'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import { normalizeNullableNumber } from '@/utils/form/normalize'
 
@@ -130,12 +97,11 @@
   import { ElButton, ElMessage } from 'element-plus'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
-  import ArtUploadFile from '@/components/core/forms/art-upload-file/index.vue'
+
   import { useTenantScopeStore } from '@/store/modules/tenant-scope'
   import ArtAddressPicker from '@/components/core/forms/art-address-picker/index.vue'
   import type { AddressLocationPayload } from '@/components/core/forms/art-address-picker/types'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
-  import ArtTableSingleSelect from '@/components/core/forms/art-data-select/table-single.vue'
   import VehicleDataSourceEmptyActions from '../../../components/vehicle-data-source-empty-actions.vue'
   import VmsDriverSelect from '../../../components/vms-driver-select.vue'
   import type {
@@ -267,7 +233,37 @@
     items: computed<FormItem[]>(() => {
       const items: FormItem[] = [
         { label: '基础信息', key: 'baseSection', type: 'tab', span: 24 },
-        { label: '车牌号', key: 'vehicleId', span: 12 },
+        {
+          label: '车牌号',
+          key: 'vehicleId',
+          span: 12,
+          type: 'dataSelect',
+          props: {
+            mode: 'table',
+            multiple: false,
+            modelValue: vehicleSelectValue.value,
+            'onUpdate:modelValue': (value: typeof vehicleSelectValue.value) => {
+              vehicleSelectValue.value = value
+            },
+            selectedData: form.vehicleSelection,
+            'onUpdate:selectedData': (value: typeof form.vehicleSelection) => {
+              form.vehicleSelection = value
+            },
+            apiFn: fetchApprovedVehicleSelectData,
+            columns: vehicleColumns,
+            rowKey: 'id',
+            labelKey: 'plateNo',
+            descriptionKey: 'companyName',
+            title: '选择车辆',
+            searchPlaceholder: '输入车牌号或所属公司',
+            emptyText: '暂无可选车辆',
+            emptyDescription: '请先维护车辆档案并确保车辆已启用。',
+            showPagination: true,
+            onChange: handleVehicleChange,
+            showSelectedPanel: false
+          },
+          slots: { empty: () => h(VehicleDataSourceEmptyActions, { source: 'vehicle' }) }
+        },
         { label: '所属公司', key: 'companyName', type: 'input', props: { disabled: true } },
         {
           label: '驾驶员',
@@ -385,7 +381,26 @@
         type: 'input',
         props: { maxlength: 100 }
       },
-      { label: '选择上传文件', key: 'file' }
+      {
+        label: '选择上传文件',
+        key: 'file',
+        type: 'uploadFile',
+        props: {
+          title: attachmentTenantId.value ? '选择上传文件' : '请先选择车辆',
+          resourceTenantId: attachmentTenantId.value,
+          disabled: !attachmentTenantId.value,
+          showFileList: false,
+          showTip: false,
+          onResourceChange: handleAttachmentFileChange
+        },
+        description: () =>
+          attachment.data.fileName ? (
+            <div class="accident-attachment-dialog__file">
+              <span>{attachment.data.fileName}</span>
+              {attachment.data.url ? <ArtSvgIcon icon="ri:check-line" /> : null}
+            </div>
+          ) : null
+      }
     ]),
     rules: computed<FormRules<AttachmentFormData>>(() => ({
       name: [{ required: true, message: '请输入事故附件名称', trigger: 'blur' }],
@@ -578,13 +593,6 @@
 
   .accident-attachment-dialog {
     padding: 8px 0 4px;
-
-    &__upload {
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-      align-items: flex-start;
-    }
 
     &__file {
       display: flex;

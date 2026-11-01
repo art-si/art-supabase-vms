@@ -12,25 +12,6 @@
         :gutter="20"
         label-width="120px"
       >
-        <template #vehicleId>
-          <ArtTableSingleSelect
-            v-model="vehicleSelectValue"
-            v-model:selected-data="form.vehicleSelection"
-            :api-fn="fetchApprovedVehicleSelectData"
-            :columns="vehicleColumns"
-            row-key="id"
-            label-key="plateNo"
-            description-key="companyName"
-            title="选择车辆"
-            search-placeholder="输入车牌号或所属公司"
-            empty-text="暂无可选车辆"
-            empty-description="请先维护车辆档案并确保车辆已启用。"
-            show-pagination
-            @change="handleVehicleChange"
-          >
-            <template #empty><VehicleDataSourceEmptyActions source="vehicle" /></template>
-          </ArtTableSingleSelect>
-        </template>
       </ArtForm>
 
       <section v-if="canViewDocuments" class="vehicle-inspection-dialog__section">
@@ -58,6 +39,7 @@
 </template>
 
 <script setup lang="tsx">
+  import { h } from 'vue'
   import BusinessAttachmentRowActions from '@/components/business/business-attachment-row-actions/index.vue'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
@@ -68,7 +50,6 @@
   import { ElMessage } from 'element-plus'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
-  import ArtTableSingleSelect from '@/components/core/forms/art-data-select/table-single.vue'
   import VehicleDataSourceEmptyActions from '../../../components/vehicle-data-source-empty-actions.vue'
   import type {
     DataSelectColumn,
@@ -166,7 +147,36 @@
     items: computed<FormItem[]>(() => {
       const items: FormItem[] = [
         { label: '年检信息', key: 'inspectionSection', type: 'divider', span: 24 },
-        { label: '车牌号', key: 'vehicleId' },
+        {
+          label: '车牌号',
+          key: 'vehicleId',
+          type: 'dataSelect',
+          props: {
+            mode: 'table',
+            multiple: false,
+            modelValue: vehicleSelectValue.value,
+            'onUpdate:modelValue': (value: typeof vehicleSelectValue.value) => {
+              vehicleSelectValue.value = value
+            },
+            selectedData: form.vehicleSelection,
+            'onUpdate:selectedData': (value: typeof form.vehicleSelection) => {
+              form.vehicleSelection = value
+            },
+            apiFn: fetchApprovedVehicleSelectData,
+            columns: vehicleColumns,
+            rowKey: 'id',
+            labelKey: 'plateNo',
+            descriptionKey: 'companyName',
+            title: '选择车辆',
+            searchPlaceholder: '输入车牌号或所属公司',
+            emptyText: '暂无可选车辆',
+            emptyDescription: '请先维护车辆档案并确保车辆已启用。',
+            showPagination: true,
+            onChange: handleVehicleChange,
+            showSelectedPanel: false
+          },
+          slots: { empty: () => h(VehicleDataSourceEmptyActions, { source: 'vehicle' }) }
+        },
         {
           label: '所属公司',
           key: 'companyName',

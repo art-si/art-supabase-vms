@@ -8,29 +8,12 @@
     <ArtForm
       ref="formRef"
       v-model:active-tab="activeTab"
-      v-model="form"
+      :model-value="entryModel"
       :items="formItems"
       :rules="formRules"
       :span="12"
       label-width="118px"
     >
-      <template #cardId>
-        <ArtTableSingleSelect
-          v-model="cardSelectValue"
-          v-model:selected-data="cardSelection"
-          :api-fn="fetchSelectableCards"
-          :columns="cardColumns"
-          row-key="id"
-          label-key="cardNo"
-          description-key="plateNo"
-          title="选择电卡"
-          search-placeholder="输入电卡号或车牌号"
-          empty-text="暂无正常状态电卡"
-          empty-description="请先在电卡档案创建并启用电卡。"
-          show-pagination
-          @change="handleCardChange"
-        />
-      </template>
       <template #currentBalance>
         <span class="font-medium tabular-nums">
           {{ selectedCard ? formatCurrencyValue(selectedCard.balance) : '选择电卡后显示余额' }}
@@ -39,23 +22,7 @@
       <template #driverName>
         <span>{{ selectedCard?.driverName || '未绑定主司机' }}</span>
       </template>
-      <template #waybillId>
-        <ArtTableSingleSelect
-          v-model="waybillSelectValue"
-          v-model:selected-data="waybillSelection"
-          :api-fn="fetchWaybills"
-          :columns="waybillColumns"
-          row-key="id"
-          label-key="waybillNo"
-          title="选择关联运单"
-          search-placeholder="输入运单号"
-          empty-text="该电卡车辆暂无可关联运单"
-          :disabled="!selectedCard"
-          show-pagination
-          clearable
-          @change="handleWaybillChange"
-        />
-      </template>
+
       <template #locationPicker>
         <ArtAddressPicker
           v-model:address-detail="form.expenseLocation"
@@ -74,27 +41,6 @@
           show-locate-button
         />
       </template>
-      <template #transactionVoucher>
-        <div class="mt-4 border-t border-[var(--el-border-color-lighter)] pt-4">
-          <span class="mb-2 block text-sm font-medium">现场凭证</span>
-          <ArtUploadImage
-            v-model="voucherUrls"
-            :resource-tenant-id="selectedCard?.tenantId || ''"
-            title="现场凭证"
-            :size="88"
-            multiple
-            :limit="5"
-            :file-size="8 * 1024 * 1024"
-            file-type="image/png,image/jpeg,image/webp"
-            :upload-request="uploadVoucher"
-            :show-resource-picker="false"
-            :readonly="!selectedCard"
-          />
-          <p class="mt-2 text-xs text-[var(--el-text-color-secondary)]"
-            >可上传充电小票、充值凭证等照片，最多 5 张。</p
-          >
-        </div>
-      </template>
     </ArtForm>
     <ElAlert
       v-if="action === 'consume'"
@@ -108,15 +54,15 @@
 </template>
 
 <script setup lang="tsx">
+  import { toRefs } from 'vue'
   import dayjs from 'dayjs'
   import type { FormRules } from 'element-plus'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
-  import ArtTableSingleSelect from '@/components/core/forms/art-data-select/table-single.vue'
   import ArtAddressPicker from '@/components/core/forms/art-address-picker/index.vue'
   import ArtDictDisplay from '@/components/core/base/art-dict-display/index.vue'
-  import ArtUploadImage from '@/components/core/forms/art-upload-image/index.vue'
+
   import type {
     DataSelectColumn,
     DataSelectRecord
@@ -263,11 +209,46 @@
       allowedMimeTypes: ['image/png', 'image/jpeg', 'image/webp'],
       maxBytes: 8 * 1024 * 1024
     })
+  const entryModel = reactive({
+    ...toRefs(form),
+    cardId: cardSelectValue,
+    waybillId: waybillSelectValue,
+    transactionVoucher: voucherUrls
+  })
   const formItems = computed<FormItem[]>(() => [
     ...(action.value === 'consume'
       ? [{ key: 'transactionSection', label: '流水信息', type: 'tab' } satisfies FormItem]
       : []),
-    { label: '电卡', key: 'cardId', span: 24 },
+    {
+      label: '电卡',
+      key: 'cardId',
+      span: 24,
+      type: 'dataSelect',
+      props: {
+        mode: 'table',
+        multiple: false,
+        modelValue: cardSelectValue.value,
+        'onUpdate:modelValue': (value: typeof cardSelectValue.value) => {
+          cardSelectValue.value = value
+        },
+        selectedData: cardSelection.value,
+        'onUpdate:selectedData': (value: typeof cardSelection.value) => {
+          cardSelection.value = value
+        },
+        apiFn: fetchSelectableCards,
+        columns: cardColumns,
+        rowKey: 'id',
+        labelKey: 'cardNo',
+        descriptionKey: 'plateNo',
+        title: '选择电卡',
+        searchPlaceholder: '输入电卡号或车牌号',
+        emptyText: '暂无正常状态电卡',
+        emptyDescription: '请先在电卡档案创建并启用电卡。',
+        showPagination: true,
+        onChange: handleCardChange,
+        showSelectedPanel: false
+      }
+    },
     { label: '当前余额', key: 'currentBalance', span: 12 },
     { label: '绑定司机', key: 'driverName', span: 12 },
     {
@@ -300,7 +281,35 @@
         ] satisfies FormItem[])
       : ([
           { key: 'consumptionSection', label: '充电与凭证', type: 'tab' },
-          { label: '关联运单', key: 'waybillId' },
+          {
+            label: '关联运单',
+            key: 'waybillId',
+            type: 'dataSelect',
+            props: {
+              mode: 'table',
+              multiple: false,
+              modelValue: waybillSelectValue.value,
+              'onUpdate:modelValue': (value: typeof waybillSelectValue.value) => {
+                waybillSelectValue.value = value
+              },
+              selectedData: waybillSelection.value,
+              'onUpdate:selectedData': (value: typeof waybillSelection.value) => {
+                waybillSelection.value = value
+              },
+              apiFn: fetchWaybills,
+              columns: waybillColumns,
+              rowKey: 'id',
+              labelKey: 'waybillNo',
+              title: '选择关联运单',
+              searchPlaceholder: '输入运单号',
+              emptyText: '该电卡车辆暂无可关联运单',
+              disabled: !selectedCard.value,
+              showPagination: true,
+              clearable: true,
+              onChange: handleWaybillChange,
+              showSelectedPanel: false
+            }
+          },
           {
             label: '充电站',
             key: 'stationName',
@@ -334,7 +343,25 @@
       span: 24,
       props: { type: 'textarea', rows: 3, maxlength: 500, showWordLimit: true }
     },
-    { key: 'transactionVoucher', label: '', type: 'slot', span: 24 }
+    {
+      key: 'transactionVoucher',
+      label: '现场凭证',
+      type: 'uploadImage',
+      span: 24,
+      description: '可上传充电小票、充值凭证等照片，最多 5 张。',
+      props: {
+        resourceTenantId: selectedCard.value?.tenantId || '',
+        title: '现场凭证',
+        size: 88,
+        multiple: true,
+        limit: 5,
+        fileSize: 8 * 1024 * 1024,
+        fileType: 'image/png,image/jpeg,image/webp',
+        uploadRequest: uploadVoucher,
+        showResourcePicker: false,
+        readonly: !selectedCard.value
+      }
+    }
   ])
   const formRules: FormRules<EntryForm> = {
     cardId: [{ required: true, message: '请选择电卡', trigger: 'change' }],

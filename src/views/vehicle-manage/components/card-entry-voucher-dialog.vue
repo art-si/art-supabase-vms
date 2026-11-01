@@ -8,24 +8,12 @@
       :title="`${entry?.cardNo || '当前卡'} · 已有 ${entry?.voucherPaths.length || 0} 张，最多 5 张`"
       :description="entry?.referenceNo ? `业务凭证号：${entry.referenceNo}` : undefined"
     />
-    <div class="mt-5">
-      <span class="mb-2 block text-sm font-medium">补传图片</span>
-      <ArtUploadImage
-        v-model="voucherUrls"
-        :resource-tenant-id="entry?.tenantId || ''"
-        title="现场凭证"
-        :size="88"
-        multiple
-        :limit="remainingSlots"
-        :file-size="8 * 1024 * 1024"
-        file-type="image/png,image/jpeg,image/webp"
-        :upload-request="uploadVoucher"
-        :show-resource-picker="false"
-      />
-      <p class="mt-2 text-xs text-[var(--el-text-color-secondary)]">
-        支持 PNG、JPG、WebP，单张不超过 8 MB。提交后只追加图片，原凭证保留。
-      </p>
-    </div>
+    <ArtForm
+      :model-value="voucherForm"
+      :items="voucherItems"
+      :span="24"
+      root-class="px-0! md:px-0!"
+    />
   </ArtDialog>
 </template>
 
@@ -33,7 +21,7 @@
   import { ElAlert } from 'element-plus'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
-  import ArtUploadImage from '@/components/core/forms/art-upload-image/index.vue'
+  import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
   import {
     privateAttachmentPathFromSignedUrl,
@@ -58,6 +46,26 @@
   const dialogRef = ref<ArtDialogExpose<void>>()
   const entry = ref<CardEntry>()
   const voucherUrls = ref<string[]>([])
+  const voucherForm = reactive({ voucherUrls })
+  const voucherItems = computed<FormItem[]>(() => [
+    {
+      key: 'voucherUrls',
+      label: '补传图片',
+      type: 'uploadImage',
+      description: '支持 PNG、JPG、WebP，单张不超过 8 MB。提交后只追加图片，原凭证保留。',
+      props: {
+        resourceTenantId: entry.value?.tenantId || '',
+        title: '现场凭证',
+        size: 88,
+        multiple: true,
+        limit: remainingSlots.value,
+        fileSize: 8 * 1024 * 1024,
+        fileType: 'image/png,image/jpeg,image/webp',
+        uploadRequest: uploadVoucher,
+        showResourcePicker: false
+      }
+    }
+  ])
   const bucket = computed(() =>
     props.kind === 'fuel' ? 'vms-fuel-card-private' : 'vms-electric-card-private'
   )

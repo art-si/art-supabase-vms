@@ -1,44 +1,31 @@
 <template>
   <ArtDialog ref="dialogRef" size="lg">
     <template #subtitle>先录入车辆身份和车型，保存后可继续完善证照、司机与运营资料。</template>
-    <div class="grid gap-6 sm:grid-cols-[120px_minmax(0,1fr)]">
-      <div class="flex flex-col gap-3">
-        <span class="text-sm text-[var(--el-text-color-regular)]">车辆图片</span>
-        <ArtUploadImage
-          v-model="form.vehiclePhotoUrl"
-          :resource-tenant-id="form.tenantId"
-          title="车辆图片"
-          :size="120"
-          :limit="1"
-          :readonly="!form.tenantId"
-        />
-      </div>
-      <ArtForm
-        ref="formRef"
-        v-model="form"
-        :items="formItems"
-        :rules="rules"
-        :span="12"
-        :gutter="20"
-        label-width="110px"
-        tenant-scope-mode="manual"
-      >
-        <template #vehicleTypeProfileId>
-          <ElButton
-            class="w-full justify-start!"
-            :disabled="!form.tenantId"
-            @click="openVehicleTypePicker"
-          >
-            <span class="min-w-0 flex-1 truncate text-left">{{
-              form.vehicleTypeProfileId
-                ? `${form.vehicleType} · ${form.specLengthM ?? form.loadTons}${form.specLengthM == null ? ' 吨' : ' 米'}`
-                : '参选车型与规格'
-            }}</span>
-            <ArtSvgIcon icon="ri:arrow-right-s-line" aria-hidden="true" />
-          </ElButton>
-        </template>
-      </ArtForm>
-    </div>
+    <ArtForm
+      ref="formRef"
+      v-model="form"
+      :items="formItems"
+      :rules="rules"
+      :span="12"
+      :gutter="20"
+      label-width="110px"
+      tenant-scope-mode="manual"
+    >
+      <template #vehicleTypeProfileId>
+        <ElButton
+          class="w-full justify-start!"
+          :disabled="!form.tenantId"
+          @click="openVehicleTypePicker"
+        >
+          <span class="min-w-0 flex-1 truncate text-left">{{
+            form.vehicleTypeProfileId
+              ? `${form.vehicleType} · ${form.specLengthM ?? form.loadTons}${form.specLengthM == null ? ' 吨' : ' 米'}`
+              : '参选车型与规格'
+          }}</span>
+          <ArtSvgIcon icon="ri:arrow-right-s-line" aria-hidden="true" />
+        </ElButton>
+      </template>
+    </ArtForm>
     <div
       class="grid grid-cols-1 gap-3 rounded-[var(--art-control-radius)] bg-[var(--el-fill-color-light)] p-4 text-sm sm:grid-cols-3"
     >
@@ -65,7 +52,7 @@
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
-  import ArtUploadImage from '@/components/core/forms/art-upload-image/index.vue'
+
   import ArtSvgIcon from '@/components/core/base/art-svg-icon/index.vue'
   import { useUserStore } from '@/store/modules/user'
   import { useTenantScopeStore } from '@/store/modules/tenant-scope'
@@ -120,6 +107,19 @@
       .map((tenant) => ({ label: tenant.tenantName, value: tenant.id }))
   ])
   const formItems = computed<FormItem[]>(() => [
+    {
+      key: 'vehiclePhotoUrl',
+      label: '车辆图片',
+      type: 'uploadImage',
+      span: 24,
+      props: {
+        resourceTenantId: form.value.tenantId,
+        title: '车辆图片',
+        size: 120,
+        limit: 1,
+        readonly: !form.value.tenantId
+      }
+    },
     {
       label: '车牌号码',
       key: 'plateNo',

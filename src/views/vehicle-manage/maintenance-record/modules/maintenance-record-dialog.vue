@@ -15,85 +15,6 @@
         :gutter="20"
         label-width="120px"
       >
-        <template #vehicleId>
-          <ArtTableSingleSelect
-            v-model="vehicleSelectValue"
-            v-model:selected-data="form.vehicleSelection"
-            :api-fn="fetchApprovedVehicleSelectData"
-            :columns="vehicleColumns"
-            row-key="id"
-            label-key="plateNo"
-            description-key="companyName"
-            title="选择车辆"
-            search-placeholder="输入车牌号或所属公司"
-            empty-text="暂无可选车辆"
-            empty-description="请先维护车辆档案并确保车辆已启用。"
-            show-pagination
-            @change="handleVehicleChange"
-          >
-            <template #empty><VehicleDataSourceEmptyActions source="vehicle" /></template>
-          </ArtTableSingleSelect>
-        </template>
-        <template #initiatorEmployeeId>
-          <div class="min-w-0">
-            <ArtEmployeeSelect
-              :model-value="form.data.initiatorEmployeeId ?? undefined"
-              :selected-data="selectedInitiator"
-              :tenant-id="form.data.tenantId ?? tenantScopeStore.effectiveTenantId ?? undefined"
-              title="选择经办人"
-              placeholder="请选择经办人"
-              @change="handleInitiatorChange"
-            />
-            <p
-              v-if="form.data.initiator && !form.data.initiatorEmployeeId"
-              class="mt-1 text-xs text-[var(--el-text-color-secondary)]"
-            >
-              历史经办人：{{ form.data.initiator }}；重新选择后可关联员工花名册。
-            </p>
-          </div>
-        </template>
-        <template #workshopSupplierId>
-          <div class="min-w-0">
-            <ArtTableSingleSelect
-              :model-value="form.data.workshopSupplierId ?? undefined"
-              :selected-data="selectedWorkshop"
-              :api-fn="fetchWorkshopSelectData"
-              :columns="workshopColumns"
-              row-key="id"
-              label-key="supplierName"
-              title="选择维修厂"
-              subtitle="仅显示供应商分组为“维修厂”的资料。"
-              placeholder="选择维修厂（选填）"
-              empty-text="暂无维修厂供应商"
-              empty-description="请先在供应商档案中维护“维修厂”分组及供应商。"
-              clearable
-              @change="handleWorkshopChange"
-            />
-            <p
-              v-if="form.data.workshop && !form.data.workshopSupplierId"
-              class="mt-1 text-xs text-[var(--el-text-color-secondary)]"
-            >
-              历史维修厂：{{ form.data.workshop }}；重新选择后可绑定供应商档案。
-            </p>
-          </div>
-        </template>
-        <template #mileageRecordId>
-          <ArtTableSingleSelect
-            :model-value="form.data.mileageRecordId ?? undefined"
-            :selected-data="selectedMileage"
-            :api-fn="fetchMileageSelectData"
-            :columns="mileageColumns"
-            row-key="id"
-            :label-key="formatMileageLabel"
-            title="关联行驶记录"
-            subtitle="选择该车的一次行程，列表将显示其司机、运单和里程。"
-            placeholder="选择行驶记录（选填）"
-            :disabled="!form.data.vehicleId"
-            show-pagination
-            clearable
-            @change="handleMileageChange"
-          />
-        </template>
         <template #maintenanceItems>
           <section v-if="canViewMaintenanceItems" class="maintenance-record-dialog__section">
             <div class="maintenance-record-dialog__section-header">
@@ -155,27 +76,14 @@
         :span="24"
         label-width="170px"
       >
-        <template #file>
-          <div class="maintenance-attachment-dialog__upload">
-            <ArtUploadFile
-              title="选择上传文件"
-              :resource-tenant-id="form.data.tenantId || ''"
-              :show-file-list="false"
-              :show-tip="false"
-              @resource-change="handleAttachmentFileChange"
-            />
-            <div v-if="attachment.data.fileName" class="maintenance-attachment-dialog__file">
-              <span>{{ attachment.data.fileName }}</span>
-              <ArtSvgIcon v-if="attachment.data.url" icon="ri:check-line" />
-            </div>
-          </div>
-        </template>
       </ArtForm>
     </div>
   </ArtDialog>
 </template>
 
 <script setup lang="tsx">
+  import ArtSvgIcon from '@/components/core/base/art-svg-icon/index.vue'
+  import { h } from 'vue'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
   import { useDraftAttachmentRemoval } from '@/hooks/core/useDraftAttachmentRemoval'
@@ -186,12 +94,10 @@
   import { ElButton, ElInput, ElInputNumber, ElMessage } from 'element-plus'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
-  import ArtUploadFile from '@/components/core/forms/art-upload-file/index.vue'
+
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
   import { useDocumentNumberRule } from '@/hooks/core/useDocumentNumberRule'
-  import ArtTableSingleSelect from '@/components/core/forms/art-data-select/table-single.vue'
   import VehicleDataSourceEmptyActions from '../../../components/vehicle-data-source-empty-actions.vue'
-  import ArtEmployeeSelect from '@/components/business/art-employee-select/index.vue'
   import type { EmployeeIntegrationItem } from '@/api/integration/employees'
   import type {
     DataSelectColumn,
@@ -344,7 +250,37 @@
     items: computed<FormItem[]>(() => {
       const items: FormItem[] = [
         { label: '基础信息', key: 'baseSection', type: 'tab', span: 24 },
-        { label: '车牌号', key: 'vehicleId', span: 12 },
+        {
+          label: '车牌号',
+          key: 'vehicleId',
+          span: 12,
+          type: 'dataSelect',
+          props: {
+            mode: 'table',
+            multiple: false,
+            modelValue: vehicleSelectValue.value,
+            'onUpdate:modelValue': (value: typeof vehicleSelectValue.value) => {
+              vehicleSelectValue.value = value
+            },
+            selectedData: form.vehicleSelection,
+            'onUpdate:selectedData': (value: typeof form.vehicleSelection) => {
+              form.vehicleSelection = value
+            },
+            apiFn: fetchApprovedVehicleSelectData,
+            columns: vehicleColumns,
+            rowKey: 'id',
+            labelKey: 'plateNo',
+            descriptionKey: 'companyName',
+            title: '选择车辆',
+            searchPlaceholder: '输入车牌号或所属公司',
+            emptyText: '暂无可选车辆',
+            emptyDescription: '请先维护车辆档案并确保车辆已启用。',
+            showPagination: true,
+            onChange: handleVehicleChange,
+            showSelectedPanel: false
+          },
+          slots: { empty: () => h(VehicleDataSourceEmptyActions, { source: 'vehicle' }) }
+        },
         { label: '所属公司', key: 'companyName', type: 'input', props: { disabled: true } },
         {
           label: '维修单号',
@@ -362,8 +298,47 @@
           type: 'select',
           props: { options: maintenanceTypeOptions.value }
         },
-        { label: '经办人', key: 'initiatorEmployeeId' },
-        { label: '关联行驶记录', key: 'mileageRecordId', span: 24 },
+        {
+          label: '经办人',
+          key: 'initiatorEmployeeId',
+          type: 'employeeSelect',
+          description:
+            form.data.initiator && !form.data.initiatorEmployeeId
+              ? '历史经办人：' + form.data.initiator + '；重新选择后可关联员工花名册。'
+              : '',
+          props: {
+            modelValue: form.data.initiatorEmployeeId ?? undefined,
+            selectedData: selectedInitiator.value,
+            tenantId: form.data.tenantId ?? tenantScopeStore.effectiveTenantId ?? undefined,
+            title: '选择经办人',
+            placeholder: '请选择经办人',
+            onChange: handleInitiatorChange
+          }
+        },
+        {
+          label: '关联行驶记录',
+          key: 'mileageRecordId',
+          span: 24,
+          type: 'dataSelect',
+          props: {
+            mode: 'table',
+            multiple: false,
+            modelValue: form.data.mileageRecordId ?? undefined,
+            selectedData: selectedMileage.value,
+            apiFn: fetchMileageSelectData,
+            columns: mileageColumns,
+            rowKey: 'id',
+            labelKey: formatMileageLabel,
+            title: '关联行驶记录',
+            subtitle: '选择该车的一次行程，列表将显示其司机、运单和里程。',
+            placeholder: '选择行驶记录（选填）',
+            disabled: !form.data.vehicleId,
+            showPagination: true,
+            clearable: true,
+            onChange: handleMileageChange,
+            showSelectedPanel: false
+          }
+        },
         { label: '开始时间', key: 'startTime', type: 'date', props: dateTimeProps },
         { label: '结束时间', key: 'endTime', type: 'date', props: dateTimeProps },
         { label: '里程与保养提醒', key: 'reminderSection', type: 'tab', span: 24 },
@@ -409,7 +384,34 @@
           type: 'number',
           props: { ...moneyProps, disabled: true }
         },
-        { label: '维修厂', key: 'workshopSupplierId' },
+        {
+          label: '维修厂',
+          key: 'workshopSupplierId',
+          type: 'dataSelect',
+          description:
+            form.data.workshop && !form.data.workshopSupplierId
+              ? '历史维修厂：' + form.data.workshop + '；重新选择后可绑定供应商档案。'
+              : '',
+          props: {
+            mode: 'table',
+            multiple: false,
+            showSelectedPanel: false,
+            showPagination: true,
+            modelValue: form.data.workshopSupplierId ?? undefined,
+            selectedData: selectedWorkshop.value,
+            apiFn: fetchWorkshopSelectData,
+            columns: workshopColumns,
+            rowKey: 'id',
+            labelKey: 'supplierName',
+            title: '选择维修厂',
+            subtitle: '仅显示供应商分组为“维修厂”的资料。',
+            placeholder: '选择维修厂（选填）',
+            emptyText: '暂无维修厂供应商',
+            emptyDescription: '请先在供应商档案中维护“维修厂”分组及供应商。',
+            clearable: true,
+            onChange: handleWorkshopChange
+          }
+        },
         { label: '发票号', key: 'invoiceNo', type: 'input', props: { maxlength: 100 } },
         {
           label: '外部维修',
@@ -510,7 +512,25 @@
         type: 'input',
         props: { maxlength: 100 }
       },
-      { label: '选择上传文件', key: 'file' }
+      {
+        label: '选择上传文件',
+        key: 'file',
+        type: 'uploadFile',
+        props: {
+          title: '选择上传文件',
+          resourceTenantId: form.data.tenantId || '',
+          showFileList: false,
+          showTip: false,
+          onResourceChange: handleAttachmentFileChange
+        },
+        description: () =>
+          attachment.data.fileName ? (
+            <div class="maintenance-attachment-dialog__file">
+              <span>{attachment.data.fileName}</span>
+              {attachment.data.url ? <ArtSvgIcon icon="ri:check-line" /> : null}
+            </div>
+          ) : null
+      }
     ]),
     rules: computed<FormRules<AttachmentFormData>>(() => ({
       name: [{ required: true, message: '请输入维修保养附件名称', trigger: 'blur' }],
@@ -918,13 +938,6 @@
 
   .maintenance-attachment-dialog {
     padding: 8px 0 4px;
-
-    &__upload {
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-      align-items: flex-start;
-    }
 
     &__file {
       display: flex;

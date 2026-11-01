@@ -12,34 +12,6 @@
         :gutter="20"
         label-width="120px"
       >
-        <template #subjectId>
-          <ArtTableSingleSelect
-            :model-value="form.subjectId || undefined"
-            :selected-data="selectedSubject ? [selectedSubject] : []"
-            :api-fn="fetchSubjects"
-            :columns="subjectColumns"
-            row-key="id"
-            label-key="label"
-            :title="form.subjectType === 'vehicle' ? '选择车辆' : '选择司机'"
-            search-placeholder="输入车牌号或司机姓名"
-            empty-text="暂无可选档案"
-            empty-description="请先完善对应的车辆或司机档案。"
-            show-pagination
-            :disabled="Boolean(recordId || form.renewalOfId || sourcePrefill)"
-            @change="handleSubjectChange"
-          />
-        </template>
-        <template #responsibleUserId>
-          <ArtUserSelect
-            v-model="form.responsibleUserId"
-            :options="responsibleOptions"
-            :loading="responsibleLoading"
-            :disabled="!form.subjectId || responsibleLoading"
-            placeholder="请选择证件责任人"
-            no-data-text="该对象所属租户暂无可选责任人"
-            class="w-full"
-          />
-        </template>
       </ArtForm>
 
       <section class="mt-3 min-w-0 px-4">
@@ -84,12 +56,10 @@
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
-  import ArtTableSingleSelect from '@/components/core/forms/art-data-select/table-single.vue'
   import type {
     DataSelectColumn,
     DataSelectRecord
   } from '@/components/core/forms/art-data-select/types'
-  import ArtUserSelect from '@/components/core/forms/art-user-select/index.vue'
   import type { ArtUserSelectOption } from '@/components/core/forms/art-user-select/types'
   import ArtUploadFile from '@/components/core/forms/art-upload-file/index.vue'
   import ArtSectionTitle from '@/components/core/surfaces/art-section-title/index.vue'
@@ -187,7 +157,30 @@
       span: 12,
       disabled: Boolean(recordId.value || form.renewalOfId || sourcePrefill.value)
     },
-    { label: form.subjectType === 'vehicle' ? '车辆' : '司机', key: 'subjectId', span: 12 },
+    {
+      label: form.subjectType === 'vehicle' ? '车辆' : '司机',
+      key: 'subjectId',
+      span: 12,
+      type: 'dataSelect',
+      props: {
+        mode: 'table',
+        multiple: false,
+        modelValue: form.subjectId || undefined,
+        selectedData: selectedSubject.value ? [selectedSubject.value] : [],
+        apiFn: fetchSubjects,
+        columns: subjectColumns,
+        rowKey: 'id',
+        labelKey: 'label',
+        title: form.subjectType === 'vehicle' ? '选择车辆' : '选择司机',
+        searchPlaceholder: '输入车牌号或司机姓名',
+        emptyText: '暂无可选档案',
+        emptyDescription: '请先完善对应的车辆或司机档案。',
+        showPagination: true,
+        disabled: Boolean(recordId.value || form.renewalOfId || sourcePrefill.value),
+        onChange: handleSubjectChange,
+        showSelectedPanel: false
+      }
+    },
     { label: '证件信息', key: 'certificateSection', type: 'divider', span: 24 },
     {
       label: '证件类型',
@@ -207,7 +200,20 @@
     { label: '发证日期', key: 'issueDate', type: 'date', props: dateProps, span: 8 },
     { label: '有效期开始', key: 'validFrom', type: 'date', props: dateProps, span: 8 },
     { label: '有效期截止', key: 'expiresOn', type: 'date', props: dateProps, span: 8 },
-    { label: '证件责任人', key: 'responsibleUserId', span: 24 }
+    {
+      label: '证件责任人',
+      key: 'responsibleUserId',
+      span: 24,
+      type: 'userSelect',
+      props: {
+        options: responsibleOptions.value,
+        loading: responsibleLoading.value,
+        disabled: !form.subjectId || responsibleLoading.value,
+        placeholder: '请选择证件责任人',
+        noDataText: '该对象所属租户暂无可选责任人',
+        class: 'w-full'
+      }
+    }
   ])
   const formRules: FormRules<CertificateWritePayload> = {
     subjectId: [{ required: true, message: '请选择车辆或司机', trigger: 'change' }],

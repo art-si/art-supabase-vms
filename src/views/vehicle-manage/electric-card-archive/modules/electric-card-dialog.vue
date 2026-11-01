@@ -5,104 +5,33 @@
         ? '可更新卡面、人员和备注；余额仍由电卡流水计算。'
         : '绑定已审批车辆，初始余额会作为首笔期初流水留痕。'
     }}</template>
-    <div
-      class="mb-4 flex items-center gap-4 rounded-[var(--el-border-radius-base)] bg-[var(--el-fill-color-light)] p-3"
-    >
-      <ArtUploadImage
-        :model-value="cardImageUrl"
-        @update:model-value="handleImageChange"
-        :resource-tenant-id="selectedVehicleTenantId"
-        title="电卡图片"
-        :size="88"
-        :limit="1"
-        :file-size="8 * 1024 * 1024"
-        file-type="image/png,image/jpeg,image/webp"
-        :upload-request="uploadCardImage"
-        :show-resource-picker="false"
-        :readonly="!selectedVehicleTenantId"
-      />
-      <div class="min-w-0">
-        <strong class="block text-sm">电卡图片</strong>
-        <p class="mt-1 text-xs text-[var(--el-text-color-secondary)]">{{
-          editingCard
-            ? '上传或更换卡面照片，仅同租户授权用户可查看。'
-            : '先选车辆，再上传卡面照片；影像仅供同租户授权用户查看。'
-        }}</p>
-      </div>
-    </div>
+
     <ArtForm
       ref="formRef"
-      v-model="form"
+      :model-value="cardForm"
       :items="formItems"
       :rules="formRules"
       :span="24"
       label-width="110px"
     >
-      <template #vehicleId>
-        <span v-if="editingCard" class="font-medium">{{ editingCard.plateNo }}</span>
-        <ArtTableSingleSelect
-          v-else
-          v-model="vehicleSelectValue"
-          v-model:selected-data="vehicleSelection"
-          :api-fn="fetchApprovedVehicleSelectData"
-          :columns="vehicleColumns"
-          row-key="id"
-          label-key="plateNo"
-          description-key="companyName"
-          title="选择已审批车辆"
-          search-placeholder="输入车牌号或所属公司"
-          empty-text="暂无可绑定车辆"
-          empty-description="请先完成车辆档案审批后重试。"
-          show-pagination
-          @change="handleVehicleChange"
-        >
-          <template #empty><VehicleDataSourceEmptyActions source="vehicle" /></template>
-        </ArtTableSingleSelect>
-      </template>
-      <template #ownerEmployeeId>
-        <ArtEmployeeSelect
-          v-model="form.ownerEmployeeId"
-          v-model:selected-data="selectedOwner"
-          :tenant-id="selectedVehicleTenantId"
-          :api-fn="fetchElectricCardEmployeeOptions"
-          :display-fields="[]"
-          :disabled="!selectedVehicleTenantId"
-          missing-tenant-placeholder="请先选择绑定车辆"
-          title="选择卡归属人"
-          :placeholder="editingCard ? '选择卡归属人（选填）' : '留空则带入车辆主司机'"
-        />
-      </template>
-      <template #openerEmployeeId>
-        <ArtEmployeeSelect
-          v-model="form.openerEmployeeId"
-          v-model:selected-data="selectedOpener"
-          :tenant-id="selectedVehicleTenantId"
-          :api-fn="fetchElectricCardEmployeeOptions"
-          :display-fields="[]"
-          :disabled="!selectedVehicleTenantId"
-          missing-tenant-placeholder="请先选择绑定车辆"
-          title="选择开户人"
-          placeholder="请选择开户人（选填）"
-        />
-      </template>
     </ArtForm>
   </ArtDialog>
 </template>
 
 <script setup lang="tsx">
+  import { toRef, toRefs } from 'vue'
+  import { h } from 'vue'
   import type { FormRules } from 'element-plus'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
-  import ArtTableSingleSelect from '@/components/core/forms/art-data-select/table-single.vue'
   import type {
     DataSelectColumn,
     DataSelectRecord
   } from '@/components/core/forms/art-data-select/types'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
-  import ArtUploadImage from '@/components/core/forms/art-upload-image/index.vue'
-  import ArtEmployeeSelect from '@/components/business/art-employee-select/index.vue'
+
   import type { EmployeeIntegrationItem } from '@/api/integration/employees'
   import {
     privateAttachmentPathFromSignedUrl,
@@ -151,6 +80,13 @@
   const cardImageUrl = ref('')
   const imageChanged = ref(false)
   const vehicleSelectValue = ref<string>('')
+  const cardForm = computed(() =>
+    reactive({
+      ...toRefs(form),
+      vehicleId: editingCard.value ? toRef(form, 'vehicleId') : vehicleSelectValue,
+      cardImageUrl
+    })
+  )
   const vehicleSelection = ref<Api.Vms.ArchiveManage.VehicleArchive[]>([])
   const selectedVehicleTenantId = computed(
     () => editingCard.value?.tenantId || vehicleSelection.value[0]?.tenantId || ''
@@ -174,14 +110,99 @@
   ]
   const formItems = computed<FormItem[]>(() => [
     {
+      key: 'cardImageUrl',
+      label: '电卡图片',
+      type: 'uploadImage',
+      description: editingCard.value
+        ? '上传或更换卡面照片，仅同租户授权用户可查看。'
+        : '先选车辆，再上传卡面照片；影像仅供同租户授权用户查看。',
+      props: {
+        resourceTenantId: selectedVehicleTenantId.value,
+        title: '电卡图片',
+        size: 88,
+        limit: 1,
+        fileSize: 8 * 1024 * 1024,
+        fileType: 'image/png,image/jpeg,image/webp',
+        uploadRequest: uploadCardImage,
+        showResourcePicker: false,
+        readonly: !selectedVehicleTenantId.value,
+        'onUpdate:modelValue': handleImageChange
+      }
+    },
+    {
       label: '电卡号',
       key: 'cardNo',
       type: 'input',
       props: { maxlength: 64, placeholder: '请输入卡面号码', disabled: Boolean(editingCard.value) }
     },
-    { label: '绑定车辆', key: 'vehicleId' },
-    { label: '卡归属人', key: 'ownerEmployeeId' },
-    { label: '开户人', key: 'openerEmployeeId' },
+    {
+      label: '绑定车辆',
+      key: 'vehicleId',
+      type: editingCard.value ? 'text' : 'dataSelect',
+      props: editingCard.value
+        ? { formatter: () => editingCard.value?.plateNo || '—' }
+        : {
+            mode: 'table',
+            multiple: false,
+            modelValue: vehicleSelectValue.value,
+            'onUpdate:modelValue': (value: typeof vehicleSelectValue.value) => {
+              vehicleSelectValue.value = value
+            },
+            selectedData: vehicleSelection.value,
+            'onUpdate:selectedData': (rows: typeof vehicleSelection.value) => {
+              vehicleSelection.value = rows
+            },
+            apiFn: fetchApprovedVehicleSelectData,
+            columns: vehicleColumns,
+            rowKey: 'id',
+            labelKey: 'plateNo',
+            descriptionKey: 'companyName',
+            title: '选择已审批车辆',
+            searchPlaceholder: '输入车牌号或所属公司',
+            emptyText: '暂无可绑定车辆',
+            emptyDescription: '请先完成车辆档案审批后重试。',
+            showPagination: true,
+            showSelectedPanel: false,
+            onChange: handleVehicleChange
+          },
+      slots: { empty: () => h(VehicleDataSourceEmptyActions, { source: 'vehicle' }) }
+    },
+    {
+      label: '卡归属人',
+      key: 'ownerEmployeeId',
+      type: 'employeeSelect',
+      props: {
+        selectedData: selectedOwner.value,
+        'onUpdate:selectedData': (rows: EmployeeIntegrationItem[]) => {
+          selectedOwner.value = rows
+        },
+        tenantId: selectedVehicleTenantId.value,
+        apiFn: fetchElectricCardEmployeeOptions,
+        displayFields: [],
+        disabled: !selectedVehicleTenantId.value,
+        missingTenantPlaceholder: '请先选择绑定车辆',
+        title: '选择卡归属人',
+        placeholder: editingCard.value ? '选择卡归属人（选填）' : '留空则带入车辆主司机'
+      }
+    },
+    {
+      label: '开户人',
+      key: 'openerEmployeeId',
+      type: 'employeeSelect',
+      props: {
+        selectedData: selectedOpener.value,
+        'onUpdate:selectedData': (rows: EmployeeIntegrationItem[]) => {
+          selectedOpener.value = rows
+        },
+        tenantId: selectedVehicleTenantId.value,
+        apiFn: fetchElectricCardEmployeeOptions,
+        displayFields: [],
+        disabled: !selectedVehicleTenantId.value,
+        missingTenantPlaceholder: '请先选择绑定车辆',
+        title: '选择开户人',
+        placeholder: '请选择开户人（选填）'
+      }
+    },
     { label: '发卡机构', key: 'issuer', type: 'input', props: { maxlength: 100 } },
     ...(!editingCard.value
       ? [

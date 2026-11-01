@@ -8,29 +8,12 @@
     <ArtForm
       ref="formRef"
       v-model:active-tab="activeTab"
-      v-model="form"
+      :model-value="entryModel"
       :items="formItems"
       :rules="formRules"
       :span="12"
       label-width="110px"
     >
-      <template #cardId>
-        <ArtTableSingleSelect
-          v-model="cardSelectValue"
-          v-model:selected-data="cardSelection"
-          :api-fn="fetchSelectableCards"
-          :columns="cardColumns"
-          row-key="id"
-          label-key="cardNo"
-          description-key="plateNo"
-          title="选择油卡"
-          search-placeholder="输入油卡号或车牌号"
-          empty-text="暂无可用油卡"
-          empty-description="请先在油卡档案创建并启用油卡。"
-          show-pagination
-          @change="handleCardChange"
-        />
-      </template>
       <template #currentBalance>
         <span class="font-medium tabular-nums text-[var(--el-text-color-primary)]">
           {{ selectedCard ? formatCurrencyValue(selectedCard.balance) : '选择油卡后显示余额' }}
@@ -41,53 +24,7 @@
           {{ selectedCard ? `${selectedCard.cardNo} · 油卡余额扣款` : '选择油卡后显示扣款账户' }}
         </span>
       </template>
-      <template #rechargerEmployeeId>
-        <ArtEmployeeSelect
-          v-model="form.rechargerEmployeeId"
-          v-model:selected-data="selectedRecharger"
-          :tenant-id="selectedCard?.tenantId"
-          :api-fn="fetchFuelCardEmployeeOptions"
-          :display-fields="[]"
-          :disabled="!selectedCard"
-          missing-tenant-placeholder="请先选择油卡"
-          title="选择充值人"
-          placeholder="请选择充值人（选填）"
-        />
-      </template>
-      <template #waybillId>
-        <ArtTableSingleSelect
-          v-model="waybillSelectValue"
-          v-model:selected-data="waybillSelection"
-          :api-fn="fetchWaybills"
-          :columns="waybillColumns"
-          row-key="id"
-          label-key="waybillNo"
-          title="选择关联运单"
-          search-placeholder="输入运单号"
-          empty-text="该油卡车辆暂无可关联运单"
-          :disabled="!selectedCard"
-          show-pagination
-          clearable
-          @change="handleWaybillChange"
-        />
-      </template>
-      <template #driverId>
-        <ArtTableSingleSelect
-          v-model="driverSelectValue"
-          v-model:selected-data="driverSelection"
-          :api-fn="fetchDrivers"
-          :columns="driverColumns"
-          row-key="id"
-          label-key="driverName"
-          title="选择本笔消费司机"
-          search-placeholder="输入司机姓名或手机号"
-          empty-text="该租户暂无可选司机"
-          :disabled="!selectedCard"
-          show-pagination
-          clearable
-          @change="handleDriverChange"
-        />
-      </template>
+
       <template #locationPicker>
         <ArtAddressPicker
           v-model:address-detail="form.expenseLocation"
@@ -106,27 +43,6 @@
           show-locate-button
         />
       </template>
-      <template #transactionVoucher>
-        <div class="mt-4 border-t border-[var(--el-border-color-lighter)] pt-4">
-          <span class="mb-2 block text-sm font-medium">现场凭证</span>
-          <ArtUploadImage
-            v-model="voucherUrls"
-            :resource-tenant-id="selectedCard?.tenantId || ''"
-            title="现场凭证"
-            :size="88"
-            multiple
-            :limit="5"
-            :file-size="8 * 1024 * 1024"
-            file-type="image/png,image/jpeg,image/webp"
-            :upload-request="uploadVoucher"
-            :show-resource-picker="false"
-            :readonly="!selectedCard"
-          />
-          <p class="mt-2 text-xs text-[var(--el-text-color-secondary)]"
-            >可上传加油小票、充值凭证等照片，最多 5 张。</p
-          >
-        </div>
-      </template>
     </ArtForm>
     <ElAlert
       v-if="action === 'consume'"
@@ -140,14 +56,13 @@
 </template>
 
 <script setup lang="tsx">
+  import { toRefs } from 'vue'
   import dayjs from 'dayjs'
   import type { FormRules } from 'element-plus'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
-  import ArtTableSingleSelect from '@/components/core/forms/art-data-select/table-single.vue'
-  import ArtEmployeeSelect from '@/components/business/art-employee-select/index.vue'
-  import ArtUploadImage from '@/components/core/forms/art-upload-image/index.vue'
+
   import ArtAddressPicker from '@/components/core/forms/art-address-picker/index.vue'
   import ArtDictDisplay from '@/components/core/base/art-dict-display/index.vue'
   import type { EmployeeIntegrationItem } from '@/api/integration/employees'
@@ -294,11 +209,47 @@
       formatter: (row: DataSelectRecord) => formatCurrencyValue(row.balance)
     }
   ]
+  const entryModel = reactive({
+    ...toRefs(form),
+    cardId: cardSelectValue,
+    waybillId: waybillSelectValue,
+    driverId: driverSelectValue,
+    transactionVoucher: voucherUrls
+  })
   const formItems = computed<FormItem[]>(() => [
     ...(action.value === 'consume'
       ? [{ key: 'transactionSection', label: '流水信息', type: 'tab' } satisfies FormItem]
       : []),
-    { label: '油卡', key: 'cardId', span: 24 },
+    {
+      label: '油卡',
+      key: 'cardId',
+      span: 24,
+      type: 'dataSelect',
+      props: {
+        mode: 'table',
+        multiple: false,
+        modelValue: cardSelectValue.value,
+        'onUpdate:modelValue': (value: typeof cardSelectValue.value) => {
+          cardSelectValue.value = value
+        },
+        selectedData: cardSelection.value,
+        'onUpdate:selectedData': (value: typeof cardSelection.value) => {
+          cardSelection.value = value
+        },
+        apiFn: fetchSelectableCards,
+        columns: cardColumns,
+        rowKey: 'id',
+        labelKey: 'cardNo',
+        descriptionKey: 'plateNo',
+        title: '选择油卡',
+        searchPlaceholder: '输入油卡号或车牌号',
+        emptyText: '暂无可用油卡',
+        emptyDescription: '请先在油卡档案创建并启用油卡。',
+        showPagination: true,
+        onChange: handleCardChange,
+        showSelectedPanel: false
+      }
+    },
     {
       label: '当前余额',
       key: 'currentBalance',
@@ -333,12 +284,85 @@
             props: { maxlength: 80, placeholder: '例如加油站柜台、银行转账' }
           },
           { label: '发票号', key: 'invoiceNo', type: 'input', props: { maxlength: 80 } },
-          { label: '充值人', key: 'rechargerEmployeeId' }
+          {
+            label: '充值人',
+            key: 'rechargerEmployeeId',
+            type: 'employeeSelect',
+            props: {
+              selectedData: selectedRecharger.value,
+              'onUpdate:selectedData': (rows: EmployeeIntegrationItem[]) => {
+                selectedRecharger.value = rows
+              },
+              tenantId: selectedCard.value?.tenantId,
+              apiFn: fetchFuelCardEmployeeOptions,
+              displayFields: [],
+              disabled: !selectedCard.value,
+              missingTenantPlaceholder: '请先选择油卡',
+              title: '选择充值人',
+              placeholder: '请选择充值人（选填）'
+            }
+          }
         ] satisfies FormItem[])
       : ([
           { key: 'consumptionSection', label: '加油与凭证', type: 'tab' },
-          { label: '关联运单', key: 'waybillId' },
-          { label: '本笔司机', key: 'driverId' },
+          {
+            label: '关联运单',
+            key: 'waybillId',
+            type: 'dataSelect',
+            props: {
+              mode: 'table',
+              multiple: false,
+              modelValue: waybillSelectValue.value,
+              'onUpdate:modelValue': (value: typeof waybillSelectValue.value) => {
+                waybillSelectValue.value = value
+              },
+              selectedData: waybillSelection.value,
+              'onUpdate:selectedData': (value: typeof waybillSelection.value) => {
+                waybillSelection.value = value
+              },
+              apiFn: fetchWaybills,
+              columns: waybillColumns,
+              rowKey: 'id',
+              labelKey: 'waybillNo',
+              title: '选择关联运单',
+              searchPlaceholder: '输入运单号',
+              emptyText: '该油卡车辆暂无可关联运单',
+              disabled: !selectedCard.value,
+              showPagination: true,
+              clearable: true,
+              onChange: handleWaybillChange,
+              showSelectedPanel: false
+            }
+          },
+          {
+            label: '本笔司机',
+            key: 'driverId',
+            type: 'dataSelect',
+            props: {
+              mode: 'table',
+              multiple: false,
+              modelValue: driverSelectValue.value,
+              'onUpdate:modelValue': (value: typeof driverSelectValue.value) => {
+                driverSelectValue.value = value
+              },
+              selectedData: driverSelection.value,
+              'onUpdate:selectedData': (value: typeof driverSelection.value) => {
+                driverSelection.value = value
+              },
+              apiFn: fetchDrivers,
+              columns: driverColumns,
+              rowKey: 'id',
+              labelKey: 'driverName',
+              title: '选择本笔消费司机',
+              searchPlaceholder: '输入司机姓名或手机号',
+              emptyText: '该租户暂无可选司机',
+              disabled: !selectedCard.value,
+              showPagination: true,
+              clearable: true,
+              onChange: handleDriverChange,
+              showSelectedPanel: false
+            }
+          },
           {
             label: '加油站',
             key: 'stationName',
@@ -382,7 +406,25 @@
       span: 24,
       props: { type: 'textarea', rows: 3, maxlength: 500, showWordLimit: true }
     },
-    { key: 'transactionVoucher', label: '', type: 'slot', span: 24 }
+    {
+      key: 'transactionVoucher',
+      label: '现场凭证',
+      type: 'uploadImage',
+      span: 24,
+      description: '可上传加油小票、充值凭证等照片，最多 5 张。',
+      props: {
+        resourceTenantId: selectedCard.value?.tenantId || '',
+        title: '现场凭证',
+        size: 88,
+        multiple: true,
+        limit: 5,
+        fileSize: 8 * 1024 * 1024,
+        fileType: 'image/png,image/jpeg,image/webp',
+        uploadRequest: uploadVoucher,
+        showResourcePicker: false,
+        readonly: !selectedCard.value
+      }
+    }
   ])
   const formRules: FormRules<EntryForm> = {
     cardId: [{ required: true, message: '请选择油卡', trigger: 'change' }],

@@ -17,23 +17,6 @@
       :span="12"
       label-width="102px"
     >
-      <template #vehicleId>
-        <ArtTableSingleSelect
-          v-model="vehicleSelectValue"
-          v-model:selected-data="form.vehicleSelection"
-          :api-fn="fetchApprovedVehicleSelectData"
-          :columns="vehicleColumns"
-          row-key="id"
-          label-key="plateNo"
-          description-key="companyName"
-          title="选择领用车辆"
-          search-placeholder="输入车牌号或所属公司"
-          empty-text="暂无可选车辆"
-          empty-description="请先维护并审批车辆档案。"
-          show-pagination
-          @change="handleVehicleChange"
-        />
-      </template>
       <template #driverId>
         <VmsDriverSelect
           :model-value="form.data.driverId || null"
@@ -131,6 +114,7 @@
 </template>
 
 <script setup lang="ts">
+  import type { ComputedRef } from 'vue'
   import dayjs from 'dayjs'
   import type { FormRules } from 'element-plus'
   import {
@@ -150,7 +134,6 @@
   import ArtTable, { type ArtTableExpose } from '@/components/core/tables/art-table/index.vue'
   import type { ColumnOption } from '@/types'
   import ArtUploadImage from '@/components/core/forms/art-upload-image/index.vue'
-  import ArtTableSingleSelect from '@/components/core/forms/art-data-select/table-single.vue'
   import type {
     DataSelectColumn,
     DataSelectKey,
@@ -188,7 +171,7 @@
   interface FormGroup {
     data: IssueForm
     vehicleSelection: DataSelectRecord[]
-    items: FormItem[]
+    items: ComputedRef<FormItem[]>
     rules: FormRules<IssueForm>
   }
 
@@ -243,8 +226,37 @@
   const form = reactive<FormGroup>({
     data: initialForm(),
     vehicleSelection: [],
-    items: [
-      { label: '领用车辆', key: 'vehicleId', span: 12 },
+    items: computed<FormItem[]>((): FormItem[] => [
+      {
+        label: '领用车辆',
+        key: 'vehicleId',
+        span: 12,
+        type: 'dataSelect',
+        props: {
+          mode: 'table',
+          multiple: false,
+          modelValue: vehicleSelectValue.value,
+          'onUpdate:modelValue': (value: typeof vehicleSelectValue.value) => {
+            vehicleSelectValue.value = value
+          },
+          selectedData: form.vehicleSelection,
+          'onUpdate:selectedData': (value: typeof form.vehicleSelection) => {
+            form.vehicleSelection = value
+          },
+          apiFn: fetchApprovedVehicleSelectData,
+          columns: vehicleColumns,
+          rowKey: 'id',
+          labelKey: 'plateNo',
+          descriptionKey: 'companyName',
+          title: '选择领用车辆',
+          searchPlaceholder: '输入车牌号或所属公司',
+          emptyText: '暂无可选车辆',
+          emptyDescription: '请先维护并审批车辆档案。',
+          showPagination: true,
+          onChange: handleVehicleChange,
+          showSelectedPanel: false
+        }
+      },
       { label: '领用司机', key: 'driverId', span: 12 },
       { label: '领用明细', key: 'lines', span: 24 },
       {
@@ -254,7 +266,7 @@
         span: 24,
         props: { type: 'textarea', rows: 2, maxlength: 500, showWordLimit: true }
       }
-    ],
+    ]),
     rules: { vehicleId: [{ required: true, message: '请选择领用车辆', trigger: 'change' }] }
   })
   const vehicleSelectValue = computed<DataSelectKey | undefined>({

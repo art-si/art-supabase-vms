@@ -165,120 +165,43 @@
                   {{ selectedId ? '保存更改' : '创建规格' }}
                 </ElButton>
               </template>
-              <div class="vehicle-type-tab__detail">
-                <div class="vehicle-type-tab__form">
-                  <ArtForm
-                    ref="formRef"
-                    v-model="form"
-                    :items="formItems"
-                    :rules="rules"
-                    :span="12"
-                    :gutter="16"
-                    label-position="top"
-                    :disabled="!canEdit"
-                  >
-                    <template #lengthM>
-                      <div class="vehicle-type-tab__metric-field">
-                        <div class="vehicle-type-tab__metric-input">
-                          <ElInputNumber
-                            v-model="form.lengthM"
-                            :min="0.01"
-                            :precision="2"
-                            :step="0.1"
-                            :controls="false"
-                            :disabled="!canEdit"
-                            placeholder="输入实际车长"
-                            aria-label="车长，单位米"
-                          />
-                          <span>米</span>
-                        </div>
-                        <div v-if="selectedCategory === '半挂车'" class="vehicle-type-tab__presets">
-                          <span>常用车长</span>
-                          <div>
-                            <ElButton
-                              v-for="value in SEMI_TRAILER_LENGTHS"
-                              :key="value"
-                              class="vehicle-type-tab__preset-button"
-                              :type="form.lengthM === value ? 'primary' : 'default'"
-                              :disabled="!canEdit"
-                              @click="applyPreset(value)"
-                            >
-                              {{ value }} 米
-                            </ElButton>
-                            <ElButton
-                              class="vehicle-type-tab__preset-button"
-                              :disabled="!canEdit"
-                              @click="form.lengthM = null"
-                            >
-                              其他 / 自定义
-                            </ElButton>
-                          </div>
-                        </div>
-                      </div>
-                    </template>
-                    <template #loadTons>
-                      <div class="vehicle-type-tab__metric-field">
-                        <div class="vehicle-type-tab__metric-input">
-                          <ElInputNumber
-                            v-model="form.loadTons"
-                            :min="0.01"
-                            :precision="2"
-                            :step="0.1"
-                            :controls="false"
-                            :disabled="!canEdit"
-                            placeholder="输入实际载重"
-                            aria-label="载重，单位吨"
-                          />
-                          <span>吨</span>
-                        </div>
-                        <div v-if="selectedCategory === '按载重'" class="vehicle-type-tab__presets">
-                          <span>常用载重</span>
-                          <div>
-                            <ElButton
-                              v-for="value in LOAD_CAPACITY_PRESETS"
-                              :key="value"
-                              class="vehicle-type-tab__preset-button"
-                              :type="form.loadTons === value ? 'primary' : 'default'"
-                              :disabled="!canEdit"
-                              @click="applyPreset(value)"
-                            >
-                              {{ value }} 吨
-                            </ElButton>
-                            <ElButton
-                              class="vehicle-type-tab__preset-button"
-                              :disabled="!canEdit"
-                              @click="form.loadTons = null"
-                            >
-                              其他 / 自定义
-                            </ElButton>
-                          </div>
-                        </div>
-                      </div>
-                    </template>
-                  </ArtForm>
-                </div>
+              <ArtForm
+                ref="formRef"
+                v-model="form"
+                :items="formItems"
+                :rules="rules"
+                :span="12"
+                :gutter="16"
+                label-position="top"
+                :disabled="!canEdit"
+                root-class="p-0! md:p-0!"
+                ><template #layout="{ fields: Fields }"
+                  ><div class="vehicle-type-tab__detail">
+                    <div class="vehicle-type-tab__form">
+                      <component
+                        :is="Fields"
+                        :items="formItems.filter((item) => item.key !== 'imageUrl')"
+                        :actions="false"
+                      />
+                    </div>
 
-                <aside class="vehicle-type-tab__visual">
-                  <div class="vehicle-type-tab__visual-heading">
-                    <strong>车型图片</strong>
-                    <span>参选弹窗展示</span>
-                  </div>
-                  <div class="vehicle-type-tab__preview">
-                    <ElImage v-if="form.imageUrl" :src="form.imageUrl" fit="contain" />
-                    <VehicleTypeArt v-else :category="selectedCategory" />
-                  </div>
-                  <p>未上传时使用这套共用车型插画。</p>
-                  <ArtUploadImage
-                    v-model="form.imageUrl"
-                    :resource-tenant-id="selectedTenantId"
-                    :disabled="!selectedTenantId"
-                    title="上传自定义车型图片"
-                    :size="88"
-                    :limit="1"
-                    :readonly="!canEdit"
-                  />
-                </aside>
-              </div>
+                    <aside class="vehicle-type-tab__visual">
+                      <div class="vehicle-type-tab__visual-heading">
+                        <strong>车型图片</strong>
+                        <span>参选弹窗展示</span>
+                      </div>
+                      <div class="vehicle-type-tab__preview">
+                        <ElImage v-if="form.imageUrl" :src="form.imageUrl" fit="contain" />
+                        <VehicleTypeArt v-else :category="selectedCategory" />
+                      </div>
+                      <p>未上传时使用这套共用车型插画。</p>
+                      <component
+                        :is="Fields"
+                        :items="formItems.filter((item) => item.key === 'imageUrl')"
+                        :actions="false"
+                      />
+                    </aside> </div></template
+              ></ArtForm>
             </ArtSectionCard>
           </div>
         </template>
@@ -289,15 +212,9 @@
 </template>
 
 <script setup lang="ts">
+  import { h } from 'vue'
   import ArtEmptyState from '@/components/core/feedback/art-empty-state/index.vue'
-  import {
-    ElButton,
-    ElImage,
-    ElInputNumber,
-    ElMessage,
-    ElTreeV2,
-    type TreeV2Instance
-  } from 'element-plus'
+  import { ElButton, ElImage, ElMessage, ElTreeV2, type TreeV2Instance } from 'element-plus'
   import { ElAutoResizer } from 'element-plus/es/components/table-v2/index.mjs'
   import { useElementSize, useWindowSize } from '@vueuse/core'
   import { groupBy } from 'lodash-es'
@@ -306,7 +223,7 @@
   import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
   import ArtWorkspaceSplitter from '@/components/core/layouts/art-workspace-splitter/index.vue'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
-  import ArtUploadImage from '@/components/core/forms/art-upload-image/index.vue'
+
   import ArtSvgIcon from '@/components/core/base/art-svg-icon/index.vue'
   import ArtDictDisplay from '@/components/core/base/art-dict-display/index.vue'
   import ArtIconButton from '@/components/core/widget/art-icon-button/index.vue'
@@ -505,12 +422,70 @@
     remark: [{ max: 500, message: '备注不能超过 500 个字符', trigger: 'blur' }]
   }))
 
+  const renderMetricPresets = (field: 'lengthM' | 'loadTons') => {
+    const lengths = field === 'lengthM'
+    if (selectedCategory.value !== (lengths ? '半挂车' : '按载重')) return null
+    const unit = lengths ? '米' : '吨'
+    return h('div', { class: 'vehicle-type-tab__presets' }, [
+      h('span', lengths ? '常用车长' : '常用载重'),
+      h('div', [
+        ...(lengths ? SEMI_TRAILER_LENGTHS : LOAD_CAPACITY_PRESETS).map((value) =>
+          h(
+            ElButton,
+            {
+              class: 'vehicle-type-tab__preset-button',
+              type: form.value[field] === value ? 'primary' : 'default',
+              disabled: !canEdit.value,
+              onClick: () => applyPreset(value)
+            },
+            () => value + ' ' + unit
+          )
+        ),
+        h(
+          ElButton,
+          {
+            class: 'vehicle-type-tab__preset-button',
+            disabled: !canEdit.value,
+            onClick: () => {
+              form.value[field] = null
+            }
+          },
+          () => '其他 / 自定义'
+        )
+      ])
+    ])
+  }
   const formItems = computed<FormItem[]>(() => [
+    {
+      key: 'imageUrl',
+      label: '车型图片',
+      type: 'uploadImage',
+      span: 24,
+      props: {
+        resourceTenantId: selectedTenantId.value,
+        disabled: !selectedTenantId.value,
+        title: '上传自定义车型图片',
+        size: 88,
+        limit: 1,
+        readonly: !canEdit.value
+      }
+    },
     {
       label: '车长（米）',
       key: 'lengthM',
       type: 'number',
-      span: 24
+      span: 24,
+      props: {
+        min: 0.01,
+        precision: 2,
+        step: 0.1,
+        controls: false,
+        disabled: !canEdit.value,
+        class: 'w-full!',
+        placeholder: '输入实际车长',
+        'aria-label': '车长，单位米'
+      },
+      description: () => renderMetricPresets('lengthM')
     },
     {
       label: '容积（立方米）',
@@ -523,7 +498,18 @@
       label: '载重（吨）',
       key: 'loadTons',
       type: 'number',
-      span: 12
+      span: 12,
+      props: {
+        min: 0.01,
+        precision: 2,
+        step: 0.1,
+        controls: false,
+        disabled: !canEdit.value,
+        class: 'w-full!',
+        placeholder: '输入实际载重',
+        'aria-label': '载重，单位吨'
+      },
+      description: () => renderMetricPresets('loadTons')
     },
     {
       label: '排序',
@@ -1104,37 +1090,6 @@
 
       :deep(.el-input-number .el-input__inner) {
         text-align: left;
-      }
-    }
-
-    &__metric-field {
-      display: grid;
-      gap: 10px;
-      width: 100%;
-      min-width: 0;
-    }
-
-    &__metric-input {
-      position: relative;
-      width: 100%;
-
-      :deep(.el-input-number) {
-        width: 100%;
-      }
-
-      :deep(.el-input__inner) {
-        padding-right: 42px;
-        text-align: left;
-      }
-
-      > span {
-        position: absolute;
-        top: 50%;
-        right: 14px;
-        font-size: 12px;
-        color: var(--el-text-color-secondary);
-        pointer-events: none;
-        transform: translateY(-50%);
       }
     }
 

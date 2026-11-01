@@ -372,7 +372,6 @@
 
 <style scoped lang="scss">
   .vehicle-query-page {
-    gap: 12px;
     min-width: 0;
 
     &__overview {

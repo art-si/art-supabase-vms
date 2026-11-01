@@ -9,28 +9,12 @@
       :span="12"
       label-width="104px"
     >
-      <template #partId>
-        <ArtTableSingleSelect
-          v-model="partSelectValue"
-          v-model:selected-data="form.partSelection"
-          :api-fn="fetchPartRows"
-          :columns="partColumns"
-          row-key="id"
-          label-key="partName"
-          description-key="partCode"
-          title="选择配件"
-          search-placeholder="输入配件名称或编码"
-          empty-text="暂无可选配件"
-          empty-description="请先在零部件资料中维护配件。"
-          show-pagination
-          @change="handlePartChange"
-        />
-      </template>
     </ArtForm>
   </ArtDialog>
 </template>
 
 <script setup lang="ts">
+  import type { ComputedRef } from 'vue'
   import dayjs from 'dayjs'
   import type { FormRules } from 'element-plus'
   import { buildSupabasePageRange } from '@/utils/supabase/pagination'
@@ -39,7 +23,6 @@
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
-  import ArtTableSingleSelect from '@/components/core/forms/art-data-select/table-single.vue'
   import type {
     DataSelectColumn,
     DataSelectFetchParams,
@@ -63,7 +46,7 @@
   interface FormGroup {
     data: ReceiptForm
     partSelection: DataSelectRecord[]
-    items: FormItem[]
+    items: ComputedRef<FormItem[]>
     rules: FormRules<ReceiptForm>
   }
 
@@ -83,8 +66,37 @@
   const form = reactive<FormGroup>({
     data: initialForm(),
     partSelection: [],
-    items: [
-      { label: '配件名称', key: 'partId', span: 24 },
+    items: computed<FormItem[]>((): FormItem[] => [
+      {
+        label: '配件名称',
+        key: 'partId',
+        span: 24,
+        type: 'dataSelect',
+        props: {
+          mode: 'table',
+          multiple: false,
+          modelValue: partSelectValue.value,
+          'onUpdate:modelValue': (value: typeof partSelectValue.value) => {
+            partSelectValue.value = value
+          },
+          selectedData: form.partSelection,
+          'onUpdate:selectedData': (value: typeof form.partSelection) => {
+            form.partSelection = value
+          },
+          apiFn: fetchPartRows,
+          columns: partColumns,
+          rowKey: 'id',
+          labelKey: 'partName',
+          descriptionKey: 'partCode',
+          title: '选择配件',
+          searchPlaceholder: '输入配件名称或编码',
+          emptyText: '暂无可选配件',
+          emptyDescription: '请先在零部件资料中维护配件。',
+          showPagination: true,
+          onChange: handlePartChange,
+          showSelectedPanel: false
+        }
+      },
       { label: '物料编码', key: 'partCode', type: 'input', props: { disabled: true } },
       { label: '规格型号', key: 'model', type: 'input', props: { disabled: true } },
       { label: '品牌', key: 'brand', type: 'input', props: { disabled: true } },
@@ -108,7 +120,7 @@
         span: 24,
         props: { type: 'textarea', rows: 3, maxlength: 500, showWordLimit: true }
       }
-    ],
+    ]),
     rules: {
       partId: [{ required: true, message: '请选择配件', trigger: 'change' }],
       quantity: [{ required: true, type: 'number', min: 1, message: '请输入大于 0 的入库数量' }],

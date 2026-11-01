@@ -79,35 +79,6 @@
                 /></span>
               </ElButton>
             </template>
-            <template #defaultTractorId>
-              <ArtTableSingleSelect
-                v-model="tractorId"
-                v-model:selected-data="selectedTractor"
-                :api-fn="fetchTractorOptions"
-                :columns="tractorColumns"
-                row-key="id"
-                label-key="plateNo"
-                description-key="companyName"
-                title="参选默认牵引车"
-                search-placeholder="输入牵引车车牌号"
-                placeholder="请选择默认牵引车（选填）"
-                clearable
-              />
-            </template>
-            <template #companyOrganizationId>
-              <ArtTableSingleSelect
-                v-model="companyOrganizationId"
-                v-model:selected-data="selectedCompany"
-                :api-fn="fetchCompanyOptions"
-                :columns="companyColumns"
-                row-key="id"
-                label-key="label"
-                title="参选所属公司"
-                search-placeholder="输入公司名称"
-                placeholder="请选择所属公司（可留空）"
-                clearable
-              />
-            </template>
           </ArtForm>
         </section>
       </div>
@@ -125,7 +96,6 @@
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
   import ArtUploadImage from '@/components/core/forms/art-upload-image/index.vue'
-  import ArtTableSingleSelect from '@/components/core/forms/art-data-select/table-single.vue'
   import type {
     DataSelectColumn,
     DataSelectFetchParams
@@ -305,8 +275,61 @@
   ]
   const otherItems = computed<FormItem[]>(() => [
     { label: '车辆归属', key: 'ownership', type: 'select', props: { options: ownershipOptions } },
-    { label: '默认牵引车', key: 'defaultTractorId', type: 'input' },
-    { label: '所属公司', key: 'companyOrganizationId', type: 'input' },
+    {
+      label: '默认牵引车',
+      key: 'defaultTractorId',
+      type: 'dataSelect',
+      props: {
+        mode: 'table',
+        multiple: false,
+        modelValue: tractorId.value,
+        'onUpdate:modelValue': (value: typeof tractorId.value) => {
+          tractorId.value = value
+        },
+        selectedData: selectedTractor.value,
+        'onUpdate:selectedData': (value: typeof selectedTractor.value) => {
+          selectedTractor.value = value
+        },
+        apiFn: fetchTractorOptions,
+        columns: tractorColumns,
+        rowKey: 'id',
+        labelKey: 'plateNo',
+        descriptionKey: 'companyName',
+        title: '参选默认牵引车',
+        searchPlaceholder: '输入牵引车车牌号',
+        placeholder: '请选择默认牵引车（选填）',
+        clearable: true,
+        showSelectedPanel: false,
+        showPagination: Boolean(fetchTractorOptions)
+      }
+    },
+    {
+      label: '所属公司',
+      key: 'companyOrganizationId',
+      type: 'dataSelect',
+      props: {
+        mode: 'table',
+        multiple: false,
+        modelValue: companyOrganizationId.value,
+        'onUpdate:modelValue': (value: typeof companyOrganizationId.value) => {
+          companyOrganizationId.value = value
+        },
+        selectedData: selectedCompany.value,
+        'onUpdate:selectedData': (value: typeof selectedCompany.value) => {
+          selectedCompany.value = value
+        },
+        apiFn: fetchCompanyOptions,
+        columns: companyColumns,
+        rowKey: 'id',
+        labelKey: 'label',
+        title: '参选所属公司',
+        searchPlaceholder: '输入公司名称',
+        placeholder: '请选择所属公司（可留空）',
+        clearable: true,
+        showSelectedPanel: false,
+        showPagination: Boolean(fetchCompanyOptions)
+      }
+    },
     {
       label: '备注',
       key: 'remark',

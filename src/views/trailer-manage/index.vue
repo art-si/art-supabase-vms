@@ -1,5 +1,5 @@
 <template>
-  <div class="trailer-manage art-full-height">
+  <div class="trailer-manage business-workspace-page art-full-height">
     <MasterDeleteProcessingNotice
       :table="tableQueryRef"
       action-hint="请核对关联挂车；解除车型引用后返回原页面继续删除。"

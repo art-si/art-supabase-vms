@@ -18,23 +18,9 @@
     <div ref="pageRef" class="vehicle-archive-edit__content">
       <ElTabs v-model="page.activeTab" class="vehicle-archive-edit__tabs art-card-xs">
         <ElTabPane v-if="hasAuth('VehicleArchive:TabBasic')" label="基础信息" name="basic">
-          <div class="vehicle-archive-edit__vehicle-photo">
-            <ArtUploadImage
-              v-model="form.vehiclePhotoUrl"
-              :resource-tenant-id="form.tenantId"
-              title="车辆图片"
-              :size="120"
-              :limit="1"
-              :readonly="!form.tenantId || !hasAuth(savePermission)"
-            />
-            <div>
-              <strong>车辆图片</strong>
-              <p>上传车辆外观照片，便于调度和车管快速识别。</p>
-            </div>
-          </div>
           <ArtForm
             ref="basicFormRef"
-            v-model="form"
+            :model-value="basicFormModel"
             :items="basicItems"
             :rules="rules"
             :span="8"
@@ -61,37 +47,6 @@
               </ElButton>
             </template>
           </ArtForm>
-
-          <div class="vehicle-archive-edit__trailer-field">
-            <div>
-              <strong>默认挂车</strong>
-              <p>可从挂车档案参选；牵引车与挂车的默认关系会同步更新。</p>
-            </div>
-            <div class="vehicle-archive-edit__trailer-actions">
-              <ArtTableSingleSelect
-                v-model="defaultTrailerId"
-                v-model:selected-data="defaultTrailerSelection"
-                :api-fn="fetchDefaultTrailerOptions"
-                :columns="defaultTrailerColumns"
-                row-key="id"
-                label-key="plateNo"
-                description-key="trailerType"
-                title="参选默认挂车"
-                search-placeholder="输入挂车车牌号"
-                placeholder="请选择默认挂车"
-                :disabled="
-                  !isEdit || page.saving || trailerSaving || !hasAuth('VehicleArchive:Edit')
-                "
-                clearable
-                show-pagination
-                @change="handleDefaultTrailerChange"
-              />
-              <span v-if="!isEdit">先保存车辆档案后参选</span>
-              <ElButton v-if="defaultTrailerError" link type="primary" @click="loadDefaultTrailer"
-                >加载失败，重试</ElButton
-              >
-            </div>
-          </div>
 
           <section
             v-if="canViewArchiveField('documents')"
@@ -338,6 +293,7 @@
   import { focusFirstInvalidFormField } from '@/utils/form/validation'
   import { useDraftAttachmentRemoval } from '@/hooks/core/useDraftAttachmentRemoval'
   import type { ComputedRef, Ref, UnwrapNestedRefs } from 'vue'
+  import { toRefs } from 'vue'
   import type { FormRules } from 'element-plus'
   import { ElAlert, ElButton, ElCheckbox, ElMessage, ElTabPane, ElTabs } from 'element-plus'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
@@ -391,7 +347,6 @@
   } from './modules/vehicle-archive-model'
   import VehicleTypeTab from './modules/vehicle-type-tab.vue'
   import VehicleTypePicker from './modules/vehicle-type-picker.vue'
-  import ArtTableSingleSelect from '@/components/core/forms/art-data-select/table-single.vue'
   import type {
     DataSelectColumn,
     DataSelectFetchParams
@@ -602,6 +557,7 @@
   const createInitialForm = createInitialVehicleArchiveForm
 
   const form = ref<VehicleArchiveForm>(createInitialForm())
+  const basicFormModel = computed(() => reactive({ ...toRefs(form.value), defaultTrailerId }))
   const documentTenantId = computed(
     () =>
       form.value.tenantId ??
@@ -711,6 +667,20 @@
   const basicItems = computed<FormItem[]>(() =>
     [
       { label: '车辆基础信息', key: 'identitySection', type: 'divider', span: 24 },
+      {
+        key: 'vehiclePhotoUrl',
+        label: '车辆图片',
+        type: 'uploadImage',
+        span: 24,
+        description: '上传车辆外观照片，便于调度和车管快速识别。',
+        props: {
+          resourceTenantId: form.value.tenantId,
+          title: '车辆图片',
+          size: 120,
+          limit: 1,
+          readonly: !form.value.tenantId || !hasAuth(savePermission.value)
+        }
+      },
       { label: '车牌号', key: 'plateNo', type: 'input' },
       {
         label: '车牌颜色',
@@ -1000,6 +970,49 @@
         type: 'input',
         span: 24,
         props: { type: 'textarea', rows: 3 }
+      },
+      {
+        key: 'defaultTrailerId',
+        label: '默认挂车',
+        type: 'dataSelect',
+        span: 24,
+        props: {
+          mode: 'table',
+          multiple: false,
+          showSelectedPanel: false,
+          modelValue: defaultTrailerId.value,
+          'onUpdate:modelValue': (value: string | undefined) => {
+            defaultTrailerId.value = value
+          },
+          selectedData: defaultTrailerSelection.value,
+          'onUpdate:selectedData': (rows: TrailerOption[]) => {
+            defaultTrailerSelection.value = rows
+          },
+          apiFn: fetchDefaultTrailerOptions,
+          columns: defaultTrailerColumns,
+          rowKey: 'id',
+          labelKey: 'plateNo',
+          descriptionKey: 'trailerType',
+          title: '参选默认挂车',
+          searchPlaceholder: '输入挂车车牌号',
+          placeholder: '请选择默认挂车',
+          disabled:
+            !isEdit.value || page.saving || trailerSaving.value || !hasAuth('VehicleArchive:Edit'),
+          clearable: true,
+          showPagination: true,
+          onChange: handleDefaultTrailerChange
+        },
+        description: () => (
+          <div class="flex flex-wrap items-center gap-2">
+            <span>可从挂车档案参选；牵引车与挂车的默认关系会同步更新。</span>
+            {!isEdit.value ? <span>先保存车辆档案后参选</span> : null}
+            {defaultTrailerError.value ? (
+              <ElButton link type="primary" onClick={loadDefaultTrailer}>
+                加载失败，重试
+              </ElButton>
+            ) : null}
+          </div>
+        )
       }
     ].map(applyVehicleFieldAccess)
   )
@@ -1854,59 +1867,6 @@
       flex: none;
       // Sticky 向上偏移时会压缩视觉间距，提前补偿以稳定保持 16px 卡片间隔。
       margin-top: calc(var(--art-space-4) + var(--art-sticky-offset));
-    }
-
-    &__vehicle-photo {
-      display: flex;
-      gap: 16px;
-      align-items: center;
-      padding: 12px 0 18px;
-
-      strong {
-        font-size: 14px;
-        color: var(--el-text-color-primary);
-      }
-
-      p {
-        margin: 6px 0 0;
-        font-size: 12px;
-        color: var(--el-text-color-secondary);
-      }
-    }
-
-    &__trailer-field {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px 20px;
-      align-items: center;
-      justify-content: space-between;
-      padding: 16px;
-      margin-top: 8px;
-      background: var(--el-fill-color-extra-light);
-      border-radius: var(--art-control-radius);
-
-      strong {
-        font-size: 14px;
-        color: var(--el-text-color-primary);
-      }
-
-      p {
-        margin: 4px 0 0;
-        font-size: 12px;
-        color: var(--el-text-color-secondary);
-      }
-    }
-
-    &__trailer-actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      align-items: center;
-
-      > span {
-        font-size: 12px;
-        color: var(--el-text-color-secondary);
-      }
     }
 
     &__type-trigger {

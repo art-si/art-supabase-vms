@@ -253,7 +253,6 @@
 
 <style scoped lang="scss">
   .fleet-health-page {
-    gap: 12px;
     min-width: 0;
 
     &__workspace {

@@ -1,73 +1,80 @@
 <template>
-  <ElCard class="parts-category-tree-card art-card-xs flex flex-col h-full mt-0" shadow="never">
-    <template #header>
-      <div class="tree-toolbar">
-        <ElInput v-model="keyword" placeholder="请输入类别名称" clearable @input="debounceFetch" />
-        <ElButton
-          v-auth="'PartsCategory:Add'"
-          type="primary"
-          aria-label="新增一级类别"
-          title="新增一级类别"
-          @click="handleAddRoot"
-        >
-          <ArtSvgIcon icon="ri:add-fill" />
-        </ElButton>
-      </div>
+  <ArtSectionCard
+    class="parts-category-tree-card h-full"
+    title="零部件类别"
+    :loading="loading"
+    loading-mode="mask"
+    :error="loadError"
+    :empty="!loading && !loadError && treeData.length === 0"
+    empty-title="暂无类别"
+    empty-description="请调整当前范围或稍后刷新。"
+    :empty-visual-size="64"
+    :min-height="0"
+    @retry="refreshTree"
+  >
+    <template #actions>
+      <ElButton
+        v-auth="'PartsCategory:Add'"
+        type="primary"
+        aria-label="新增一级类别"
+        title="新增一级类别"
+        @click="handleAddRoot"
+      >
+        <ArtSvgIcon icon="ri:add-fill" />
+      </ElButton>
     </template>
-
-    <ArtAsyncState :loading="loading" :error="loadError" full-height @retry="refreshTree">
-      <ElScrollbar>
-        <ElTree
-          ref="treeRef"
-          :data="treeData"
-          :props="treeProps"
-          node-key="id"
-          default-expand-all
-          highlight-current
-          empty-text="暂无类别"
-          @node-click="handleNodeClick"
-        >
-          <template #default="{ data }">
-            <div class="tree-node">
-              <div class="label">
-                <span class="name">{{ data.categoryName }}</span>
-                <ElTag size="small" type="info">{{ data.categoryCode }}</ElTag>
-              </div>
-              <div class="actions" :class="{ 'is-current': currentId === data.id }" @click.stop>
-                <ArtIconButton
-                  v-auth="'PartsCategory:Add'"
-                  class="size-6.5! text-base!"
-                  icon="ri:add-line"
-                  label="新增子类别"
-                  @click.stop="handleAddChild(data)"
-                />
-                <ArtIconButton
-                  v-auth="'PartsCategory:Edit'"
-                  class="size-6.5! text-base!"
-                  icon="ri:pencil-line"
-                  label="编辑类别"
-                  @click.stop="handleEdit(data)"
-                />
-                <ArtButtonMore
-                  trigger="click"
-                  :list="deleteActions"
-                  @click="(item) => item.key === 'delete' && handleDelete(data)"
-                />
-              </div>
-            </div>
-          </template>
-          <template #empty>
-            <ArtEmptyState
-              title="暂无可显示内容"
-              description="请调整当前范围或稍后刷新。"
-              size="compact"
-              :visual-size="64"
+    <template #toolbar>
+      <ElInput v-model="keyword" placeholder="请输入类别名称" clearable @input="debounceFetch" />
+    </template>
+    <ElTree
+      ref="treeRef"
+      :data="treeData"
+      :props="treeProps"
+      node-key="id"
+      default-expand-all
+      highlight-current
+      empty-text="暂无类别"
+      @node-click="handleNodeClick"
+    >
+      <template #default="{ data }">
+        <div class="tree-node">
+          <div class="label">
+            <span class="name">{{ data.categoryName }}</span>
+            <ElTag size="small" type="info">{{ data.categoryCode }}</ElTag>
+          </div>
+          <div class="actions" :class="{ 'is-current': currentId === data.id }" @click.stop>
+            <ArtIconButton
+              v-auth="'PartsCategory:Add'"
+              class="size-6.5! text-base!"
+              icon="ri:add-line"
+              label="新增子类别"
+              @click.stop="handleAddChild(data)"
             />
-          </template>
-        </ElTree>
-      </ElScrollbar>
-    </ArtAsyncState>
-  </ElCard>
+            <ArtIconButton
+              v-auth="'PartsCategory:Edit'"
+              class="size-6.5! text-base!"
+              icon="ri:pencil-line"
+              label="编辑类别"
+              @click.stop="handleEdit(data)"
+            />
+            <ArtButtonMore
+              trigger="click"
+              :list="deleteActions"
+              @click="(item) => item.key === 'delete' && handleDelete(data)"
+            />
+          </div>
+        </div>
+      </template>
+      <template #empty>
+        <ArtEmptyState
+          title="暂无可显示内容"
+          description="请调整当前范围或稍后刷新。"
+          size="compact"
+          :visual-size="64"
+        />
+      </template>
+    </ElTree>
+  </ArtSectionCard>
 
   <PartsCategoryDialog ref="dialogRef" @success="handleDialogSuccess" />
   <MasterDataDeleteGuard ref="deleteGuardRef" />
@@ -75,7 +82,7 @@
 
 <script setup lang="ts">
   import ArtEmptyState from '@/components/core/feedback/art-empty-state/index.vue'
-  import ArtAsyncState from '@/components/core/feedback/art-async-state/index.vue'
+  import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
   import ArtButtonMore from '@/components/core/forms/art-button-more/index.vue'
   import MasterDataDeleteGuard from '@/components/business/master-data-delete-guard/index.vue'
   import { useRecordDeleteGuard } from '@/hooks/core/useRecordDeleteGuard'
@@ -223,26 +230,7 @@
 
 <style scoped lang="scss">
   .parts-category-tree-card {
-    :deep(.el-card__header) {
-      padding: 12px;
-      border-bottom: 0;
-    }
-
-    :deep(.el-card__body) {
-      position: relative;
-      flex: 1;
-      min-height: 0;
-      padding: 0 12px 12px;
-    }
-
-    .tree-toolbar {
-      display: flex;
-      gap: 12px;
-    }
-
     .el-tree {
-      height: 100%;
-
       :deep(.el-tree-node__content) {
         height: 38px;
         margin-top: 2px;
