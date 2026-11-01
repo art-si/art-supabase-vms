@@ -7,13 +7,12 @@
     }}</template>
     <ArtForm
       ref="formRef"
+      v-model:active-tab="activeTab"
       v-model="form"
       :items="formItems"
       :rules="formRules"
       :span="12"
       label-width="110px"
-      :show-reset="false"
-      :show-submit="false"
     >
       <template #cardId>
         <ArtTableSingleSelect
@@ -107,6 +106,27 @@
           show-locate-button
         />
       </template>
+      <template #transactionVoucher>
+        <div class="mt-4 border-t border-[var(--el-border-color-lighter)] pt-4">
+          <span class="mb-2 block text-sm font-medium">现场凭证</span>
+          <ArtUploadImage
+            v-model="voucherUrls"
+            :resource-tenant-id="selectedCard?.tenantId || ''"
+            title="现场凭证"
+            :size="88"
+            multiple
+            :limit="5"
+            :file-size="8 * 1024 * 1024"
+            file-type="image/png,image/jpeg,image/webp"
+            :upload-request="uploadVoucher"
+            :show-resource-picker="false"
+            :readonly="!selectedCard"
+          />
+          <p class="mt-2 text-xs text-[var(--el-text-color-secondary)]"
+            >可上传加油小票、充值凭证等照片，最多 5 张。</p
+          >
+        </div>
+      </template>
     </ArtForm>
     <ElAlert
       v-if="action === 'consume'"
@@ -116,25 +136,6 @@
       show-icon
       title="本趟百公里油耗在运单完成且具备出回表显、余油等数据后自动核算；当前单笔升数不会直接作为本趟油耗。"
     />
-    <div class="mt-4 border-t border-[var(--el-border-color-lighter)] pt-4">
-      <span class="mb-2 block text-sm font-medium">现场凭证</span>
-      <ArtUploadImage
-        v-model="voucherUrls"
-        :resource-tenant-id="selectedCard?.tenantId || ''"
-        title="现场凭证"
-        :size="88"
-        multiple
-        :limit="5"
-        :file-size="8 * 1024 * 1024"
-        file-type="image/png,image/jpeg,image/webp"
-        :upload-request="uploadVoucher"
-        :show-resource-picker="false"
-        :readonly="!selectedCard"
-      />
-      <p class="mt-2 text-xs text-[var(--el-text-color-secondary)]"
-        >可上传加油小票、充值凭证等照片，最多 5 张。</p
-      >
-    </div>
   </ArtDialog>
 </template>
 
@@ -209,6 +210,7 @@
   }
 
   const emit = defineEmits<{ success: [] }>()
+  const activeTab = ref('transactionSection')
   const dialogRef = ref<ArtDialogExpose<void>>()
   const formRef = ref<FormExpose>()
   const action = ref<Action>('recharge')
@@ -293,6 +295,9 @@
     }
   ]
   const formItems = computed<FormItem[]>(() => [
+    ...(action.value === 'consume'
+      ? [{ key: 'transactionSection', label: '流水信息', type: 'tab' } satisfies FormItem]
+      : []),
     { label: '油卡', key: 'cardId', span: 24 },
     {
       label: '当前余额',
@@ -331,6 +336,7 @@
           { label: '充值人', key: 'rechargerEmployeeId' }
         ] satisfies FormItem[])
       : ([
+          { key: 'consumptionSection', label: '加油与凭证', type: 'tab' },
           { label: '关联运单', key: 'waybillId' },
           { label: '本笔司机', key: 'driverId' },
           {
@@ -375,7 +381,8 @@
       type: 'input',
       span: 24,
       props: { type: 'textarea', rows: 3, maxlength: 500, showWordLimit: true }
-    }
+    },
+    { key: 'transactionVoucher', label: '', type: 'slot', span: 24 }
   ])
   const formRules: FormRules<EntryForm> = {
     cardId: [{ required: true, message: '请选择油卡', trigger: 'change' }],
@@ -486,6 +493,7 @@
   }
 
   const handleOpen = async (type: Action, card?: FuelCard): Promise<void> => {
+    activeTab.value = 'transactionSection'
     action.value = type
     Object.assign(form, {
       cardId: card?.id || '',

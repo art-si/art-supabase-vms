@@ -23,8 +23,6 @@
         title="车辆分类"
         :subtitle="navigationKey === 'all' ? '按车辆归属和车型筛选' : `当前：${navigationLabel}`"
         aria-label="按车辆归属和车型筛选"
-        :show-scrollbar="false"
-        body-class="vehicle-archive-manage__navigation-body"
         :loading="navigationLoading"
         loading-mode="mask"
         :error="navigationError"
@@ -60,64 +58,65 @@
           <ArtIconButton icon="ri:refresh-line" label="刷新车辆分类" @click="loadNavigation" />
         </template>
 
-        <ElInput
-          v-model="navigationKeyword"
-          clearable
-          placeholder="搜索归属或车型"
-          aria-label="搜索车辆分类"
-        >
-          <template #prefix><ArtSvgIcon icon="ri:search-line" /></template>
-        </ElInput>
+        <template #toolbar>
+          <div class="grid gap-2.5">
+            <ElInput
+              v-model="navigationKeyword"
+              clearable
+              placeholder="搜索归属或车型"
+              aria-label="搜索车辆分类"
+            >
+              <template #prefix><ArtSvgIcon icon="ri:search-line" /></template>
+            </ElInput>
 
-        <button
-          type="button"
-          class="vehicle-archive-manage__navigation-all"
-          :class="{ 'is-current': navigationKey === 'all' }"
-          @click="handleNavigationClick()"
-        >
-          <span class="vehicle-archive-manage__navigation-icon" aria-hidden="true">
-            <ArtSvgIcon icon="ri:apps-2-line" />
-          </span>
-          <span class="vehicle-archive-manage__navigation-copy">
-            <strong>全部车辆</strong>
-            <small>{{ navigationRows.length }} 辆车</small>
-          </span>
-          <ArtSvgIcon v-if="navigationKey === 'all'" icon="ri:check-line" aria-hidden="true" />
-        </button>
-
-        <ElScrollbar class="vehicle-archive-manage__navigation-scroll">
-          <ElTree
-            ref="navigationTreeRef"
-            :data="navigationTree"
-            node-key="key"
-            :default-expand-all="navigationRows.length < 24"
-            highlight-current
-            :expand-on-click-node="false"
-            :current-node-key="navigationKey === 'all' ? undefined : navigationKey"
-            :filter-node-method="filterNavigationNode"
-            @node-click="handleNavigationClick"
-          >
-            <template #default="{ data }">
-              <span class="vehicle-archive-manage__navigation-node">
-                <ArtSvgIcon
-                  class="vehicle-archive-manage__navigation-node-icon"
-                  :icon="data.vehicleType ? 'ri:truck-line' : 'ri:folder-3-line'"
-                  aria-hidden="true"
-                />
-                <span :title="data.label">{{ data.label }}</span>
-                <small :aria-label="`${data.count} 辆车`">{{ data.count }}</small>
+            <button
+              type="button"
+              class="vehicle-archive-manage__navigation-all"
+              :class="{ 'is-current': navigationKey === 'all' }"
+              @click="handleNavigationClick()"
+            >
+              <span class="vehicle-archive-manage__navigation-icon" aria-hidden="true">
+                <ArtSvgIcon icon="ri:apps-2-line" />
               </span>
-            </template>
-            <template #empty>
-              <ArtEmptyState
-                title="未找到匹配项"
-                description="请调整关键词或清空筛选条件。"
-                size="compact"
-                :visual-size="64"
+              <span class="vehicle-archive-manage__navigation-copy">
+                <strong>全部车辆</strong>
+                <small>{{ navigationRows.length }} 辆车</small>
+              </span>
+              <ArtSvgIcon v-if="navigationKey === 'all'" icon="ri:check-line" aria-hidden="true" />
+            </button>
+          </div>
+        </template>
+        <ElTree
+          ref="navigationTreeRef"
+          :data="navigationTree"
+          node-key="key"
+          :default-expand-all="navigationRows.length < 24"
+          highlight-current
+          :expand-on-click-node="false"
+          :current-node-key="navigationKey === 'all' ? undefined : navigationKey"
+          :filter-node-method="filterNavigationNode"
+          @node-click="handleNavigationClick"
+        >
+          <template #default="{ data }">
+            <span class="vehicle-archive-manage__navigation-node">
+              <ArtSvgIcon
+                class="vehicle-archive-manage__navigation-node-icon"
+                :icon="data.vehicleType ? 'ri:truck-line' : 'ri:folder-3-line'"
+                aria-hidden="true"
               />
-            </template>
-          </ElTree>
-        </ElScrollbar>
+              <span :title="data.label">{{ data.label }}</span>
+              <small :aria-label="`${data.count} 辆车`">{{ data.count }}</small>
+            </span>
+          </template>
+          <template #empty>
+            <ArtEmptyState
+              title="未找到匹配项"
+              description="请调整关键词或清空筛选条件。"
+              size="compact"
+              :visual-size="64"
+            />
+          </template>
+        </ElTree>
       </ArtSectionCard>
 
       <ArtTableQuery
@@ -950,14 +949,6 @@
       min-height: 0;
       overflow: hidden;
 
-      :deep(.vehicle-archive-manage__navigation-body) {
-        display: flex;
-        flex: 1;
-        flex-direction: column;
-        gap: 10px;
-        min-height: 0;
-      }
-
       :deep(.el-tree) {
         --el-tree-node-hover-bg-color: color-mix(
           in srgb,
@@ -986,11 +977,6 @@
         background: color-mix(in srgb, var(--theme-color) 10%, var(--default-box-color));
         box-shadow: inset 3px 0 0 var(--theme-color);
       }
-    }
-
-    &__navigation-scroll {
-      flex: 1;
-      min-height: 0;
     }
 
     &__navigation-all {
@@ -1214,22 +1200,26 @@
         height: auto;
 
         :deep(.art-section-card__header) {
+          padding-bottom: var(--art-space-4);
           margin-bottom: 0;
         }
 
-        :deep(.vehicle-archive-manage__navigation-body) {
+        :deep(.art-section-card__toolbar),
+        :deep(.art-section-card__scrollbar) {
           display: none;
         }
 
         &.is-expanded {
-          height: 260px;
+          height: 360px;
 
           :deep(.art-section-card__header) {
+            padding-bottom: 0;
             margin-bottom: var(--art-space-4);
           }
 
-          :deep(.vehicle-archive-manage__navigation-body) {
-            display: flex;
+          :deep(.art-section-card__toolbar),
+          :deep(.art-section-card__scrollbar) {
+            display: block;
           }
         }
       }

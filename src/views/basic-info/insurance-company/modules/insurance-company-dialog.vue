@@ -4,15 +4,12 @@
 
     <ArtForm
       ref="formRef"
-      :model-value="form"
-      @update:model-value="replaceReactiveModel(form, $event)"
+      v-model="form"
       :items="items"
       :rules="rules"
       :span="12"
       :gutter="20"
       label-width="120px"
-      :show-reset="false"
-      :show-submit="false"
     >
       <template #addressPicker>
         <ArtAddressPicker
@@ -69,7 +66,7 @@
     remark: ''
   })
 
-  const form = reactive<InsuranceCompanyForm>(createInitialForm())
+  const form = ref<InsuranceCompanyForm>(createInitialForm())
 
   const rules: FormRules<InsuranceCompanyForm> = {
     companyName: [
@@ -90,7 +87,6 @@
   }
 
   const items = computed<FormItem[]>(() => [
-    { label: '机构信息', key: 'organizationSection', type: 'divider', span: 24 },
     {
       label: '保险公司名称',
       key: 'companyName',
@@ -100,7 +96,6 @@
         maxlength: 100
       }
     },
-    { label: '联络与地址', key: 'contactSection', type: 'divider', span: 24 },
     {
       label: '联系人',
       key: 'contactPerson',
@@ -141,7 +136,7 @@
   ])
 
   const resetForm = async (): Promise<void> => {
-    replaceReactiveModel(form, createInitialForm())
+    replaceReactiveModel(form.value, createInitialForm())
     await nextTick()
     formRef.value?.clearValidate()
   }
@@ -155,15 +150,15 @@
     }
 
     try {
-      const { regionPath, ...payload } = toRaw(form)
+      const { regionPath, ...payload } = toRaw(form.value)
       delete payload.addressPicker
       payload.region = regionPath?.join('/') || ''
-      if (form.id) {
+      if (form.value.id) {
         await editInsuranceCompany(payload)
       } else {
         await addInsuranceCompany(payload)
       }
-      emit('success', form.id ? 'edit' : 'add')
+      emit('success', form.value.id ? 'edit' : 'add')
       return true
     } catch (error) {
       notifyFriendlyError(error, '保险公司保存失败，请检查填写内容后重试')
@@ -177,7 +172,7 @@
     if (isEdit) {
       const editData = structuredClone(toRaw(row)) as InsuranceCompanyForm
       editData.regionPath = editData.region?.split('/').filter(Boolean) || []
-      replaceReactiveModel(form, editData)
+      replaceReactiveModel(form.value, editData)
     }
 
     await dialogRef.value?.handleOpen(row, {

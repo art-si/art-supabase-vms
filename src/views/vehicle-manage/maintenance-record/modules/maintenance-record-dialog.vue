@@ -7,14 +7,13 @@
     <div class="maintenance-record-dialog">
       <ArtForm
         ref="formRef"
+        v-model:active-tab="activeTab"
         v-model="form.data"
         :items="form.items"
         :rules="form.rules"
         :span="12"
         :gutter="20"
         label-width="120px"
-        :show-reset="false"
-        :show-submit="false"
       >
         <template #vehicleId>
           <ArtTableSingleSelect
@@ -95,52 +94,54 @@
             @change="handleMileageChange"
           />
         </template>
+        <template #maintenanceItems>
+          <section v-if="canViewMaintenanceItems" class="maintenance-record-dialog__section">
+            <div class="maintenance-record-dialog__section-header">
+              <ArtSectionTitle :show-line="false">项目清单</ArtSectionTitle>
+              <ElButton v-if="canEditMaintenanceItems" type="primary" plain @click="addItem">
+                <template #icon><ArtSvgIcon icon="ri:add-line" /></template>
+                新增
+              </ElButton>
+            </div>
+            <ArtTable
+              ref="itemTableRef"
+              :data="form.data.items"
+              :columns="itemColumns"
+              :pagination="undefined"
+              empty-height="160px"
+            />
+            <div
+              v-if="canViewMaintenanceField('totalCost')"
+              class="mt-3 flex justify-end gap-3 text-sm text-[var(--el-text-color-regular)]"
+            >
+              <span>项目费用合计</span>
+              <strong class="text-base text-[var(--el-text-color-primary)]"
+                >¥{{ totalCost.toFixed(2) }}</strong
+              >
+            </div>
+          </section>
+        </template>
+        <template #maintenanceAttachments>
+          <section v-if="canViewDocuments" class="maintenance-record-dialog__section">
+            <div class="maintenance-record-dialog__section-header">
+              <ArtSectionTitle :show-line="false">维修保养附件</ArtSectionTitle>
+              <ElButton v-if="canEditDocuments" type="primary" plain @click="openAttachmentDialog">
+                <template #icon><ArtSvgIcon icon="ri:upload-2-line" /></template>
+                上传
+              </ElButton>
+            </div>
+            <p class="mb-3 text-xs leading-5 text-[var(--el-text-color-secondary)]">
+              可上传维修单、发票照片等凭证；请在附件名称中标明凭证类型，便于后续核对。
+            </p>
+            <VehicleAttachmentTable
+              :attachments="form.data.attachments ?? []"
+              :name-min-width="180"
+              :removable="canEditDocuments"
+              @remove="removeAttachment"
+            />
+          </section>
+        </template>
       </ArtForm>
-
-      <section v-if="canViewMaintenanceItems" class="maintenance-record-dialog__section">
-        <div class="maintenance-record-dialog__section-header">
-          <ArtSectionTitle :show-line="false">项目清单</ArtSectionTitle>
-          <ElButton v-if="canEditMaintenanceItems" type="primary" plain @click="addItem">
-            <template #icon><ArtSvgIcon icon="ri:add-line" /></template>
-            新增
-          </ElButton>
-        </div>
-        <ArtTable
-          :data="form.data.items"
-          :columns="itemColumns"
-          :pagination="undefined"
-          :show-table-header="false"
-          empty-height="160px"
-        />
-        <div
-          v-if="canViewMaintenanceField('totalCost')"
-          class="mt-3 flex justify-end gap-3 text-sm text-[var(--el-text-color-regular)]"
-        >
-          <span>项目费用合计</span>
-          <strong class="text-base text-[var(--el-text-color-primary)]"
-            >¥{{ totalCost.toFixed(2) }}</strong
-          >
-        </div>
-      </section>
-
-      <section v-if="canViewDocuments" class="maintenance-record-dialog__section">
-        <div class="maintenance-record-dialog__section-header">
-          <ArtSectionTitle :show-line="false">维修保养附件</ArtSectionTitle>
-          <ElButton v-if="canEditDocuments" type="primary" plain @click="openAttachmentDialog">
-            <template #icon><ArtSvgIcon icon="ri:upload-2-line" /></template>
-            上传
-          </ElButton>
-        </div>
-        <p class="mb-3 text-xs leading-5 text-[var(--el-text-color-secondary)]">
-          可上传维修单、发票照片等凭证；请在附件名称中标明凭证类型，便于后续核对。
-        </p>
-        <VehicleAttachmentTable
-          :attachments="form.data.attachments ?? []"
-          :name-min-width="180"
-          :removable="canEditDocuments"
-          @remove="removeAttachment"
-        />
-      </section>
     </div>
   </ArtDialog>
 
@@ -153,8 +154,6 @@
         :rules="attachment.rules"
         :span="24"
         label-width="170px"
-        :show-reset="false"
-        :show-submit="false"
       >
         <template #file>
           <div class="maintenance-attachment-dialog__upload">
@@ -199,7 +198,7 @@
     DataSelectRecord
   } from '@/components/core/forms/art-data-select/types'
   import ArtSectionTitle from '@/components/core/surfaces/art-section-title/index.vue'
-  import ArtTable from '@/components/core/tables/art-table/index.vue'
+  import ArtTable, { type ArtTableExpose } from '@/components/core/tables/art-table/index.vue'
   import ArtIconButton from '@/components/core/widget/art-icon-button/index.vue'
   import type { ColumnOption } from '@/types'
   import {
@@ -253,6 +252,8 @@
     maintenanceTypeDictionary.filter((option) => option.value !== 'maintenance')
   )
   const booleanOptions = useDictionaryOptions<boolean>('commonBoolean', (value) => value === 'true')
+  const activeTab = ref('baseSection')
+  const itemTableRef = ref<ArtTableExpose<MaintenanceItem>>()
   const dialogRef = ref<ArtDialogExpose<MaintenanceRecord | undefined>>()
   const attachmentDialogRef = ref<ArtDialogExpose<void>>()
   const formRef = ref<FormExpose>()
@@ -342,7 +343,7 @@
     vehicleSelection: [],
     items: computed<FormItem[]>(() => {
       const items: FormItem[] = [
-        { label: '基础信息', key: 'baseSection', type: 'divider', span: 24 },
+        { label: '基础信息', key: 'baseSection', type: 'tab', span: 24 },
         { label: '车牌号', key: 'vehicleId', span: 12 },
         { label: '所属公司', key: 'companyName', type: 'input', props: { disabled: true } },
         {
@@ -365,7 +366,7 @@
         { label: '关联行驶记录', key: 'mileageRecordId', span: 24 },
         { label: '开始时间', key: 'startTime', type: 'date', props: dateTimeProps },
         { label: '结束时间', key: 'endTime', type: 'date', props: dateTimeProps },
-        { label: '里程与保养提醒', key: 'reminderSection', type: 'divider', span: 24 },
+        { label: '里程与保养提醒', key: 'reminderSection', type: 'tab', span: 24 },
         {
           label: '保养维修日期',
           key: 'serviceDate',
@@ -401,7 +402,7 @@
                 props: { min: 0, disabled: true, class: '!w-full' }
               }
             ]),
-        { label: '费用与票据', key: 'costSection', type: 'divider', span: 24 },
+        { label: '费用与票据', key: 'costSection', type: 'tab', span: 24 },
         {
           label: '总费用（元）',
           key: 'costAmount',
@@ -422,7 +423,21 @@
           type: 'input',
           span: 24,
           props: { type: 'textarea', rows: 3, maxlength: 500, showWordLimit: true }
-        }
+        },
+        {
+          key: 'maintenanceItems',
+          label: '',
+          type: 'slot',
+          span: 24,
+          hidden: !canViewMaintenanceItems.value
+        },
+        {
+          key: 'maintenanceAttachmentsSection',
+          label: '维保附件',
+          type: 'tab',
+          hidden: !canViewDocuments.value
+        },
+        { key: 'maintenanceAttachments', label: '', type: 'slot', span: 24 }
       ]
       return items
         .filter((item) => {
@@ -586,6 +601,15 @@
     {
       prop: 'itemName',
       label: '项目名称',
+      headerTooltip: '项目名称和配件名称至少填写一项；整行空白时可不填。',
+      rules: {
+        validator: ({ row }) =>
+          Boolean(row.itemName || row.partName) ||
+          [row.totalAmount, row.laborAmount, row.partPrice, row.quantity].every(
+            (value) => value == null
+          ),
+        message: ({ rowIndex }) => `第 ${rowIndex + 1} 行请补充项目名称或配件名称`
+      },
       minWidth: 130,
       formatter: (row) => (
         <ElInput
@@ -655,6 +679,11 @@
     {
       prop: 'totalAmount',
       label: '合计',
+      headerTooltip: '已填写项目名称或配件名称的行必须填写合计费用。',
+      rules: {
+        validator: ({ row }) => !(row.itemName || row.partName) || row.totalAmount != null,
+        message: ({ rowIndex }) => `第 ${rowIndex + 1} 行请填写合计费用`
+      },
       width: 112,
       formatter: (row) => (
         <ElInputNumber
@@ -806,30 +835,17 @@
       return false
     }
 
-    if (
-      canEditMaintenanceItems.value &&
-      (form.data.items ?? []).some(
-        (item) =>
-          !item.itemName &&
-          !item.partName &&
-          (item.totalAmount != null ||
-            item.laborAmount != null ||
-            item.partPrice != null ||
-            item.quantity != null)
-      )
-    ) {
-      ElMessage.warning('请为已填写费用的项目补充项目名称或配件名称')
-      return false
-    }
-
-    if (
-      canEditMaintenanceItems.value &&
-      (form.data.items ?? []).some(
-        (item) => (item.itemName || item.partName) && item.totalAmount == null
-      )
-    ) {
-      ElMessage.warning('请填写项目清单中每项的合计费用')
-      return false
+    if (canEditMaintenanceItems.value) {
+      const validation = await itemTableRef.value?.validate({ focus: false })
+      if (!validation?.valid) {
+        activeTab.value = 'costSection'
+        await nextTick()
+        if (validation?.firstError) {
+          await itemTableRef.value?.validateField(validation.firstError.prop)
+          ElMessage.warning(validation.firstError.message)
+        }
+        return false
+      }
     }
 
     try {
@@ -848,6 +864,7 @@
   }
 
   const handleOpen = async (row?: MaintenanceRecord): Promise<void> => {
+    activeTab.value = 'baseSection'
     await resetForm()
     if (row?.id) replaceForm(row)
 

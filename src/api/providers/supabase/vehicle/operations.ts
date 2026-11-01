@@ -287,13 +287,26 @@ export async function editVehicleAccident(params: VehicleAccidentRecord) {
 export async function deleteVehicleAccident(id: string) {
   return await responseHandle<number>(
     () => supabase.rpc('vms_delete_vehicle_accident_secure', { p_ids: [id] }),
-    { showMessage: true, message: '删除成功', breakReturn: true }
+    {
+      showMessage: true,
+      message: '删除成功',
+      showErrorMessage: false,
+      showReferenceFeedback: false,
+      breakReturn: true,
+      requireAffected: true
+    }
   )
 }
 
 export async function deleteVehicleAccidentBatch(ids: string[]) {
   return await responseHandle<number>(
     () => supabase.rpc('vms_delete_vehicle_accident_secure', { p_ids: ids }),
-    { showMessage: true, breakReturn: true }
+    {
+      showMessage: true,
+      showErrorMessage: false,
+      showReferenceFeedback: false,
+      breakReturn: true,
+      requireAffected: true
+    }
   )
 }

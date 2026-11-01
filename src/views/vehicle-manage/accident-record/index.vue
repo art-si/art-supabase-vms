@@ -36,11 +36,13 @@
     />
 
     <AccidentRecordDialog ref="dialogRef" @success="handleSaveSuccess" />
+    <MasterDataDeleteGuard ref="deleteGuardRef" />
   </div>
 </template>
 
 <script setup lang="tsx">
-  import { useArtFeedback } from '@/hooks/core/useArtFeedback'
+  import { useRecordDeleteGuard } from '@/hooks/core/useRecordDeleteGuard'
+  import MasterDataDeleteGuard from '@/components/business/master-data-delete-guard/index.vue'
   import type { ComputedRef, UnwrapNestedRefs } from 'vue'
   import ArtButtonTable from '@/components/core/forms/art-button-table/index.vue'
   import ArtButtonMore, {
@@ -51,7 +53,6 @@
     ArtTableQueryExpose,
     ArtTableQueryExcelColumn,
     ArtTableQueryHeaderAction,
-    ArtTableQueryHeaderActionContext,
     ArtTableQueryProps
   } from '@/components/core/tables/art-table-query/index.vue'
   import type { ColumnOption, DialogType } from '@/types'
@@ -73,7 +74,10 @@
 
   defineOptions({ name: 'VehicleAccident' })
 
-  const { confirmAction } = useArtFeedback()
+  const { deleteGuardRef, deleteRecord, deleteRecords } = useRecordDeleteGuard(
+    'vehicle_accident_record',
+    '车辆事故记录'
+  )
 
   type AccidentRecord = Api.Vms.VehicleManage.VehicleAccidentRecord
   type SearchParams = Api.Vms.VehicleManage.VehicleAccidentSearchParams
@@ -189,12 +193,20 @@
       {
         type: 'delete',
         permission: 'VehicleAccident:Delete',
-        content: ({ selectedCount }: ArtTableQueryHeaderActionContext) =>
-          `确定删除选中的 ${selectedCount} 条事故记录吗？删除后无法恢复。`,
+        confirm: false,
         onClick: async ({ selectedRows }) => {
-          const ids = selectedRows.map((row) => row.id).filter(Boolean)
-          await deleteVehicleAccidentBatch(ids)
-          await tableQueryRef.value?.refreshRemove()
+          const resources = selectedRows.map((row) => ({
+            id: String(row.id ?? ''),
+            label: [row.plateNo, row.accidentTime].filter(Boolean).join(' · ') || '车辆事故记录'
+          }))
+          await deleteRecords({
+            resources,
+            permission: 'VehicleAccident:Delete',
+            remove: () => deleteVehicleAccidentBatch(resources.map((resource) => resource.id)),
+            onDeleted: async () => {
+              await tableQueryRef.value?.refreshRemove()
+            }
+          })
         }
       }
     ]),
@@ -357,18 +369,18 @@
 
   const handleDelete = async (row: AccidentRecord): Promise<void> => {
     if (!row.id) return
-    try {
-      await confirmAction(`确定删除车辆“${row.plateNo}”的事故记录吗？`, '删除确认', {
-        confirmButtonText: '删除',
-        cancelButtonText: '取消',
-        type: 'warning',
-        confirmButtonType: 'danger'
-      })
-      await deleteVehicleAccident(row.id)
-      await tableQueryRef.value?.refreshRemove()
-    } catch {
-      // 用户取消删除时无需提示。
-    }
+    const id = row.id
+    await deleteRecord({
+      resource: {
+        id,
+        label: [row.plateNo, row.accidentTime].filter(Boolean).join(' · ') || '车辆事故记录'
+      },
+      permission: 'VehicleAccident:Delete',
+      remove: () => deleteVehicleAccident(id),
+      onDeleted: async () => {
+        await tableQueryRef.value?.refreshRemove()
+      }
+    })
   }
 
   const getProcessedDictOptions = () => processedOptions

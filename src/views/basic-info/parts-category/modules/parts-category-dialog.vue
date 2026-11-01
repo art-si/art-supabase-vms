@@ -4,15 +4,12 @@
 
     <ArtForm
       ref="formRef"
-      :model-value="form"
-      @update:model-value="replaceReactiveModel(form, $event)"
+      v-model="form"
       :items="items"
       :rules="rules"
       :span="12"
       :gutter="20"
       label-width="110px"
-      :show-reset="false"
-      :show-submit="false"
     />
   </ArtDialog>
 </template>
@@ -73,11 +70,11 @@
     remark: ''
   })
 
-  const form = reactive<PartsCategoryForm>(createInitialForm())
+  const form = ref<PartsCategoryForm>(createInitialForm())
 
   const categoryTree = new TreeUtils({ parentKey: 'parentId' })
 
-  const categoryNumber = useDocumentNumberRule('vehicle.part_category', () => form.tenantId)
+  const categoryNumber = useDocumentNumberRule('vehicle.part_category', () => form.value.tenantId)
 
   const rules = computed<FormRules<PartsCategoryForm>>(() => ({
     categoryName: [
@@ -85,7 +82,7 @@
       { min: 2, max: 80, message: '长度应为 2 到 80 个字符', trigger: 'blur' }
     ],
     categoryCode: [
-      ...(categoryNumber.manualRequired(Boolean(form.id))
+      ...(categoryNumber.manualRequired(Boolean(form.value.id))
         ? [{ required: true, message: '请输入类别编码', trigger: 'blur' as const }]
         : []),
       {
@@ -99,7 +96,6 @@
   }))
 
   const items = computed<FormItem[]>(() => [
-    { label: '层级与编码', key: 'structureSection', type: 'divider', span: 24 },
     {
       label: '上级类别',
       key: 'parentId',
@@ -110,8 +106,11 @@
         return {
           ...result,
           data:
-            result.data && form.id
-              ? categoryTree.removeNodesByCondition(result.data, (node) => node.id === form.id).tree
+            result.data && form.value.id
+              ? categoryTree.removeNodesByCondition(
+                  result.data,
+                  (node) => node.id === form.value.id
+                ).tree
               : result.data
         }
       },
@@ -143,7 +142,7 @@
       span: 14,
       props: {
         maxlength: 50,
-        ...categoryNumber.inputProps(Boolean(form.id), '如 engine_part', true)
+        ...categoryNumber.inputProps(Boolean(form.value.id), '如 engine_part', true)
       },
       description: categoryNumber.description.value
     },
@@ -159,7 +158,6 @@
         class: '!w-full'
       }
     },
-    { label: '使用设置', key: 'usageSection', type: 'divider', span: 24 },
     {
       label: '状态',
       key: 'status',
@@ -184,7 +182,7 @@
   ])
 
   const resetForm = async (): Promise<void> => {
-    replaceReactiveModel(form, createInitialForm())
+    replaceReactiveModel(form.value, createInitialForm())
     await nextTick()
     formRef.value?.clearValidate()
   }
@@ -199,22 +197,22 @@
 
     try {
       const payload: PartsCategoryForm = {
-        id: form.id,
-        ...(!form.id ? { tenantId: form.tenantId } : {}),
-        parentId: form.parentId || null,
-        categoryName: normalizeNonNullableText(form.categoryName),
-        categoryCode: normalizeNonNullableText(form.categoryCode),
-        categoryLevel: form.categoryLevel,
-        sort: form.sort,
-        status: form.status,
-        remark: normalizeNonNullableText(form.remark)
+        id: form.value.id,
+        ...(!form.value.id ? { tenantId: form.value.tenantId } : {}),
+        parentId: form.value.parentId || null,
+        categoryName: normalizeNonNullableText(form.value.categoryName),
+        categoryCode: normalizeNonNullableText(form.value.categoryCode),
+        categoryLevel: form.value.categoryLevel,
+        sort: form.value.sort,
+        status: form.value.status,
+        remark: normalizeNonNullableText(form.value.remark)
       }
-      if (form.id) {
+      if (form.value.id) {
         await editPartsCategory(payload)
       } else {
         await addPartsCategory(payload)
       }
-      emit('success', form.id ? 'edit' : 'add')
+      emit('success', form.value.id ? 'edit' : 'add')
       return true
     } catch (error) {
       notifyFriendlyError(error, '配件分类保存失败，请检查填写内容后重试')
@@ -227,13 +225,13 @@
     const isEdit = !!row?.id
 
     if (isEdit) {
-      replaceReactiveModel(form, {
+      replaceReactiveModel(form.value, {
         ...createInitialForm(),
         ...pick(row, Object.keys(createInitialForm()))
       })
     } else if (parent?.id) {
-      form.parentId = parent.id
-      form.tenantId = parent.tenantId
+      form.value.parentId = parent.id
+      form.value.tenantId = parent.tenantId
     }
 
     await dialogRef.value?.handleOpen(row, {

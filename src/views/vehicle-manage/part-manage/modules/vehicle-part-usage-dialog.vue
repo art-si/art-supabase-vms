@@ -15,6 +15,7 @@
 
     <ArtForm
       ref="formRef"
+      v-model:active-tab="activeTab"
       v-model="form.data"
       :items="formItems"
       :rules="form.rules"
@@ -22,8 +23,6 @@
       :gutter="20"
       label-width="120px"
       root-class="vehicle-part-usage-form"
-      :show-reset="false"
-      :show-submit="false"
     >
       <template #vehicleId>
         <ArtTableSingleSelect
@@ -265,6 +264,7 @@
 
   const emit = defineEmits<Emits>()
   const { getDictMap } = storeToRefs(useUserStore())
+  const activeTab = ref('partInfoSection')
   const dialogRef = ref<ArtDialogExpose<Usage | undefined>>()
   const formRef = ref<{
     validate: () => Promise<boolean>
@@ -328,7 +328,7 @@
   })
 
   const formItems = computed<FormItem[]>(() => [
-    { label: '零部件信息', key: 'partInfoSection', type: 'divider', span: 24 },
+    { label: '零部件信息', key: 'partInfoSection', type: 'tab', span: 24 },
     { label: '车牌号', key: 'vehicleId', span: 12 },
     { label: '所属公司', key: 'companyName', type: 'input', span: 12, props: { disabled: true } },
     {
@@ -392,7 +392,7 @@
           }
         ] as FormItem[])
       : []),
-    { label: '零部件使用', key: 'partUsageSection', type: 'divider', span: 24 },
+    { label: '零部件使用', key: 'partUsageSection', type: 'tab', span: 24 },
     ...(canViewField(currentFieldAccess.value, 'traceabilityTag')
       ? ([{ label: 'RFID标签', key: 'rfidTag', span: 24 }] as FormItem[])
       : []),
@@ -696,6 +696,7 @@
   }
 
   const handleOpen = async (row?: Usage): Promise<void> => {
+    activeTab.value = 'partInfoSection'
     await resetForm()
     if (row?.id) replaceForm(row)
     await dialogRef.value?.handleOpen(row, {

@@ -34,15 +34,12 @@
           </div>
           <ArtForm
             ref="basicFormRef"
-            :model-value="form"
-            @update:model-value="replaceReactiveModel(form, $event)"
+            v-model="form"
             :items="basicItems"
             :rules="rules"
             :span="8"
             :gutter="20"
             label-width="130px"
-            :show-reset="false"
-            :show-submit="false"
           >
             <template #vehicleType>
               <ElButton
@@ -188,45 +185,36 @@
         <ElTabPane v-if="hasAuth('VehicleArchive:TabBody')" label="车身参数" name="body">
           <ArtForm
             ref="bodyFormRef"
-            :model-value="form"
-            @update:model-value="replaceReactiveModel(form, $event)"
+            v-model="form"
             :items="bodyItems"
             :rules="rules"
             :span="8"
             :gutter="20"
             label-width="130px"
-            :show-reset="false"
-            :show-submit="false"
           />
         </ElTabPane>
 
         <ElTabPane v-if="hasAuth('VehicleArchive:TabEngine')" label="发动机参数" name="engine">
           <ArtForm
             ref="engineFormRef"
-            :model-value="form"
-            @update:model-value="replaceReactiveModel(form, $event)"
+            v-model="form"
             :items="engineItems"
             :rules="rules"
             :span="8"
             :gutter="20"
             label-width="130px"
-            :show-reset="false"
-            :show-submit="false"
           />
         </ElTabPane>
 
         <ElTabPane v-if="hasAuth('VehicleArchive:TabOther')" label="其他信息" name="other">
           <ArtForm
             ref="otherFormRef"
-            :model-value="form"
-            @update:model-value="replaceReactiveModel(form, $event)"
+            v-model="form"
             :items="otherItems"
             :rules="rules"
             :span="8"
             :gutter="20"
             label-width="130px"
-            :show-reset="false"
-            :show-submit="false"
           />
 
           <section v-if="canViewArchiveField('documents')" class="vehicle-archive-edit__section">
@@ -347,7 +335,6 @@
 
 <script setup lang="tsx">
   import BusinessAttachmentRowActions from '@/components/business/business-attachment-row-actions/index.vue'
-  import { replaceReactiveModel } from '@/utils/form/model'
   import { focusFirstInvalidFormField } from '@/utils/form/validation'
   import { useDraftAttachmentRemoval } from '@/hooks/core/useDraftAttachmentRemoval'
   import type { ComputedRef, Ref, UnwrapNestedRefs } from 'vue'
@@ -614,10 +601,13 @@
 
   const createInitialForm = createInitialVehicleArchiveForm
 
-  const form = reactive<VehicleArchiveForm>(createInitialForm())
+  const form = ref<VehicleArchiveForm>(createInitialForm())
   const documentTenantId = computed(
     () =>
-      form.tenantId ?? tenantScopeStore.effectiveTenantId ?? userStore.getUserInfo.tenantId ?? ''
+      form.value.tenantId ??
+      tenantScopeStore.effectiveTenantId ??
+      userStore.getUserInfo.tenantId ??
+      ''
   )
   const vehicleTypeContextKey = computed(
     () =>
@@ -626,18 +616,18 @@
   const uploadVehicleDocument = (file: File) =>
     uploadVehiclePrivateDocument(file, documentTenantId.value)
   watch(
-    () => form.purchaseDate,
+    () => form.value.purchaseDate,
     (date) => {
-      form.vehicleAgeDisplay = formatVehicleAge(date)
+      form.value.vehicleAgeDisplay = formatVehicleAge(date)
     },
     { immediate: true }
   )
-  const archiveNumber = useDocumentNumberRule('vehicle.archive_self', () => form.tenantId)
+  const archiveNumber = useDocumentNumberRule('vehicle.archive_self', () => form.value.tenantId)
 
   const canViewArchiveField = (field: Api.Vms.ArchiveManage.VehicleArchiveFieldKey): boolean =>
-    !isEdit.value || canViewField(form.fieldAccess, field)
+    !isEdit.value || canViewField(form.value.fieldAccess, field)
   const canEditArchiveField = (field: Api.Vms.ArchiveManage.VehicleArchiveFieldKey): boolean =>
-    !isEdit.value || canEditField(form.fieldAccess, field)
+    !isEdit.value || canEditField(form.value.fieldAccess, field)
   const canManageArchiveAttachments = computed(
     () => canEditArchiveField('documents') && hasAuth(savePermission.value)
   )
@@ -688,7 +678,8 @@
     vehicleType: [
       {
         validator: (_rule, _value, callback) => {
-          if (form.vehicleTypeProfileId || (isEdit.value && form.vehicleType)) callback()
+          if (form.value.vehicleTypeProfileId || (isEdit.value && form.value.vehicleType))
+            callback()
           else callback(new Error('请参选已配置的车型规格'))
         },
         trigger: 'change'
@@ -788,26 +779,26 @@
                 filterable: true,
                 placeholder: '默认平台租户，可选择其他所属租户',
                 onChange: (tenantId: string) => {
-                  form.companyName =
+                  form.value.companyName =
                     (tenantId === userStore.getUserInfo.tenantId
                       ? userStore.getUserInfo.tenant?.tenantName
                       : tenantScopeStore.tenantOptions.find((tenant) => tenant.id === tenantId)
                           ?.tenantName) ?? ''
-                  form.carrierId = null
-                  form.vehicleTypeProfileId = null
-                  form.vehicleType = ''
-                  form.primaryDriverId = null
-                  form.secondaryDriverId = null
-                  form.backupDriverIds = []
-                  form.backupDrivers = []
-                  form.vehiclePhotoUrl = ''
-                  form.drivingLicenseFrontUrl = ''
-                  form.drivingLicenseBackUrl = ''
-                  form.drivingLicenseBackReverseUrl = ''
-                  form.operationLicenseUrl = ''
-                  form.personVehiclePhotoUrl = ''
-                  form.vehicleHeadPhotoUrl = ''
-                  form.attachments = []
+                  form.value.carrierId = null
+                  form.value.vehicleTypeProfileId = null
+                  form.value.vehicleType = ''
+                  form.value.primaryDriverId = null
+                  form.value.secondaryDriverId = null
+                  form.value.backupDriverIds = []
+                  form.value.backupDrivers = []
+                  form.value.vehiclePhotoUrl = ''
+                  form.value.drivingLicenseFrontUrl = ''
+                  form.value.drivingLicenseBackUrl = ''
+                  form.value.drivingLicenseBackReverseUrl = ''
+                  form.value.operationLicenseUrl = ''
+                  form.value.personVehiclePhotoUrl = ''
+                  form.value.vehicleHeadPhotoUrl = ''
+                  form.value.attachments = []
                 }
               }
             }
@@ -833,29 +824,29 @@
           placeholder: '请选择所属承运商（选填）',
           onChange: (value?: string) => {
             if (!value) {
-              form.primaryDriverId = null
-              form.primaryDriver = null
-              form.primaryDriverName = ''
-              form.primaryDriverPhone = ''
-              form.secondaryDriverId = null
-              form.secondaryDriver = null
-              form.backupDriverIds = []
-              form.backupDrivers = []
-              form.secondaryDriverName = ''
-              form.secondaryDriverPhone = ''
+              form.value.primaryDriverId = null
+              form.value.primaryDriver = null
+              form.value.primaryDriverName = ''
+              form.value.primaryDriverPhone = ''
+              form.value.secondaryDriverId = null
+              form.value.secondaryDriver = null
+              form.value.backupDriverIds = []
+              form.value.backupDrivers = []
+              form.value.secondaryDriverName = ''
+              form.value.secondaryDriverPhone = ''
               driverCache.value = new Map()
               return
             }
-            form.primaryDriverId = null
-            form.primaryDriver = null
-            form.primaryDriverName = ''
-            form.primaryDriverPhone = ''
-            form.secondaryDriverId = null
-            form.secondaryDriver = null
-            form.backupDriverIds = []
-            form.backupDrivers = []
-            form.secondaryDriverName = ''
-            form.secondaryDriverPhone = ''
+            form.value.primaryDriverId = null
+            form.value.primaryDriver = null
+            form.value.primaryDriverName = ''
+            form.value.primaryDriverPhone = ''
+            form.value.secondaryDriverId = null
+            form.value.secondaryDriver = null
+            form.value.backupDriverIds = []
+            form.value.backupDrivers = []
+            form.value.secondaryDriverName = ''
+            form.value.secondaryDriverPhone = ''
             driverCache.value = new Map()
           }
         }
@@ -867,7 +858,7 @@
         type: 'input',
         props: {
           maxlength: 50,
-          ...archiveNumber.inputProps(Boolean(form.id), '可手工填写车辆自编号', true)
+          ...archiveNumber.inputProps(Boolean(form.value.id), '可手工填写车辆自编号', true)
         },
         description: archiveNumber.description.value
       },
@@ -1199,10 +1190,10 @@
         valueField: 'id',
         immediate: false,
         beforeFetch: () => ({
-          carrierId: form.carrierId ?? undefined,
+          carrierId: form.value.carrierId ?? undefined,
           driverType: 'primary'
         }),
-        shouldFetch: () => Boolean(form.carrierId),
+        shouldFetch: () => Boolean(form.value.carrierId),
         afterFetch: syncPrimaryDriverOptions,
         labelFn: (option: unknown) => {
           const driver = option as DriverOption
@@ -1211,22 +1202,23 @@
         props: {
           filterable: true,
           clearable: true,
-          disabled: !form.carrierId,
-          placeholder: form.carrierId ? '请选择主司机' : '请先选择所属承运商',
+          disabled: !form.value.carrierId,
+          placeholder: form.value.carrierId ? '请选择主司机' : '请先选择所属承运商',
           onVisibleChange: (visible: boolean) => {
-            if (visible && form.carrierId) void otherFormRef.value?.reloadOptions('primaryDriverId')
+            if (visible && form.value.carrierId)
+              void otherFormRef.value?.reloadOptions('primaryDriverId')
           },
           onChange: (value?: string) => {
             if (!value) {
-              form.primaryDriver = null
-              form.primaryDriverName = ''
-              form.primaryDriverPhone = ''
+              form.value.primaryDriver = null
+              form.value.primaryDriverName = ''
+              form.value.primaryDriverPhone = ''
               return
             }
             const driver = driverCache.value.get(value)
-            form.primaryDriver = driver ?? null
-            form.primaryDriverName = driver?.driverName ?? ''
-            form.primaryDriverPhone = driver?.phone ?? ''
+            form.value.primaryDriver = driver ?? null
+            form.value.primaryDriverName = driver?.driverName ?? ''
+            form.value.primaryDriverPhone = driver?.phone ?? ''
           }
         }
       },
@@ -1245,10 +1237,10 @@
         valueField: 'id',
         immediate: false,
         beforeFetch: () => ({
-          carrierId: form.carrierId ?? undefined,
+          carrierId: form.value.carrierId ?? undefined,
           driverType: 'secondary'
         }),
-        shouldFetch: () => Boolean(form.carrierId),
+        shouldFetch: () => Boolean(form.value.carrierId),
         afterFetch: syncSecondaryDriverOptions,
         labelFn: (option: unknown) => {
           const driver = option as DriverOption
@@ -1260,10 +1252,11 @@
           multiple: true,
           collapseTags: true,
           collapseTagsTooltip: true,
-          disabled: !form.carrierId,
-          placeholder: form.carrierId ? '请选择一名或多名备用司机' : '请先选择所属承运商',
+          disabled: !form.value.carrierId,
+          placeholder: form.value.carrierId ? '请选择一名或多名备用司机' : '请先选择所属承运商',
           onVisibleChange: (visible: boolean) => {
-            if (visible && form.carrierId) void otherFormRef.value?.reloadOptions('backupDriverIds')
+            if (visible && form.value.carrierId)
+              void otherFormRef.value?.reloadOptions('backupDriverIds')
           },
           onChange: (value?: string[]) => syncBackupDriverSelection(value ?? [])
         }
@@ -1314,35 +1307,37 @@
   }
 
   function getSelectedPrimaryDriver(): DriverOption | undefined {
-    if (!form.primaryDriverId) return undefined
+    if (!form.value.primaryDriverId) return undefined
     return (
-      driverCache.value.get(form.primaryDriverId) ??
-      (form.primaryDriver?.id === form.primaryDriverId ? form.primaryDriver : undefined)
+      driverCache.value.get(form.value.primaryDriverId) ??
+      (form.value.primaryDriver?.id === form.value.primaryDriverId
+        ? form.value.primaryDriver
+        : undefined)
     )
   }
 
   function getSelectedBackupDrivers(): DriverOption[] {
-    return (form.backupDriverIds ?? []).flatMap((id) => {
+    return (form.value.backupDriverIds ?? []).flatMap((id) => {
       const driver =
         driverCache.value.get(id) ??
-        form.backupDrivers?.find((item) => item.id === id) ??
-        (form.secondaryDriver?.id === id ? form.secondaryDriver : null)
+        form.value.backupDrivers?.find((item) => item.id === id) ??
+        (form.value.secondaryDriver?.id === id ? form.value.secondaryDriver : null)
       return driver ? [driver] : []
     })
   }
 
   function syncBackupDriverSelection(ids: string[]): void {
-    const nextIds = ids.filter((id) => id !== form.primaryDriverId)
+    const nextIds = ids.filter((id) => id !== form.value.primaryDriverId)
     if (nextIds.length !== ids.length) ElMessage.warning('主司机不能重复选为备用司机')
-    form.backupDriverIds = nextIds
-    form.backupDrivers = nextIds.flatMap((id) => {
+    form.value.backupDriverIds = nextIds
+    form.value.backupDrivers = nextIds.flatMap((id) => {
       const driver = driverCache.value.get(id)
       return driver ? [driver] : []
     })
-    form.secondaryDriverId = nextIds[0] ?? null
-    form.secondaryDriver = form.backupDrivers[0] ?? null
-    form.secondaryDriverName = form.secondaryDriver?.driverName ?? ''
-    form.secondaryDriverPhone = form.secondaryDriver?.phone ?? ''
+    form.value.secondaryDriverId = nextIds[0] ?? null
+    form.value.secondaryDriver = form.value.backupDrivers[0] ?? null
+    form.value.secondaryDriverName = form.value.secondaryDriver?.driverName ?? ''
+    form.value.secondaryDriverPhone = form.value.secondaryDriver?.phone ?? ''
   }
 
   function createDriverOption(driver: DriverOption): FormItemOption {
@@ -1365,7 +1360,7 @@
     canViewArchiveField('documents') ? certificateItems : []
   )
   const certificateFilledCount = computed(
-    () => visibleCertificateItems.value.filter((item) => Boolean(form[item.key])).length
+    () => visibleCertificateItems.value.filter((item) => Boolean(form.value[item.key])).length
   )
 
   type OcrField = keyof VehicleDocumentOcrResult['document']
@@ -1409,7 +1404,7 @@
       .map((field) => ({
         field,
         label: ocrFieldLabels[field],
-        current: String(form[field] ?? ''),
+        current: String(form.value[field] ?? ''),
         recognized: String(ocrResult.value?.document[field] ?? '')
       }))
   )
@@ -1422,7 +1417,7 @@
   const recognizeCertificate = async (
     key: 'drivingLicenseFrontUrl' | 'operationLicenseUrl'
   ): Promise<void> => {
-    const url = form[key]
+    const url = form.value[key]
     if (!url) {
       ocrError.value = '请先上传要识别的证照照片'
       return
@@ -1458,7 +1453,7 @@
   const recognizeCertificateLocally = async (
     key: 'drivingLicenseFrontUrl' | 'operationLicenseUrl'
   ): Promise<void> => {
-    const url = form[key]
+    const url = form.value[key]
     if (!url) {
       ocrError.value = '请先上传要识别的证照照片'
       return
@@ -1505,7 +1500,7 @@
       if (row.field === 'vehicleType') continue
       const access = ocrFieldAccess[row.field]
       if (access && !canEditArchiveField(access)) continue
-      if (!ocrReplaceExisting.value && form[row.field]) continue
+      if (!ocrReplaceExisting.value && form.value[row.field]) continue
       const value =
         row.field === 'operationType'
           ? options.operationType.find(
@@ -1513,10 +1508,10 @@
             )?.value
           : row.recognized
       if (!value) continue
-      form[row.field] = value
+      form.value[row.field] = value
       applied += 1
     }
-    if (applied && ocrResult.value.artifactId) form.aiArtifactId = ocrResult.value.artifactId
+    if (applied && ocrResult.value.artifactId) form.value.aiArtifactId = ocrResult.value.artifactId
     ElMessage.success(applied ? `已填入 ${applied} 个字段，请核对后保存` : '没有需要填入的字段')
     ocrReviewDialogRef.value?.handleClose()
   }
@@ -1624,11 +1619,11 @@
         })
         return
       }
-      form.companyName =
+      form.value.companyName =
         tenantScopeStore.selectedTenant?.tenantName ??
         userStore.getUserInfo.tenant?.tenantName ??
         ''
-      form.tenantId =
+      form.value.tenantId =
         tenantScopeStore.effectiveTenantId ?? userStore.getUserInfo.tenantId ?? undefined
       return
     }
@@ -1683,24 +1678,24 @@
   }
 
   const replaceForm = (nextForm: VehicleArchiveForm): void => {
-    Object.keys(form).forEach((key) => {
-      delete form[key as keyof VehicleArchive]
+    Object.keys(form.value).forEach((key) => {
+      delete form.value[key as keyof VehicleArchive]
     })
-    Object.assign(form, nextForm)
+    Object.assign(form.value, nextForm)
     if (nextForm.primaryDriver?.id) {
       driverCache.value.set(nextForm.primaryDriver.id, nextForm.primaryDriver)
-      form.primaryDriverName = nextForm.primaryDriver.driverName
-      form.primaryDriverPhone = nextForm.primaryDriver.phone ?? ''
+      form.value.primaryDriverName = nextForm.primaryDriver.driverName
+      form.value.primaryDriverPhone = nextForm.primaryDriver.phone ?? ''
     }
     if (nextForm.secondaryDriver?.id) {
       driverCache.value.set(nextForm.secondaryDriver.id, nextForm.secondaryDriver)
-      form.secondaryDriverName = nextForm.secondaryDriver.driverName
-      form.secondaryDriverPhone = nextForm.secondaryDriver.phone ?? ''
+      form.value.secondaryDriverName = nextForm.secondaryDriver.driverName
+      form.value.secondaryDriverPhone = nextForm.secondaryDriver.phone ?? ''
     }
     for (const driver of nextForm.backupDrivers ?? []) {
       driverCache.value.set(driver.id, driver)
     }
-    form.backupDriverIds = nextForm.backupDriverIds?.length
+    form.value.backupDriverIds = nextForm.backupDriverIds?.length
       ? [...nextForm.backupDriverIds]
       : nextForm.secondaryDriverId
         ? [nextForm.secondaryDriverId]
@@ -1730,7 +1725,7 @@
 
     page.saving = true
     try {
-      const payload = sanitizeVehicleArchivePayload(toRaw(form))
+      const payload = sanitizeVehicleArchivePayload(toRaw(form.value))
       if (isEdit.value) {
         await editVehicleArchive(payload, { showMessage: !submitForApproval })
         if (submitForApproval) {
@@ -1758,18 +1753,18 @@
   const openVehicleTypePicker = (): void => {
     void vehicleTypePickerRef.value?.handleOpen({
       vehicleId: isEdit.value ? String(route.params.id) : undefined,
-      carrierId: form.carrierId ?? undefined,
-      tenantId: form.tenantId,
-      selectedId: form.vehicleTypeProfileId
+      carrierId: form.value.carrierId ?? undefined,
+      tenantId: form.value.tenantId,
+      selectedId: form.value.vehicleTypeProfileId
     })
   }
 
   const handleVehicleTypeSelected = (profile: VehicleTypeProfile): void => {
-    form.vehicleTypeProfileId = profile.id
-    form.vehicleType = profile.category
-    form.specLengthM = profile.lengthM
-    form.volumeM3 = profile.volumeM3
-    form.loadTons = profile.loadTons
+    form.value.vehicleTypeProfileId = profile.id
+    form.value.vehicleType = profile.category
+    form.value.specLengthM = profile.lengthM
+    form.value.volumeM3 = profile.volumeM3
+    form.value.loadTons = profile.loadTons
     basicFormRef.value?.clearValidate()
   }
 
@@ -1777,7 +1772,7 @@
     const resource = resources[0]
     if (!resource) return
     if (!resource.url) return
-    if ((form.attachments ?? []).some((item) => item.url === resource.url)) {
+    if ((form.value.attachments ?? []).some((item) => item.url === resource.url)) {
       ElMessage.info('该附件已在当前记录中')
       return
     }
@@ -1788,17 +1783,17 @@
       fileType: getFileExtension(fileName, resource.suffix),
       fileSize: resource.sizeInfo
     }
-    form.attachments = [...(form.attachments ?? []), nextAttachment]
+    form.value.attachments = [...(form.value.attachments ?? []), nextAttachment]
     ElMessage.success('附件已添加')
   }
 
   const removeAttachment = useDraftAttachmentRemoval<ArchiveAttachment>({
-    getAttachments: () => form.attachments,
+    getAttachments: () => form.value.attachments,
     setAttachments: (rows) => {
-      form.attachments = rows
+      form.value.attachments = rows
     },
     canRemove: () => canManageArchiveAttachments.value,
-    getContext: () => [form.id, form.tenantId]
+    getContext: () => [form.value.id, form.value.tenantId]
   })
 
   const goBack = (): void => {

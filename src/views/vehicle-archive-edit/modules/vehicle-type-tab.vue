@@ -32,7 +32,7 @@
           <ArtSectionCard
             title="车型层级"
             subtitle="展开分类后选择具体规格"
-            root-class="vehicle-type-tab__tree-card"
+            root-class="vehicle-type-tab__tree-card p-0!"
             :show-scrollbar="false"
           >
             <template #actions>
@@ -169,16 +169,13 @@
                 <div class="vehicle-type-tab__form">
                   <ArtForm
                     ref="formRef"
-                    :model-value="form"
-                    @update:model-value="replaceReactiveModel(form, $event)"
+                    v-model="form"
                     :items="formItems"
                     :rules="rules"
                     :span="12"
                     :gutter="16"
                     label-position="top"
                     :disabled="!canEdit"
-                    :show-reset="false"
-                    :show-submit="false"
                   >
                     <template #lengthM>
                       <div class="vehicle-type-tab__metric-field">
@@ -292,7 +289,6 @@
 </template>
 
 <script setup lang="ts">
-  import { replaceReactiveModel } from '@/utils/form/model'
   import ArtEmptyState from '@/components/core/feedback/art-empty-state/index.vue'
   import {
     ElButton,
@@ -418,7 +414,7 @@
     remark: '',
     imageUrl: ''
   })
-  const form = reactive<ProfileForm>(initialForm())
+  const form = ref<ProfileForm>(initialForm())
   const canEdit = computed(() =>
     hasAuth(selectedId.value ? 'VehicleArchive:TypeEdit' : 'VehicleArchive:TypeAdd')
   )
@@ -562,7 +558,7 @@
       return
     }
     selectedId.value = undefined
-    Object.assign(form, initialForm(), {
+    Object.assign(form.value, initialForm(), {
       category,
       sort: Math.max(0, ...categoryProfiles(category).map((profile) => profile.sort)) + 10
     })
@@ -584,14 +580,14 @@
   }
 
   const applyPreset = (value: number): void => {
-    if (selectedCategory.value === '按载重') form.loadTons = value
-    else form.lengthM = value
+    if (selectedCategory.value === '按载重') form.value.loadTons = value
+    else form.value.lengthM = value
   }
 
   const selectProfile = (profile: VehicleTypeProfile): void => {
     selectedCategory.value = profile.category
     selectedId.value = profile.id
-    Object.assign(form, {
+    Object.assign(form.value, {
       category: profile.category,
       lengthM: profile.lengthM,
       volumeM3: profile.volumeM3,
@@ -697,15 +693,15 @@
           id: rowId,
           ...(isAllTenants.value ? { tenantId: row?.tenantId ?? context.tenantId } : {}),
           category,
-          lengthM: form.lengthM,
-          volumeM3: form.volumeM3,
-          loadTons: form.loadTons,
-          status: form.status,
-          sort: form.sort,
-          schemeColor: form.schemeColor || null,
-          tagStyle: form.tagStyle || null,
-          remark: form.remark || null,
-          imageUrl: form.imageUrl || null
+          lengthM: form.value.lengthM,
+          volumeM3: form.value.volumeM3,
+          loadTons: form.value.loadTons,
+          status: form.value.status,
+          sort: form.value.sort,
+          schemeColor: form.value.schemeColor || null,
+          tagStyle: form.value.tagStyle || null,
+          remark: form.value.remark || null,
+          imageUrl: form.value.imageUrl || null
         },
         { showMessage: false, showErrorMessage: false }
       )
@@ -875,7 +871,7 @@
       selectedId.value = undefined
       selectedCategory.value = '半挂车'
       expandedKeys.value = []
-      Object.assign(form, initialForm())
+      Object.assign(form.value, initialForm())
       formRef.value?.clearValidate()
       treeRef.value?.setExpandedKeys([])
       if (selectedTenantId.value) void loadProfiles()
@@ -953,12 +949,11 @@
     }
 
     &__tree-card {
-      --vehicle-tree-inline-padding: var(--art-section-padding);
+      --vehicle-tree-inline-padding: var(--art-space-2);
 
       display: flex;
       flex-direction: column;
       min-height: 0;
-      padding-right: 0;
 
       :deep(.art-section-card__header) {
         flex: none;
@@ -970,6 +965,10 @@
         flex: 1 1 auto;
         flex-direction: column;
         min-height: 0;
+      }
+
+      :deep(.el-tree-node) {
+        max-width: calc(100% - var(--vehicle-tree-inline-padding));
       }
     }
 
@@ -985,7 +984,7 @@
       align-items: center;
       width: 100%;
       min-width: 0;
-      padding-right: calc(var(--vehicle-tree-inline-padding) + 8px);
+      padding-right: 8px;
 
       :deep(.vehicle-type-art) {
         flex: none;
@@ -1239,12 +1238,6 @@
 
       &__preview {
         max-width: 260px;
-      }
-    }
-
-    @media (width <= 640px) {
-      &__tree-card {
-        --vehicle-tree-inline-padding: var(--art-space-4);
       }
     }
 

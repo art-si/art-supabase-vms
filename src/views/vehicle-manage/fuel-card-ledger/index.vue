@@ -74,139 +74,20 @@
             ></div
           >
         </div>
-        <dl
-          class="grid gap-4 rounded-[var(--el-border-radius-base)] border border-[var(--el-border-color-light)] p-5 sm:grid-cols-2"
-        >
-          <div
-            ><dt class="text-xs text-[var(--el-text-color-secondary)]">油卡状态</dt
-            ><dd class="mt-1"
-              ><ArtDictDisplay dict-code="fuelCardStatus" :value="selectedEntry.cardStatus" /></dd
-          ></div>
-          <div
-            ><dt class="text-xs text-[var(--el-text-color-secondary)]">流水时间</dt
-            ><dd class="mt-1 font-medium">{{
-              selectedEntry.occurredAt
-                ? formatWithDayjs(selectedEntry.occurredAt)
-                : selectedEntry.occurredOn
-            }}</dd></div
-          >
-          <div
-            ><dt class="text-xs text-[var(--el-text-color-secondary)]">关联运单</dt
-            ><dd class="mt-1 font-medium">{{ selectedEntry.waybillNo || '--' }}</dd></div
-          >
-          <div
-            ><dt class="text-xs text-[var(--el-text-color-secondary)]">燃油费用单</dt
-            ><dd class="mt-1 font-medium"
-              >{{ selectedEntry.sourceCostNo || '--' }}
-              <ElButton
-                v-if="selectedEntry.sourceCostId && hasAuth('FinanceWaybillCost:View')"
-                link
-                type="primary"
-                @click="openSourceCost(selectedEntry)"
-                >查看费用单</ElButton
-              ></dd
-            ></div
-          >
-          <div
-            ><dt class="text-xs text-[var(--el-text-color-secondary)]">所属公司</dt
-            ><dd class="mt-1 font-medium">{{ selectedEntry.companyName || '--' }}</dd></div
-          >
-          <div
-            ><dt class="text-xs text-[var(--el-text-color-secondary)]">本笔司机</dt
-            ><dd class="mt-1 font-medium">{{ selectedEntry.driverName || '--' }}</dd></div
-          >
-          <div
-            ><dt class="text-xs text-[var(--el-text-color-secondary)]">加油站</dt
-            ><dd class="mt-1 font-medium">{{ selectedEntry.stationName || '--' }}</dd></div
-          >
-          <div
-            ><dt class="text-xs text-[var(--el-text-color-secondary)]">发生地点</dt
-            ><dd class="mt-1 font-medium">{{ selectedEntry.expenseLocation || '--' }}</dd></div
-          >
-          <div
-            ><dt class="text-xs text-[var(--el-text-color-secondary)]">地点坐标</dt
-            ><dd class="mt-1 font-medium tabular-nums">
-              {{
-                selectedEntry.expenseCoordinateStatus === 'located'
-                  ? formatCoordinateValue(
-                      selectedEntry.expenseLongitude,
-                      selectedEntry.expenseLatitude
-                    )
-                  : '--'
-              }}
-              <span
-                v-if="selectedEntry.expenseCoordinateStatus === 'located'"
-                class="ml-1 text-xs font-normal text-[var(--el-text-color-secondary)]"
-              >
-                {{
-                  selectedEntry.expenseCoordinateSource === 'device_geolocation'
-                    ? '当前位置'
-                    : '地图选点'
-                }}
-              </span>
-            </dd></div
-          >
-          <div
-            ><dt class="text-xs text-[var(--el-text-color-secondary)]">加油升数</dt
-            ><dd class="mt-1 font-medium tabular-nums">{{ selectedEntry.liters ?? '--' }}</dd></div
-          >
-          <div
-            ><dt class="text-xs text-[var(--el-text-color-secondary)]">油价（元/升）</dt
-            ><dd class="mt-1 font-medium tabular-nums">{{
-              selectedEntry.unitPrice ?? '--'
-            }}</dd></div
-          >
-          <div
-            ><dt class="text-xs text-[var(--el-text-color-secondary)]">表显里程（公里）</dt
-            ><dd class="mt-1 font-medium tabular-nums">{{
-              selectedEntry.odometerKm ?? '--'
-            }}</dd></div
-          >
-          <div
-            ><dt class="text-xs text-[var(--el-text-color-secondary)]">本趟百公里油耗</dt
-            ><dd class="mt-1 font-medium tabular-nums">{{
-              selectedEntry.entryType !== 'consume'
-                ? '—'
-                : selectedEntry.tripFuelPer100Km == null
-                  ? '待核算：需完整运单里程、表显与余油'
-                  : `${selectedEntry.tripFuelPer100Km.toFixed(2)} L/100km`
-            }}</dd></div
-          >
-          <div
-            ><dt class="text-xs text-[var(--el-text-color-secondary)]">支付方式</dt
-            ><dd class="mt-1"
-              ><ArtDictDisplay
-                v-if="selectedEntry.paymentMethod"
-                dict-code="fuelCardPaymentMethod"
-                :value="selectedEntry.paymentMethod"
-              /><span v-else>--</span></dd
-            ></div
-          >
-          <div
-            ><dt class="text-xs text-[var(--el-text-color-secondary)]">充值渠道</dt
-            ><dd class="mt-1 font-medium">{{ selectedEntry.rechargeChannel || '--' }}</dd></div
-          >
-          <div
-            ><dt class="text-xs text-[var(--el-text-color-secondary)]">充值人</dt
-            ><dd class="mt-1 font-medium">{{
-              selectedEntry.rechargerEmployeeName || '--'
-            }}</dd></div
-          >
-          <div
-            ><dt class="text-xs text-[var(--el-text-color-secondary)]">发票号</dt
-            ><dd class="mt-1 font-medium">{{ selectedEntry.invoiceNo || '--' }}</dd></div
-          >
-          <div
-            ><dt class="text-xs text-[var(--el-text-color-secondary)]">业务凭证号</dt
-            ><dd class="mt-1 font-medium">{{ selectedEntry.referenceNo || '--' }}</dd></div
-          >
-          <div class="sm:col-span-2"
-            ><dt class="text-xs text-[var(--el-text-color-secondary)]">备注</dt
-            ><dd class="mt-1 whitespace-pre-wrap break-words">{{
-              selectedEntry.remark || '--'
-            }}</dd></div
-          >
-        </dl>
+        <ElTabs v-if="selectedEntry.entryType === 'consume'" v-model="activeDetailTab">
+          <ElTabPane name="transaction" label="流水信息">
+            <ArtDescriptions :data="selectedEntry" :items="transactionDetailItems" :columns="2" />
+          </ElTabPane>
+          <ElTabPane name="consumption" label="消费明细">
+            <ArtDescriptions :data="selectedEntry" :items="consumptionDetailItems" :columns="2" />
+          </ElTabPane>
+        </ElTabs>
+        <ArtDescriptions
+          v-else
+          :data="selectedEntry"
+          :items="transactionDetailItems"
+          :columns="2"
+        />
         <ArtSectionCard
           v-if="selectedEntry.voucherPaths.length"
           title="现场凭证"
@@ -259,6 +140,8 @@
     ArtTableQueryExcelColumn
   } from '@/components/core/tables/art-table-query/index.vue'
   import type { ColumnOption } from '@/types'
+  import ArtDescriptions from '@/components/core/base/art-descriptions/index.vue'
+  import type { ArtDescriptionItem } from '@/components/core/base/art-descriptions/types'
   import ArtDictDisplay from '@/components/core/base/art-dict-display/index.vue'
   import ArtDrawer from '@/components/core/drawers/art-drawer/index.vue'
   import type { ArtDrawerExpose } from '@/components/core/drawers/art-drawer/types'
@@ -308,6 +191,77 @@
   const statementDrawerRef = ref<{ handleOpen: () => Promise<void> }>()
   const detailRef = ref<ArtDrawerExpose<FuelCardEntry>>()
   const selectedEntry = ref<FuelCardEntry | null>(null)
+  const activeDetailTab = ref('transaction')
+  const transactionDetailItems: ArtDescriptionItem<FuelCardEntry>[] = [
+    { key: 'cardStatus', label: '油卡状态', field: 'cardStatus', dictCode: 'fuelCardStatus' },
+    {
+      key: 'occurredAt',
+      label: '流水时间',
+      value: (row: FuelCardEntry) =>
+        row.occurredAt ? formatWithDayjs(row.occurredAt) : row.occurredOn
+    },
+    { key: 'companyName', label: '所属公司', field: 'companyName' },
+    {
+      key: 'paymentMethod',
+      label: '支付方式',
+      field: 'paymentMethod',
+      dictCode: 'fuelCardPaymentMethod'
+    },
+    { key: 'rechargeChannel', label: '充值渠道', field: 'rechargeChannel' },
+    { key: 'rechargerEmployeeName', label: '充值人', field: 'rechargerEmployeeName' },
+    { key: 'invoiceNo', label: '发票号', field: 'invoiceNo' },
+    { key: 'referenceNo', label: '业务凭证号', field: 'referenceNo' },
+    {
+      key: 'remark',
+      label: '备注',
+      field: 'remark',
+      span: 2,
+      className: 'whitespace-pre-wrap break-words'
+    }
+  ]
+  const consumptionDetailItems: ArtDescriptionItem<FuelCardEntry>[] = [
+    { key: 'waybillNo', label: '关联运单', field: 'waybillNo' },
+    {
+      key: 'sourceCostNo',
+      label: '燃油费用单',
+      field: 'sourceCostNo',
+      render: (value, row) => (
+        <span>
+          {String(value || '--')}
+          {row.sourceCostId && hasAuth('FinanceWaybillCost:View') && (
+            <ElButton link type="primary" onClick={() => openSourceCost(row)}>
+              查看费用单
+            </ElButton>
+          )}
+        </span>
+      )
+    },
+    { key: 'driverName', label: '本笔司机', field: 'driverName' },
+    { key: 'stationName', label: '加油站', field: 'stationName' },
+    { key: 'expenseLocation', label: '发生地点', field: 'expenseLocation', span: 2 },
+    {
+      key: 'expenseCoordinates',
+      label: '地点坐标',
+      span: 2,
+      value: (row: FuelCardEntry) =>
+        row.expenseCoordinateStatus === 'located'
+          ? formatCoordinateValue(row.expenseLongitude, row.expenseLatitude) +
+            ' · ' +
+            (row.expenseCoordinateSource === 'device_geolocation' ? '当前位置' : '地图选点')
+          : '--'
+    },
+    { key: 'liters', label: '加油升数', field: 'liters' },
+    { key: 'unitPrice', label: '油价（元/升）', field: 'unitPrice' },
+    { key: 'odometerKm', label: '表显里程（公里）', field: 'odometerKm' },
+    {
+      key: 'tripFuelPer100Km',
+      label: '本趟百公里油耗',
+      value: (row: FuelCardEntry) =>
+        row.tripFuelPer100Km == null
+          ? '待核算：需完整运单里程、表显与余油'
+          : row.tripFuelPer100Km.toFixed(2) + ' L/100km'
+    }
+  ]
   const voucherPreviews = ref<string[]>([])
   const voucherThumbs = ref<Record<string, string>>({})
   let voucherThumbRequest = 0
@@ -693,6 +647,7 @@
     }
   }
   const openDetail = async (entry: FuelCardEntry): Promise<void> => {
+    activeDetailTab.value = 'transaction'
     selectedEntry.value = entry
     voucherPreviews.value = []
     voucherError.value = ''

@@ -8,8 +8,6 @@
       :rules="form.rules"
       :span="12"
       label-width="104px"
-      :show-reset="false"
-      :show-submit="false"
     >
       <template #partId>
         <ArtTableSingleSelect

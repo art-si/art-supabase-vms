@@ -16,8 +16,6 @@
       :rules="form.rules"
       :span="12"
       label-width="102px"
-      :show-reset="false"
-      :show-submit="false"
     >
       <template #vehicleId>
         <ArtTableSingleSelect
@@ -54,107 +52,78 @@
               <span class="art-icon-label"><ArtSvgIcon icon="ri:add-line" />添加明细</span>
             </ElButton>
           </div>
-          <div
-            v-for="(line, index) in form.data.lines"
-            :key="line.key"
-            class="rounded-[var(--el-border-radius-base)] border border-[var(--el-border-color-light)] bg-[var(--el-fill-color-extra-light)] p-4"
+          <ArtTable
+            ref="lineTableRef"
+            :data="form.data.lines"
+            :columns="lineColumns"
+            row-key="key"
+            :pagination="false"
+            :height="form.data.lines.length > 3 ? 380 : 'auto'"
           >
-            <div class="flex items-center justify-between gap-3">
-              <strong class="text-sm">领用明细 {{ index + 1 }}</strong>
-              <ElButton
-                v-if="form.data.lines.length > 1"
-                type="danger"
-                text
-                :aria-label="`移除领用明细 ${index + 1}`"
-                @click="removeLine(line.key)"
-                >移除</ElButton
+            <template #partId="{ row }">
+              <ElSelect
+                v-model="row.partId"
+                filterable
+                class="w-full"
+                placeholder="请选择库存配件"
+                aria-label="物料描述"
+                @change="handleLinePartChange(row)"
               >
-            </div>
-            <div class="mt-3 grid min-w-0 gap-3 md:grid-cols-2">
-              <div class="min-w-0 md:col-span-2">
-                <label
-                  class="mb-1 block text-xs text-[var(--el-text-color-secondary)]"
-                  :for="`part-${line.key}`"
-                  >物料描述 <span class="text-[var(--el-color-danger)]">*</span></label
-                >
-                <ElSelect
-                  :id="`part-${line.key}`"
-                  v-model="line.partId"
-                  filterable
-                  class="w-full"
-                  placeholder="请选择库存配件"
-                  @change="handleLinePartChange(line)"
-                >
-                  <ElOption
-                    v-for="part in availableParts"
-                    :key="part.partId"
-                    :value="part.partId"
-                    :label="`${part.partName} · ${part.partCode}`"
-                    :disabled="part.stockQty <= 0"
-                  />
-                </ElSelect>
-              </div>
-              <div
-                class="min-w-0 rounded-[var(--el-border-radius-base)] bg-[var(--el-fill-color-light)] px-3 py-2 text-xs text-[var(--el-text-color-secondary)] md:col-span-2"
-              >
-                <span>物料编码 {{ selectedPart(line)?.partCode || '--' }}</span>
-                <span class="mx-3">规格型号 {{ selectedPart(line)?.model || '--' }}</span>
-                <span>品牌 {{ selectedPart(line)?.brand || '--' }}</span>
-                <span class="ml-3"
-                  >可用库存 {{ selectedPart(line)?.stockQty ?? '--' }}
-                  {{ selectedPart(line)?.unit || '' }}</span
-                >
-              </div>
-              <div class="min-w-0">
-                <label
-                  class="mb-1 block text-xs text-[var(--el-text-color-secondary)]"
-                  :for="`qty-${line.key}`"
-                  >领用数量 <span class="text-[var(--el-color-danger)]">*</span></label
-                >
-                <ElInputNumber
-                  :id="`qty-${line.key}`"
-                  v-model="line.issuedQty"
-                  :min="1"
-                  :precision="0"
-                  :max="selectedPart(line)?.stockQty || undefined"
-                  :controls="false"
-                  class="w-full!"
+                <ElOption
+                  v-for="part in availableParts"
+                  :key="part.partId"
+                  :value="part.partId"
+                  :label="`${part.partName} · ${part.partCode}`"
+                  :disabled="part.stockQty <= 0"
                 />
-              </div>
-              <div class="min-w-0">
-                <label
-                  class="mb-1 block text-xs text-[var(--el-text-color-secondary)]"
-                  :for="`date-${line.key}`"
-                  >领用时间 <span class="text-[var(--el-color-danger)]">*</span></label
-                >
-                <ElDatePicker
-                  :id="`date-${line.key}`"
-                  v-model="line.issuedAt"
-                  type="datetime"
-                  value-format="YYYY-MM-DD HH:mm:ss"
-                  class="w-full!"
-                />
-              </div>
-            </div>
-            <div class="mt-3 border-t border-[var(--el-border-color-lighter)] pt-3">
-              <span class="mb-2 block text-xs text-[var(--el-text-color-secondary)]"
-                >配件照片（选填）</span
+              </ElSelect>
+              <p class="mt-1 text-xs text-g-700"
+                >{{ selectedPart(row)?.model || '—' }} · {{ selectedPart(row)?.brand || '—' }} ·
+                库存 {{ selectedPart(row)?.stockQty ?? '—' }} {{ selectedPart(row)?.unit || '' }}</p
               >
-              <ArtUploadImage
-                v-model="line.imageUrl"
+            </template>
+            <template #issuedQty="{ row }"
+              ><ElInputNumber
+                v-model="row.issuedQty"
+                :min="1"
+                :precision="0"
+                :max="selectedPart(row)?.stockQty || undefined"
+                :controls="false"
+                class="w-full!"
+                aria-label="领用数量"
+            /></template>
+            <template #issuedAt="{ row }"
+              ><ElDatePicker
+                v-model="row.issuedAt"
+                type="datetime"
+                value-format="YYYY-MM-DD HH:mm:ss"
+                class="w-full!"
+                aria-label="领用时间"
+            /></template>
+            <template #imageUrl="{ row }"
+              ><ArtUploadImage
+                v-model="row.imageUrl"
                 :resource-tenant-id="selectedVehicleTenantId"
-                :title="`领用明细 ${index + 1} 配件照片`"
-                :size="88"
+                title="配件照片"
+                :size="72"
                 :limit="1"
                 :file-size="8 * 1024 * 1024"
                 file-type="image/png,image/jpeg,image/webp"
                 :upload-request="uploadPartImage"
                 :show-resource-picker="false"
                 :readonly="!selectedVehicleTenantId"
-              />
-            </div>
-          </div>
-          <ElAlert v-if="lineError" :title="lineError" type="warning" :closable="false" show-icon />
+            /></template>
+            <template #operation="{ row }"
+              ><ElButton
+                v-if="form.data.lines.length > 1"
+                type="danger"
+                text
+                aria-label="移除领用明细"
+                @click="removeLine(row.key)"
+                >移除</ElButton
+              ></template
+            >
+          </ArtTable>
         </div>
       </template>
     </ArtForm>
@@ -164,12 +133,22 @@
 <script setup lang="ts">
   import dayjs from 'dayjs'
   import type { FormRules } from 'element-plus'
-  import { ElAlert, ElButton, ElDatePicker, ElInputNumber, ElOption, ElSelect } from 'element-plus'
+  import {
+    ElAlert,
+    ElButton,
+    ElDatePicker,
+    ElInputNumber,
+    ElMessage,
+    ElOption,
+    ElSelect
+  } from 'element-plus'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
+  import ArtTable, { type ArtTableExpose } from '@/components/core/tables/art-table/index.vue'
+  import type { ColumnOption } from '@/types'
   import ArtUploadImage from '@/components/core/forms/art-upload-image/index.vue'
   import ArtTableSingleSelect from '@/components/core/forms/art-data-select/table-single.vue'
   import type {
@@ -216,9 +195,35 @@
   const emit = defineEmits<{ success: [] }>()
   const dialogRef = ref<ArtDialogExpose>()
   const formRef = ref<{ validate: () => Promise<boolean>; clearValidate: () => void }>()
+  const lineTableRef = ref<ArtTableExpose<IssueLineForm>>()
+  const lineColumns: ColumnOption<IssueLineForm>[] = [
+    { type: 'index', label: '#', width: 48 },
+    {
+      prop: 'partId',
+      label: '物料描述',
+      minWidth: 240,
+      useSlot: true,
+      required: true,
+      headerTooltip: '从库存中选择配件，规格、品牌和可用库存自动显示。'
+    },
+    {
+      prop: 'issuedQty',
+      label: '领用数量',
+      width: 130,
+      useSlot: true,
+      required: true,
+      headerTooltip: '至少领用 1 件；同一配件多行的合计数量不能超过库存。',
+      rules: {
+        validator: ({ value }) => Number.isInteger(value) && Number(value) >= 1,
+        message: ({ rowIndex }) => `第 ${rowIndex + 1} 行领用数量必须为大于 0 的整数`
+      }
+    },
+    { prop: 'issuedAt', label: '领用时间', minWidth: 220, useSlot: true, required: true },
+    { prop: 'imageUrl', label: '配件照片', width: 110, useSlot: true },
+    { prop: 'operation', label: '操作', width: 78, fixed: 'right', useSlot: true }
+  ]
   const availableParts = ref<VehiclePartStock[]>([])
   const stockError = ref(false)
-  const lineError = ref('')
   const selectedVehicleTenantId = ref('')
   let idempotencyKey = crypto.randomUUID()
   const newLine = (): IssueLineForm => ({
@@ -294,21 +299,21 @@
   const handleLinePartChange = (line: IssueLineForm): void => {
     const stock = selectedPart(line)
     if (stock && line.issuedQty > stock.stockQty) line.issuedQty = stock.stockQty
-    lineError.value = ''
   }
   const addLine = (): void => {
     form.data.lines.push(newLine())
   }
   const removeLine = (key: string): void => {
     form.data.lines = form.data.lines.filter((line) => line.key !== key)
-    lineError.value = ''
   }
-  const validateLines = (): boolean => {
-    if (
-      !form.data.lines.length ||
-      form.data.lines.some((line) => !line.partId || !line.issuedAt || line.issuedQty < 1)
-    ) {
-      lineError.value = '请为每条领用明细选择配件、数量和时间'
+  const validateLines = async (): Promise<boolean> => {
+    if (!form.data.lines.length) {
+      ElMessage.warning('请至少添加一条领用明细')
+      return false
+    }
+    const validation = await lineTableRef.value?.validate()
+    if (!validation?.valid) {
+      if (validation?.firstError) ElMessage.warning(validation.firstError.message)
       return false
     }
     const requested = new Map<string, number>()
@@ -317,15 +322,14 @@
     for (const [partId, qty] of requested) {
       const stock = availableParts.value.find((part) => part.partId === partId)
       if (!stock || qty > stock.stockQty) {
-        lineError.value = `领用数量超过“${stock?.partName || '所选配件'}”当前库存，请调整后重试`
+        ElMessage.warning(`领用数量超过“${stock?.partName || '所选配件'}”当前库存，请调整后重试`)
         return false
       }
     }
-    lineError.value = ''
     return true
   }
   const handleConfirm = async (): Promise<boolean> => {
-    if (!(await validateArtFormForSubmit(formRef.value)) || !validateLines()) return false
+    if (!(await validateArtFormForSubmit(formRef.value)) || !(await validateLines())) return false
     try {
       await createVehiclePartIssue({
         vehicleId: form.data.vehicleId,
@@ -352,7 +356,6 @@
     Object.assign(form.data, initialForm())
     form.vehicleSelection = []
     selectedVehicleTenantId.value = ''
-    lineError.value = ''
     stockError.value = false
     idempotencyKey = crypto.randomUUID()
     try {

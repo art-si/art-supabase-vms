@@ -6,15 +6,13 @@
 
     <ArtForm
       ref="formRef"
-      :model-value="form"
-      @update:model-value="replaceReactiveModel(form, $event)"
+      v-model:active-tab="activeTab"
+      v-model="form"
       :items="items"
       :rules="rules"
       :span="12"
       :gutter="20"
       label-width="110px"
-      :show-reset="false"
-      :show-submit="false"
     />
   </ArtDialog>
 </template>
@@ -40,6 +38,7 @@
   }
 
   const emit = defineEmits<Emits>()
+  const activeTab = ref('basicSection')
   const dialogRef = ref<ArtDialogExpose<Parts | undefined>>()
   const formRef = ref<{
     validate: () => Promise<boolean>
@@ -69,8 +68,8 @@
     remark: ''
   })
 
-  const form = reactive<Parts>(createInitialForm())
-  const partNumber = useDocumentNumberRule('vehicle.part', () => form.tenantId)
+  const form = ref<Parts>(createInitialForm())
+  const partNumber = useDocumentNumberRule('vehicle.part', () => form.value.tenantId)
 
   const rules = computed<FormRules<Parts>>(() => ({
     partName: [
@@ -78,7 +77,7 @@
       { min: 2, max: 100, message: '长度应为 2 到 100 个字符', trigger: 'blur' }
     ],
     partCode: [
-      ...(partNumber.manualRequired(Boolean(form.id))
+      ...(partNumber.manualRequired(Boolean(form.value.id))
         ? [{ required: true, message: '请输入零部件编码', trigger: 'blur' as const }]
         : []),
       {
@@ -100,7 +99,7 @@
     {
       label: '基础信息',
       key: 'basicSection',
-      type: 'divider',
+      type: 'tab',
       span: 24
     },
     {
@@ -117,7 +116,7 @@
       type: 'input',
       props: {
         maxlength: 60,
-        ...partNumber.inputProps(Boolean(form.id), '如 ENG-IN-001', true)
+        ...partNumber.inputProps(Boolean(form.value.id), '如 ENG-IN-001', true)
       },
       description: partNumber.description.value
     },
@@ -175,7 +174,7 @@
     {
       label: '质保与寿命',
       key: 'lifeSection',
-      type: 'divider',
+      type: 'tab',
       span: 24
     },
     {
@@ -225,7 +224,7 @@
     {
       label: '供应信息',
       key: 'supplierSection',
-      type: 'divider',
+      type: 'tab',
       span: 24
     },
     {
@@ -286,7 +285,7 @@
     }))
 
   const resetForm = async (): Promise<void> => {
-    replaceReactiveModel(form, createInitialForm())
+    replaceReactiveModel(form.value, createInitialForm())
     await nextTick()
     formRef.value?.clearValidate()
   }
@@ -300,7 +299,7 @@
     }
 
     try {
-      const source = toRaw(form)
+      const source = toRaw(form.value)
       const payload: Parts = {
         id: source.id,
         ...(!source.id ? { tenantId: source.tenantId } : {}),
@@ -321,12 +320,12 @@
         status: source.status,
         remark: source.remark
       }
-      if (form.id) {
+      if (form.value.id) {
         await editParts(payload)
       } else {
         await addParts(payload)
       }
-      emit('success', form.id ? 'edit' : 'add')
+      emit('success', form.value.id ? 'edit' : 'add')
       return true
     } catch (error) {
       notifyFriendlyError(error, '配件档案保存失败，请检查填写内容后重试')
@@ -335,10 +334,11 @@
   }
 
   const handleOpen = async (row?: Parts): Promise<void> => {
+    activeTab.value = 'basicSection'
     await resetForm()
     const isEdit = !!row?.id
     if (isEdit) {
-      replaceReactiveModel(form, {
+      replaceReactiveModel(form.value, {
         ...createInitialForm(),
         ...(structuredClone(toRaw(row)) as Parts)
       })

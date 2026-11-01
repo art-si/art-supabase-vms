@@ -7,14 +7,13 @@
     <div class="accident-record-dialog">
       <ArtForm
         ref="formRef"
+        v-model:active-tab="activeTab"
         v-model="form.data"
         :items="form.items"
         :rules="form.rules"
         :span="12"
         :gutter="20"
         label-width="120px"
-        :show-reset="false"
-        :show-submit="false"
       >
         <template #vehicleId>
           <ArtTableSingleSelect
@@ -59,30 +58,32 @@
             @address-change="handleLocationChange"
           />
         </template>
-      </ArtForm>
 
-      <section v-if="canViewDocuments" class="accident-record-dialog__section">
-        <div class="accident-record-dialog__section-header">
-          <ArtSectionTitle :show-line="false">事故附件</ArtSectionTitle>
-          <ElButton
-            v-if="canEditDocuments"
-            type="primary"
-            plain
-            :disabled="!attachmentTenantId"
-            :title="!attachmentTenantId ? '请先选择车辆' : undefined"
-            @click="openAttachmentDialog"
-          >
-            <template #icon><ArtSvgIcon icon="ri:upload-2-line" /></template>
-            上传
-          </ElButton>
-        </div>
-        <VehicleAttachmentTable
-          :attachments="form.data.attachments ?? []"
-          name-label="事故附件名称"
-          :removable="canEditDocuments"
-          @remove="removeAttachment"
-        />
-      </section>
+        <template #accidentAttachments>
+          <section v-if="canViewDocuments" class="accident-record-dialog__section">
+            <div class="accident-record-dialog__section-header">
+              <ArtSectionTitle :show-line="false">事故附件</ArtSectionTitle>
+              <ElButton
+                v-if="canEditDocuments"
+                type="primary"
+                plain
+                :disabled="!attachmentTenantId"
+                :title="!attachmentTenantId ? '请先选择车辆' : undefined"
+                @click="openAttachmentDialog"
+              >
+                <template #icon><ArtSvgIcon icon="ri:upload-2-line" /></template>
+                上传
+              </ElButton>
+            </div>
+            <VehicleAttachmentTable
+              :attachments="form.data.attachments ?? []"
+              name-label="事故附件名称"
+              :removable="canEditDocuments"
+              @remove="removeAttachment"
+            />
+          </section>
+        </template>
+      </ArtForm>
     </div>
   </ArtDialog>
 
@@ -95,8 +96,6 @@
         :rules="attachment.rules"
         :span="24"
         label-width="150px"
-        :show-reset="false"
-        :show-submit="false"
       >
         <template #file>
           <div class="accident-attachment-dialog__upload">
@@ -190,6 +189,7 @@
     'vehicleRecordProcessed',
     (value) => value === 'true'
   )
+  const activeTab = ref('baseSection')
   const dialogRef = ref<ArtDialogExpose<AccidentRecord | undefined>>()
   const attachmentDialogRef = ref<ArtDialogExpose<void>>()
   const formRef = ref<FormExpose>()
@@ -266,7 +266,7 @@
     vehicleSelection: [],
     items: computed<FormItem[]>(() => {
       const items: FormItem[] = [
-        { label: '基础信息', key: 'baseSection', type: 'divider', span: 24 },
+        { label: '基础信息', key: 'baseSection', type: 'tab', span: 24 },
         { label: '车牌号', key: 'vehicleId', span: 12 },
         { label: '所属公司', key: 'companyName', type: 'input', props: { disabled: true } },
         {
@@ -294,7 +294,7 @@
           span: 24,
           props: { type: 'textarea', rows: 3, maxlength: 500, showWordLimit: true }
         },
-        { label: '责任及处理', key: 'processSection', type: 'divider', span: 24 },
+        { label: '责任及处理', key: 'processSection', type: 'tab', span: 24 },
         { label: '事故等级', key: 'damageLevel', type: 'input', props: { maxlength: 50 } },
         {
           label: '责任类型',
@@ -346,7 +346,14 @@
           type: 'input',
           span: 24,
           props: { type: 'textarea', rows: 3, maxlength: 500, showWordLimit: true }
-        }
+        },
+        {
+          key: 'accidentAttachmentsSection',
+          label: '事故附件',
+          type: 'tab',
+          hidden: !canViewDocuments.value
+        },
+        { key: 'accidentAttachments', label: '', type: 'slot', span: 24 }
       ]
       return items
         .filter((item) => {
@@ -526,6 +533,7 @@
   }
 
   const handleOpen = async (row?: AccidentRecord): Promise<void> => {
+    activeTab.value = 'baseSection'
     await resetForm()
     if (row?.id) replaceForm(row)
 

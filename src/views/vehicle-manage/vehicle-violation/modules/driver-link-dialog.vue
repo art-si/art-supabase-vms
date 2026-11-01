@@ -1,13 +1,6 @@
 <template>
   <ArtDialog ref="dialogRef" size="sm">
-    <ArtForm
-      v-model="form"
-      :items="items"
-      :span="24"
-      label-width="100px"
-      :show-reset="false"
-      :show-submit="false"
-    >
+    <ArtForm v-model="form" :items="items" :span="24" label-width="100px">
       <template #driverId>
         <VmsDriverSelect
           :model-value="form.driverId"

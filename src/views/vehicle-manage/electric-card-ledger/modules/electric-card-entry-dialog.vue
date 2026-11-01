@@ -7,13 +7,12 @@
     }}</template>
     <ArtForm
       ref="formRef"
+      v-model:active-tab="activeTab"
       v-model="form"
       :items="formItems"
       :rules="formRules"
       :span="12"
       label-width="118px"
-      :show-reset="false"
-      :show-submit="false"
     >
       <template #cardId>
         <ArtTableSingleSelect
@@ -75,6 +74,27 @@
           show-locate-button
         />
       </template>
+      <template #transactionVoucher>
+        <div class="mt-4 border-t border-[var(--el-border-color-lighter)] pt-4">
+          <span class="mb-2 block text-sm font-medium">现场凭证</span>
+          <ArtUploadImage
+            v-model="voucherUrls"
+            :resource-tenant-id="selectedCard?.tenantId || ''"
+            title="现场凭证"
+            :size="88"
+            multiple
+            :limit="5"
+            :file-size="8 * 1024 * 1024"
+            file-type="image/png,image/jpeg,image/webp"
+            :upload-request="uploadVoucher"
+            :show-resource-picker="false"
+            :readonly="!selectedCard"
+          />
+          <p class="mt-2 text-xs text-[var(--el-text-color-secondary)]"
+            >可上传充电小票、充值凭证等照片，最多 5 张。</p
+          >
+        </div>
+      </template>
     </ArtForm>
     <ElAlert
       v-if="action === 'consume'"
@@ -84,25 +104,6 @@
       show-icon
       title="充电数与电价用于核对，实际扣款以消费金额为准。"
     />
-    <div class="mt-4 border-t border-[var(--el-border-color-lighter)] pt-4">
-      <span class="mb-2 block text-sm font-medium">现场凭证</span>
-      <ArtUploadImage
-        v-model="voucherUrls"
-        :resource-tenant-id="selectedCard?.tenantId || ''"
-        title="现场凭证"
-        :size="88"
-        multiple
-        :limit="5"
-        :file-size="8 * 1024 * 1024"
-        file-type="image/png,image/jpeg,image/webp"
-        :upload-request="uploadVoucher"
-        :show-resource-picker="false"
-        :readonly="!selectedCard"
-      />
-      <p class="mt-2 text-xs text-[var(--el-text-color-secondary)]"
-        >可上传充电小票、充值凭证等照片，最多 5 张。</p
-      >
-    </div>
   </ArtDialog>
 </template>
 
@@ -167,6 +168,7 @@
   }
 
   const emit = defineEmits<{ success: [] }>()
+  const activeTab = ref('transactionSection')
   const dialogRef = ref<ArtDialogExpose<void>>()
   const formRef = ref<FormExpose>()
   const action = ref<Action>('recharge')
@@ -262,6 +264,9 @@
       maxBytes: 8 * 1024 * 1024
     })
   const formItems = computed<FormItem[]>(() => [
+    ...(action.value === 'consume'
+      ? [{ key: 'transactionSection', label: '流水信息', type: 'tab' } satisfies FormItem]
+      : []),
     { label: '电卡', key: 'cardId', span: 24 },
     { label: '当前余额', key: 'currentBalance', span: 12 },
     { label: '绑定司机', key: 'driverName', span: 12 },
@@ -294,6 +299,7 @@
           { label: '发票号', key: 'invoiceNo', type: 'input', props: { maxlength: 80 } }
         ] satisfies FormItem[])
       : ([
+          { key: 'consumptionSection', label: '充电与凭证', type: 'tab' },
           { label: '关联运单', key: 'waybillId' },
           {
             label: '充电站',
@@ -327,7 +333,8 @@
       type: 'input',
       span: 24,
       props: { type: 'textarea', rows: 3, maxlength: 500, showWordLimit: true }
-    }
+    },
+    { key: 'transactionVoucher', label: '', type: 'slot', span: 24 }
   ])
   const formRules: FormRules<EntryForm> = {
     cardId: [{ required: true, message: '请选择电卡', trigger: 'change' }],
@@ -410,6 +417,7 @@
     }
   }
   const handleOpen = async (type: Action, card?: ElectricCard): Promise<void> => {
+    activeTab.value = 'transactionSection'
     action.value = type
     Object.assign(form, {
       cardId: card?.id || '',

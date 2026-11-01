@@ -37,8 +37,6 @@
       :rules="formRules"
       :span="24"
       label-width="110px"
-      :show-reset="false"
-      :show-submit="false"
     >
       <template #vehicleId>
         <span v-if="editingCard" class="font-medium">{{ editingCard.plateNo }}</span>

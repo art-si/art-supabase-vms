@@ -7,14 +7,13 @@
     <div class="routine-inspection-dialog">
       <ArtForm
         ref="formRef"
+        v-model:active-tab="activeTab"
         v-model="form.data"
         :items="form.items"
         :rules="form.rules"
         :span="12"
         :gutter="20"
         label-width="120px"
-        :show-reset="false"
-        :show-submit="false"
       >
         <template #vehicleId>
           <ArtTableSingleSelect
@@ -44,33 +43,34 @@
             @change="handleDriverChange"
           />
         </template>
-      </ArtForm>
-
-      <section
-        v-if="canViewField(currentFieldAccess, 'documents')"
-        class="routine-inspection-dialog__section"
-      >
-        <div class="routine-inspection-dialog__section-header">
-          <ArtSectionTitle :show-line="false">例检附件</ArtSectionTitle>
-          <ElButton
-            v-if="canEditField(currentFieldAccess, 'documents')"
-            type="primary"
-            plain
-            :disabled="!attachmentTenantId"
-            :title="!attachmentTenantId ? '请先选择车辆' : undefined"
-            @click="openAttachmentDialog"
+        <template #inspectionAttachments>
+          <section
+            v-if="canViewField(currentFieldAccess, 'documents')"
+            class="routine-inspection-dialog__section"
           >
-            <template #icon><ArtSvgIcon icon="ri:upload-2-line" /></template>
-            上传
-          </ElButton>
-        </div>
-        <VehicleAttachmentTable
-          :attachments="form.data.attachments ?? []"
-          :name-min-width="180"
-          :removable="canEditField(currentFieldAccess, 'documents')"
-          @remove="removeAttachment"
-        />
-      </section>
+            <div class="routine-inspection-dialog__section-header">
+              <ArtSectionTitle :show-line="false">例检附件</ArtSectionTitle>
+              <ElButton
+                v-if="canEditField(currentFieldAccess, 'documents')"
+                type="primary"
+                plain
+                :disabled="!attachmentTenantId"
+                :title="!attachmentTenantId ? '请先选择车辆' : undefined"
+                @click="openAttachmentDialog"
+              >
+                <template #icon><ArtSvgIcon icon="ri:upload-2-line" /></template>
+                上传
+              </ElButton>
+            </div>
+            <VehicleAttachmentTable
+              :attachments="form.data.attachments ?? []"
+              :name-min-width="180"
+              :removable="canEditField(currentFieldAccess, 'documents')"
+              @remove="removeAttachment"
+            />
+          </section>
+        </template>
+      </ArtForm>
     </div>
   </ArtDialog>
 
@@ -83,8 +83,6 @@
         :rules="attachment.rules"
         :span="24"
         label-width="140px"
-        :show-reset="false"
-        :show-submit="false"
       >
         <template #file>
           <div class="routine-attachment-dialog__upload">
@@ -169,6 +167,7 @@
   const emit = defineEmits<Emits>()
   const inspectionTypeOptions = useDictionaryOptions('vehicleRoutineInspectionType')
   const inspectionResultOptions = useDictionaryOptions('vehicleRoutineInspectionResult')
+  const activeTab = ref('baseSection')
   const dialogRef = ref<ArtDialogExpose<RoutineInspection | undefined>>()
   const attachmentDialogRef = ref<ArtDialogExpose<void>>()
   const formRef = ref<FormExpose>()
@@ -177,6 +176,12 @@
   const attachmentFormRef = ref<FormExpose>()
   const currentFieldAccess = computed(() =>
     form.data.id ? (form.data.fieldAccess ?? {}) : EDITABLE_VEHICLE_ROUTINE_INSPECTION_ACCESS
+  )
+  const hasFindingsWorkspace = computed(
+    () =>
+      canViewField(currentFieldAccess.value, 'documents') ||
+      (canViewField(currentFieldAccess.value, 'inspectionFindings') &&
+        canViewField(currentFieldAccess.value, 'remediationDetails'))
   )
   const attachmentTenantId = computed(
     () => form.data.tenantId || tenantScopeStore.effectiveTenantId || ''
@@ -210,7 +215,9 @@
     data: createInitialForm(),
     vehicleSelection: [],
     items: computed<FormItem[]>(() => [
-      { label: '基础信息', key: 'baseSection', type: 'divider', span: 24 },
+      ...(hasFindingsWorkspace.value
+        ? [{ label: '检查信息', key: 'baseSection', type: 'tab', span: 24 } satisfies FormItem]
+        : []),
       { label: '车牌号', key: 'vehicleId', span: 12 },
       { label: '所属公司', key: 'companyName', type: 'input', props: { disabled: true } },
       {
@@ -246,6 +253,9 @@
               key: 'driverId'
             }
           ]
+        : []),
+      ...(hasFindingsWorkspace.value
+        ? [{ label: '检查结果与证据', key: 'findingsSection', type: 'tab' } satisfies FormItem]
         : []),
       ...(canViewField(currentFieldAccess.value, 'inspectionFindings')
         ? [
@@ -302,7 +312,8 @@
               }
             }
           ]
-        : [])
+        : []),
+      { key: 'inspectionAttachments', label: '', type: 'slot', span: 24 }
     ]),
     rules: computed<FormRules<RoutineInspection>>(() => ({
       vehicleId: [{ required: true, message: '请选择车辆', trigger: 'change' }],
@@ -446,6 +457,7 @@
   }
 
   const handleOpen = async (row?: RoutineInspection): Promise<void> => {
+    activeTab.value = 'baseSection'
     await resetForm()
     if (row?.id) replaceForm(row)
 

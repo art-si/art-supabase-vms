@@ -4,15 +4,12 @@
 
     <ArtForm
       ref="formRef"
-      :model-value="form"
-      @update:model-value="replaceReactiveModel(form, $event)"
+      v-model="form"
       :items="items"
       :rules="rules"
       :span="12"
       :gutter="20"
       label-width="120px"
-      :show-reset="false"
-      :show-submit="false"
     >
       <template #addressPicker>
         <ArtAddressPicker
@@ -73,9 +70,9 @@
     remark: ''
   })
 
-  const form = reactive<SupplierForm>(createInitialForm())
+  const form = ref<SupplierForm>(createInitialForm())
   const currentFieldAccess = computed<Api.Vms.BasicInfo.SupplierFieldAccessMap>(() =>
-    form.id ? (form.fieldAccess ?? {}) : EDITABLE_SUPPLIER_ACCESS
+    form.value.id ? (form.value.fieldAccess ?? {}) : EDITABLE_SUPPLIER_ACCESS
   )
 
   const rules: FormRules<SupplierForm> = {
@@ -103,7 +100,6 @@
   }
 
   const items = computed<FormItem[]>(() => [
-    { label: '厂商信息', key: 'organizationSection', type: 'divider', span: 24 },
     {
       label: '供应厂商名称',
       key: 'supplierName',
@@ -169,7 +165,7 @@
   ])
 
   const resetForm = async (): Promise<void> => {
-    replaceReactiveModel(form, createInitialForm())
+    replaceReactiveModel(form.value, createInitialForm())
     await nextTick()
     formRef.value?.clearValidate()
   }
@@ -183,18 +179,18 @@
     }
 
     try {
-      const { regionPath, ...payload } = toRaw(form)
+      const { regionPath, ...payload } = toRaw(form.value)
       delete payload.addressPicker
-      if (!form.id || canEditField(currentFieldAccess.value, 'addressDetails')) {
+      if (!form.value.id || canEditField(currentFieldAccess.value, 'addressDetails')) {
         payload.region = regionPath?.join('/') || ''
       }
       const safePayload = sanitizeSupplierPayload(payload)
-      if (form.id) {
+      if (form.value.id) {
         await editSupplier(safePayload)
       } else {
         await addSupplier(safePayload)
       }
-      emit('success', form.id ? 'edit' : 'add')
+      emit('success', form.value.id ? 'edit' : 'add')
       return true
     } catch (error) {
       notifyFriendlyError(error, '车辆供应商保存失败，请检查填写内容后重试')
@@ -208,7 +204,7 @@
     if (isEdit) {
       const editData = structuredClone(toRaw(row)) as SupplierForm
       editData.regionPath = editData.region?.split('/').filter(Boolean) || []
-      replaceReactiveModel(form, editData)
+      replaceReactiveModel(form.value, editData)
     }
 
     await dialogRef.value?.handleOpen(row, {

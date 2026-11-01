@@ -11,8 +11,6 @@
         :span="12"
         :gutter="20"
         label-width="120px"
-        :show-reset="false"
-        :show-submit="false"
       >
         <template #subjectId>
           <ArtTableSingleSelect

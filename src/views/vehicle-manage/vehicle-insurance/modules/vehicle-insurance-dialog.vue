@@ -7,37 +7,41 @@
     <div class="vehicle-insurance-dialog">
       <ArtForm
         ref="formRef"
+        v-model:active-tab="activeTab"
         v-model="form.data"
         :items="form.items"
         :rules="form.rules"
         :span="12"
         :gutter="20"
         label-width="120px"
-        :show-reset="false"
-        :show-submit="false"
-      />
-
-      <section v-if="canViewInsuranceField('documents')" class="vehicle-insurance-dialog__section">
-        <div class="vehicle-insurance-dialog__section-header">
-          <ArtSectionTitle :show-line="false">保险附件</ArtSectionTitle>
-          <ArtUploadFile
-            v-if="canEditInsuranceField('documents')"
-            title="上传附件"
-            :resource-tenant-id="form.data.tenantId || ''"
-            :show-file-list="false"
-            :show-tip="false"
-            inline
-            @resource-change="handleAttachmentUpload"
-          />
-        </div>
-        <ArtTable
-          :data="form.data.attachments"
-          :columns="attachmentColumns"
-          :pagination="undefined"
-          :show-table-header="false"
-          empty-height="160px"
-        />
-      </section>
+      >
+        <template #insuranceAttachments>
+          <section
+            v-if="canViewInsuranceField('documents')"
+            class="vehicle-insurance-dialog__section"
+          >
+            <div class="vehicle-insurance-dialog__section-header">
+              <ArtSectionTitle :show-line="false">保险附件</ArtSectionTitle>
+              <ArtUploadFile
+                v-if="canEditInsuranceField('documents')"
+                title="上传附件"
+                :resource-tenant-id="form.data.tenantId || ''"
+                :show-file-list="false"
+                :show-tip="false"
+                inline
+                @resource-change="handleAttachmentUpload"
+              />
+            </div>
+            <ArtTable
+              :data="form.data.attachments"
+              :columns="attachmentColumns"
+              :pagination="undefined"
+              :show-table-header="false"
+              empty-height="160px"
+            />
+          </section>
+        </template>
+      </ArtForm>
     </div>
   </ArtDialog>
 </template>
@@ -99,6 +103,7 @@
   }
 
   const emit = defineEmits<Emits>()
+  const activeTab = ref('commercialSection')
   const dialogRef = ref<ArtDialogExpose<VehicleInsurance | undefined>>()
   const formRef = ref<FormExpose>()
 
@@ -166,7 +171,6 @@
     companyOptions: [],
     items: computed<FormItem[]>(() => {
       const items: FormItem[] = [
-        { label: '车辆信息', key: 'vehicleSection', type: 'divider', span: 24 },
         {
           label: '车牌号',
           key: 'vehicleId',
@@ -190,7 +194,7 @@
             placeholder: '选择车辆后自动带出'
           }
         },
-        { label: '商业险', key: 'commercialSection', type: 'divider', span: 24 },
+        { label: '商业险', key: 'commercialSection', type: 'tab', span: 24 },
         {
           label: '商业险保单号',
           key: 'commercialPolicyNo',
@@ -214,7 +218,7 @@
         { label: '投保日期', key: 'commercialInsureDate', type: 'date', props: dateProps },
         { label: '投保金额', key: 'commercialPremium', type: 'number', props: moneyProps },
         { label: '到期日期', key: 'commercialExpireDate', type: 'date', props: dateProps },
-        { label: '交强险', key: 'compulsorySection', type: 'divider', span: 24 },
+        { label: '交强险', key: 'compulsorySection', type: 'tab', span: 24 },
         {
           label: '交强险保单号',
           key: 'compulsoryPolicyNo',
@@ -244,7 +248,14 @@
           type: 'input',
           span: 24,
           props: { type: 'textarea', rows: 3, maxlength: 500, showWordLimit: true }
-        }
+        },
+        {
+          key: 'insuranceAttachmentsSection',
+          label: '保险附件',
+          type: 'tab',
+          hidden: !canViewInsuranceField('documents')
+        },
+        { key: 'insuranceAttachments', label: '', type: 'slot', span: 24 }
       ]
       return items.filter(canDisplayFormItem).map((item) => {
         const field = getSensitiveFieldForFormItem(item)
@@ -397,6 +408,7 @@
   }
 
   const handleOpen = async (row?: VehicleInsurance): Promise<void> => {
+    activeTab.value = 'commercialSection'
     await resetForm()
     if (row?.id) {
       replaceForm(row)

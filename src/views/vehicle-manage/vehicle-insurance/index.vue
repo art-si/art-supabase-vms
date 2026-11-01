@@ -36,12 +36,14 @@
     />
 
     <VehicleInsuranceDialog ref="dialogRef" @success="handleSaveSuccess" />
+    <MasterDataDeleteGuard ref="deleteGuardRef" />
   </div>
 </template>
 
 <script setup lang="tsx">
   import { getFriendlySupabaseErrorMessage } from '@/utils/supabase'
-  import { useArtFeedback } from '@/hooks/core/useArtFeedback'
+  import { useRecordDeleteGuard } from '@/hooks/core/useRecordDeleteGuard'
+  import MasterDataDeleteGuard from '@/components/business/master-data-delete-guard/index.vue'
   import type { ComputedRef, UnwrapNestedRefs } from 'vue'
   import { ElMessage } from 'element-plus'
   import ArtButtonTable from '@/components/core/forms/art-button-table/index.vue'
@@ -53,7 +55,6 @@
     ArtTableQueryExpose,
     ArtTableQueryExcelColumn,
     ArtTableQueryHeaderAction,
-    ArtTableQueryHeaderActionContext,
     ArtTableQueryProps
   } from '@/components/core/tables/art-table-query/index.vue'
   import type { ColumnOption, DialogType } from '@/types'
@@ -78,7 +79,10 @@
 
   defineOptions({ name: 'VehicleInsurance' })
 
-  const { confirmAction } = useArtFeedback()
+  const { deleteGuardRef, deleteRecord, deleteRecords } = useRecordDeleteGuard(
+    'vehicle_insurance',
+    '车辆保险记录'
+  )
 
   type VehicleInsurance = Api.Vms.VehicleManage.VehicleInsurance
   type SearchParams = Api.Vms.VehicleManage.VehicleInsuranceSearchParams
@@ -192,12 +196,20 @@
       {
         type: 'delete',
         permission: 'VehicleInsurance:Delete',
-        content: ({ selectedCount }: ArtTableQueryHeaderActionContext) =>
-          `确定删除选中的 ${selectedCount} 条车辆保险记录吗？删除后无法恢复。`,
+        confirm: false,
         onClick: async ({ selectedRows }) => {
-          const ids = selectedRows.map((row) => row.id).filter(Boolean)
-          await deleteVehicleInsuranceBatch(ids)
-          await tableQueryRef.value?.refreshRemove()
+          const resources = selectedRows.map((row) => ({
+            id: String(row.id ?? ''),
+            label: row.commercialPolicyNo || row.compulsoryPolicyNo || row.plateNo || '车辆保险记录'
+          }))
+          await deleteRecords({
+            resources,
+            permission: 'VehicleInsurance:Delete',
+            remove: () => deleteVehicleInsuranceBatch(resources.map((resource) => resource.id)),
+            onDeleted: async () => {
+              await tableQueryRef.value?.refreshRemove()
+            }
+          })
         }
       }
     ]),
@@ -366,19 +378,18 @@
 
   const handleDelete = async (row: VehicleInsurance): Promise<void> => {
     if (!row.id) return
-
-    try {
-      await confirmAction(`确定删除车辆“${row.plateNo}”的保险记录吗？`, '删除确认', {
-        confirmButtonText: '删除',
-        cancelButtonText: '取消',
-        type: 'warning',
-        confirmButtonType: 'danger'
-      })
-      await deleteVehicleInsurance(row.id)
-      await tableQueryRef.value?.refreshRemove()
-    } catch {
-      // 用户取消删除时无需提示。
-    }
+    const id = row.id
+    await deleteRecord({
+      resource: {
+        id,
+        label: row.commercialPolicyNo || row.compulsoryPolicyNo || row.plateNo || '车辆保险记录'
+      },
+      permission: 'VehicleInsurance:Delete',
+      remove: () => deleteVehicleInsurance(id),
+      onDeleted: async () => {
+        await tableQueryRef.value?.refreshRemove()
+      }
+    })
   }
 
   onErrorCaptured((error) => {

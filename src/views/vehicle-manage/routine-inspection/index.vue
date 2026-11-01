@@ -36,11 +36,13 @@
     />
 
     <RoutineInspectionDialog ref="dialogRef" @success="handleSaveSuccess" />
+    <MasterDataDeleteGuard ref="deleteGuardRef" />
   </div>
 </template>
 
 <script setup lang="tsx">
-  import { useArtFeedback } from '@/hooks/core/useArtFeedback'
+  import { useRecordDeleteGuard } from '@/hooks/core/useRecordDeleteGuard'
+  import MasterDataDeleteGuard from '@/components/business/master-data-delete-guard/index.vue'
   import type { ComputedRef, UnwrapNestedRefs } from 'vue'
   import ArtButtonTable from '@/components/core/forms/art-button-table/index.vue'
   import ArtButtonMore, {
@@ -51,7 +53,6 @@
     ArtTableQueryExpose,
     ArtTableQueryExcelColumn,
     ArtTableQueryHeaderAction,
-    ArtTableQueryHeaderActionContext,
     ArtTableQueryProps
   } from '@/components/core/tables/art-table-query/index.vue'
   import type { ColumnOption, DialogType } from '@/types'
@@ -73,7 +74,10 @@
 
   defineOptions({ name: 'VehicleRoutineInspection' })
 
-  const { confirmAction } = useArtFeedback()
+  const { deleteGuardRef, deleteRecord, deleteRecords } = useRecordDeleteGuard(
+    'vehicle_routine_inspection_record',
+    '车辆例检记录'
+  )
 
   type RoutineInspection = Api.Vms.VehicleManage.VehicleRoutineInspectionRecord
   type SearchParams = Api.Vms.VehicleManage.VehicleRoutineInspectionSearchParams
@@ -186,12 +190,24 @@
       {
         type: 'delete',
         permission: 'VehicleRoutineInspection:Delete',
-        content: ({ selectedCount }: ArtTableQueryHeaderActionContext) =>
-          `确定删除选中的 ${selectedCount} 条例检记录吗？删除后无法恢复。`,
+        confirm: false,
         onClick: async ({ selectedRows }) => {
-          const ids = selectedRows.map((row) => row.id).filter(Boolean)
-          await deleteVehicleRoutineInspectionBatch(ids)
-          await tableQueryRef.value?.refreshRemove()
+          const resources = selectedRows.map((row) => ({
+            id: String(row.id ?? ''),
+            label:
+              row.routineInspectionNo ||
+              [row.plateNo, row.inspectionTime].filter(Boolean).join(' · ') ||
+              '车辆例检记录'
+          }))
+          await deleteRecords({
+            resources,
+            permission: 'VehicleRoutineInspection:Delete',
+            remove: () =>
+              deleteVehicleRoutineInspectionBatch(resources.map((resource) => resource.id)),
+            onDeleted: async () => {
+              await tableQueryRef.value?.refreshRemove()
+            }
+          })
         }
       }
     ]),
@@ -335,17 +351,20 @@
 
   const handleDelete = async (row: RoutineInspection): Promise<void> => {
     if (!row.id) return
-    try {
-      await confirmAction(`确定删除例检记录“${row.routineInspectionNo}”吗？`, '删除确认', {
-        confirmButtonText: '删除',
-        cancelButtonText: '取消',
-        type: 'warning',
-        confirmButtonType: 'danger'
-      })
-      await deleteVehicleRoutineInspection(row.id)
-      await tableQueryRef.value?.refreshRemove()
-    } catch {
-      // 用户取消删除时无需提示。
-    }
+    const id = row.id
+    await deleteRecord({
+      resource: {
+        id,
+        label:
+          row.routineInspectionNo ||
+          [row.plateNo, row.inspectionTime].filter(Boolean).join(' · ') ||
+          '车辆例检记录'
+      },
+      permission: 'VehicleRoutineInspection:Delete',
+      remove: () => deleteVehicleRoutineInspection(id),
+      onDeleted: async () => {
+        await tableQueryRef.value?.refreshRemove()
+      }
+    })
   }
 </script>

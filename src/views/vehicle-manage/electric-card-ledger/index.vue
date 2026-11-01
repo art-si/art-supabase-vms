@@ -73,81 +73,20 @@
             </strong>
           </div>
         </div>
-        <dl
-          class="grid gap-4 rounded-[var(--el-border-radius-base)] border border-[var(--el-border-color-light)] p-5 sm:grid-cols-2"
-        >
-          <div
-            ><dt class="text-xs text-[var(--el-text-color-secondary)]">卡状态</dt
-            ><dd class="mt-1"
-              ><ArtDictDisplay dict-code="fuelCardStatus" :value="selectedEntry.cardStatus" /></dd
-          ></div>
-          <div
-            ><dt class="text-xs text-[var(--el-text-color-secondary)]">流水时间</dt
-            ><dd class="mt-1 font-medium">{{
-              formatWithDayjs(selectedEntry.occurredAt) || '--'
-            }}</dd></div
-          >
-          <div
-            ><dt class="text-xs text-[var(--el-text-color-secondary)]">记账序号</dt
-            ><dd class="mt-1 font-medium tabular-nums">#{{ selectedEntry.postingSeq }}</dd></div
-          >
-          <div
-            ><dt class="text-xs text-[var(--el-text-color-secondary)]">记账时间</dt
-            ><dd class="mt-1 font-medium">{{
-              formatWithDayjs(selectedEntry.createTime) || '--'
-            }}</dd></div
-          >
-          <div
-            ><dt class="text-xs text-[var(--el-text-color-secondary)]">本笔司机</dt
-            ><dd class="mt-1 font-medium">{{ selectedEntry.driverName || '--' }}</dd></div
-          >
-          <div
-            ><dt class="text-xs text-[var(--el-text-color-secondary)]">充电站</dt
-            ><dd class="mt-1 font-medium">{{ selectedEntry.stationName || '--' }}</dd></div
-          >
-          <div
-            ><dt class="text-xs text-[var(--el-text-color-secondary)]">关联运单</dt
-            ><dd class="mt-1 font-medium break-all">{{ selectedEntry.waybillNo || '--' }}</dd></div
-          >
-          <div class="sm:col-span-2"
-            ><dt class="text-xs text-[var(--el-text-color-secondary)]">发生地点</dt
-            ><dd class="mt-1 break-words">{{ selectedEntry.expenseLocation || '--' }}</dd></div
-          >
-          <div
-            ><dt class="text-xs text-[var(--el-text-color-secondary)]">表号/桩号</dt
-            ><dd class="mt-1 font-medium">{{ selectedEntry.pileNo || '--' }}</dd></div
-          >
-          <div
-            ><dt class="text-xs text-[var(--el-text-color-secondary)]">充电数</dt
-            ><dd class="mt-1 font-medium tabular-nums">{{
-              selectedEntry.chargeKwh == null ? '--' : `${selectedEntry.chargeKwh} kWh`
-            }}</dd></div
-          >
-          <div
-            ><dt class="text-xs text-[var(--el-text-color-secondary)]">电价（元/kWh）</dt
-            ><dd class="mt-1 font-medium tabular-nums">{{
-              selectedEntry.unitPrice ?? '--'
-            }}</dd></div
-          >
-          <div
-            ><dt class="text-xs text-[var(--el-text-color-secondary)]">充值渠道</dt
-            ><dd class="mt-1 font-medium">{{ selectedEntry.rechargeChannel || '--' }}</dd></div
-          >
-          <div
-            ><dt class="text-xs text-[var(--el-text-color-secondary)]">发票号</dt
-            ><dd class="mt-1 font-medium">{{ selectedEntry.invoiceNo || '--' }}</dd></div
-          >
-          <div
-            ><dt class="text-xs text-[var(--el-text-color-secondary)]">业务凭证号</dt
-            ><dd class="mt-1 font-medium">{{ selectedEntry.referenceNo || '--' }}</dd></div
-          >
-          <div class="sm:col-span-2"
-            ><dt class="text-xs text-[var(--el-text-color-secondary)]">备注</dt
-            ><dd class="mt-1 whitespace-pre-wrap break-words">{{
-              selectedEntry.remark || '--'
-            }}</dd></div
-          >
-        </dl>
+        <ElTabs v-if="selectedEntry.entryType === 'consume'" v-model="activeDetailTab">
+          <ElTabPane name="transaction" label="流水信息">
+            <ArtDescriptions :data="selectedEntry" :items="transactionDetailItems" :columns="2" />
+          </ElTabPane>
+          <ElTabPane name="consumption" label="消费明细">
+            <ArtDescriptions :data="selectedEntry" :items="consumptionDetailItems" :columns="2" />
+          </ElTabPane>
+        </ElTabs>
+        <ArtDescriptions
+          v-else
+          :data="selectedEntry"
+          :items="transactionDetailItems"
+          :columns="2"
+        />
         <ArtSectionCard
           v-if="selectedEntry.voucherPaths.length"
           title="现场凭证"
@@ -194,6 +133,8 @@
     ArtTableQueryProps
   } from '@/components/core/tables/art-table-query/index.vue'
   import type { ColumnOption } from '@/types'
+  import ArtDescriptions from '@/components/core/base/art-descriptions/index.vue'
+  import type { ArtDescriptionItem } from '@/components/core/base/art-descriptions/types'
   import ArtDictDisplay from '@/components/core/base/art-dict-display/index.vue'
   import ArtDrawer from '@/components/core/drawers/art-drawer/index.vue'
   import type { ArtDrawerExpose } from '@/components/core/drawers/art-drawer/types'
@@ -239,6 +180,48 @@
   const voucherDialogRef = ref<{ handleOpen: (entry: ElectricCardEntry) => Promise<void> }>()
   const detailRef = ref<ArtDrawerExpose<ElectricCardEntry>>()
   const selectedEntry = ref<ElectricCardEntry | null>(null)
+  const activeDetailTab = ref('transaction')
+  const transactionDetailItems: ArtDescriptionItem<ElectricCardEntry>[] = [
+    { key: 'cardStatus', label: '卡状态', field: 'cardStatus', dictCode: 'fuelCardStatus' },
+    {
+      key: 'occurredAt',
+      label: '流水时间',
+      value: (row: ElectricCardEntry) => formatWithDayjs(row.occurredAt) || '--'
+    },
+    {
+      key: 'postingSeq',
+      label: '记账序号',
+      value: (row: ElectricCardEntry) => '#' + row.postingSeq
+    },
+    {
+      key: 'createTime',
+      label: '记账时间',
+      value: (row: ElectricCardEntry) => formatWithDayjs(row.createTime) || '--'
+    },
+    { key: 'rechargeChannel', label: '充值渠道', field: 'rechargeChannel' },
+    { key: 'invoiceNo', label: '发票号', field: 'invoiceNo' },
+    { key: 'referenceNo', label: '业务凭证号', field: 'referenceNo' },
+    {
+      key: 'remark',
+      label: '备注',
+      field: 'remark',
+      span: 2,
+      className: 'whitespace-pre-wrap break-words'
+    }
+  ]
+  const consumptionDetailItems: ArtDescriptionItem<ElectricCardEntry>[] = [
+    { key: 'driverName', label: '本笔司机', field: 'driverName' },
+    { key: 'stationName', label: '充电站', field: 'stationName' },
+    { key: 'waybillNo', label: '关联运单', field: 'waybillNo' },
+    { key: 'pileNo', label: '表号/桩号', field: 'pileNo' },
+    { key: 'expenseLocation', label: '发生地点', field: 'expenseLocation', span: 2 },
+    {
+      key: 'chargeKwh',
+      label: '充电数',
+      value: (row: ElectricCardEntry) => (row.chargeKwh == null ? '--' : row.chargeKwh + ' kWh')
+    },
+    { key: 'unitPrice', label: '电价（元/kWh）', field: 'unitPrice' }
+  ]
   const voucherPreviews = ref<string[]>([])
   const voucherError = ref('')
   const overview = reactive({ total: 0, rows: [] as ElectricCardEntry[] })
@@ -536,6 +519,7 @@
     void refreshSelectedCardBalance()
   }
   const openDetail = async (entry: ElectricCardEntry): Promise<void> => {
+    activeDetailTab.value = 'transaction'
     selectedEntry.value = entry
     voucherPreviews.value = []
     voucherError.value = ''

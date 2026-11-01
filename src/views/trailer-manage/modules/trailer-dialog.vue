@@ -63,15 +63,13 @@
           </div>
           <ArtForm
             ref="formRef"
-            :model-value="form"
-            @update:model-value="replaceReactiveModel(form, $event)"
+            v-model:active-tab="activeTab"
+            v-model="form"
             :items="visibleItems"
             :rules="rules"
             :span="12"
             :gutter="16"
             label-width="116px"
-            :show-reset="false"
-            :show-submit="false"
           >
             <template #vehicleTypeProfileId>
               <ElButton class="trailer-dialog__picker" @click="openTypePicker">
@@ -81,58 +79,38 @@
                 /></span>
               </ElButton>
             </template>
+            <template #defaultTractorId>
+              <ArtTableSingleSelect
+                v-model="tractorId"
+                v-model:selected-data="selectedTractor"
+                :api-fn="fetchTractorOptions"
+                :columns="tractorColumns"
+                row-key="id"
+                label-key="plateNo"
+                description-key="companyName"
+                title="参选默认牵引车"
+                search-placeholder="输入牵引车车牌号"
+                placeholder="请选择默认牵引车（选填）"
+                clearable
+              />
+            </template>
+            <template #companyOrganizationId>
+              <ArtTableSingleSelect
+                v-model="companyOrganizationId"
+                v-model:selected-data="selectedCompany"
+                :api-fn="fetchCompanyOptions"
+                :columns="companyColumns"
+                row-key="id"
+                label-key="label"
+                title="参选所属公司"
+                search-placeholder="输入公司名称"
+                placeholder="请选择所属公司（可留空）"
+                clearable
+              />
+            </template>
           </ArtForm>
         </section>
       </div>
-
-      <ArtSectionCard
-        class="trailer-dialog__other"
-        title="其他信息"
-        subtitle="明确车辆归属与使用关系，便于后续任务关联。"
-        :show-scrollbar="false"
-        :min-height="0"
-      >
-        <ArtForm
-          :model-value="form"
-          @update:model-value="replaceReactiveModel(form, $event)"
-          :items="otherItems"
-          :span="12"
-          :gutter="16"
-          label-width="116px"
-          :show-reset="false"
-          :show-submit="false"
-        >
-          <template #defaultTractorId>
-            <ArtTableSingleSelect
-              v-model="tractorId"
-              v-model:selected-data="selectedTractor"
-              :api-fn="fetchTractorOptions"
-              :columns="tractorColumns"
-              row-key="id"
-              label-key="plateNo"
-              description-key="companyName"
-              title="参选默认牵引车"
-              search-placeholder="输入牵引车车牌号"
-              placeholder="请选择默认牵引车（选填）"
-              clearable
-            />
-          </template>
-          <template #companyOrganizationId>
-            <ArtTableSingleSelect
-              v-model="companyOrganizationId"
-              v-model:selected-data="selectedCompany"
-              :api-fn="fetchCompanyOptions"
-              :columns="companyColumns"
-              row-key="id"
-              label-key="label"
-              title="参选所属公司"
-              search-placeholder="输入公司名称"
-              placeholder="请选择所属公司（可留空）"
-              clearable
-            />
-          </template>
-        </ArtForm>
-      </ArtSectionCard>
     </div>
 
     <VehicleTypePicker ref="typePickerRef" @selected="selectProfile" />
@@ -140,13 +118,13 @@
 </template>
 
 <script setup lang="ts">
-  import { ElAlert, ElButton, ElMessage, type FormRules } from 'element-plus'
+  import { ElAlert, ElButton, type FormRules } from 'element-plus'
   import { pick } from 'lodash-es'
+  import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
   import ArtUploadImage from '@/components/core/forms/art-upload-image/index.vue'
-  import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
   import ArtTableSingleSelect from '@/components/core/forms/art-data-select/table-single.vue'
   import type {
     DataSelectColumn,
@@ -176,7 +154,7 @@
 
   const emit = defineEmits<{ success: [] }>()
   const dialogRef = ref<ArtDialogExpose<TrailerRecord | undefined>>()
-  const formRef = ref<{ validate: () => Promise<boolean>; clearValidate: () => void }>()
+  const formRef = ref<InstanceType<typeof ArtForm>>()
   const typePickerRef = ref<{
     handleOpen: (data: { tenantId?: string; selectedId?: string | null }) => Promise<void>
   }>()
@@ -185,6 +163,7 @@
   const plateColors = useDictionaryOptions('vehiclePlateColor')
   const ownershipOptions = useDictionaryOptions('vehicleOwnership')
   const activeImage = ref<ImageKey>('licenseFrontUrl')
+  const activeTab = ref('licenseFrontSection')
   const saveError = ref('')
   const recordTenantId = ref<string | null>(null)
   const selectedTractor = ref<Api.Vms.VehicleManage.VehicleOption[]>([])
@@ -224,7 +203,7 @@
     licenseBackReverseUrl: null,
     rearPhotoUrl: null
   })
-  const form = reactive<TrailerForm>(emptyForm())
+  const form = ref<TrailerForm>(emptyForm())
   const resourceTenantId = computed(
     () =>
       recordTenantId.value ??
@@ -237,17 +216,17 @@
   const activeImageLabel = computed(
     () => imageItems.find((item) => item.key === activeImage.value)?.label ?? ''
   )
-  const filledImageCount = computed(() => imageItems.filter((item) => form[item.key]).length)
+  const filledImageCount = computed(() => imageItems.filter((item) => form.value[item.key]).length)
   const tractorId = computed({
-    get: () => form.defaultTractorId ?? undefined,
+    get: () => form.value.defaultTractorId ?? undefined,
     set: (value?: string | number) => {
-      form.defaultTractorId = value ? String(value) : null
+      form.value.defaultTractorId = value ? String(value) : null
     }
   })
   const companyOrganizationId = computed({
-    get: () => form.companyOrganizationId ?? undefined,
+    get: () => form.value.companyOrganizationId ?? undefined,
     set: (value?: string | number) => {
-      form.companyOrganizationId = value ? String(value) : null
+      form.value.companyOrganizationId = value ? String(value) : null
     }
   })
 
@@ -264,15 +243,17 @@
     { prop: 'label', label: '公司名称', minWidth: 230 }
   ]
   const fetchCompanyOptions = async (params: DataSelectFetchParams) => {
-    const result = await fetchTrailerCompanyOptions(params.keyword, form.id)
+    const result = await fetchTrailerCompanyOptions(params.keyword, form.value.id)
     return { data: result.data ?? [], total: result.data?.length ?? 0, error: result.error }
   }
 
   const rules: FormRules<TrailerForm> = {
-    plateNo: [{ required: true, message: '请输入挂车车牌号', trigger: 'blur' }],
+    plateNo: [{ required: true, whitespace: true, message: '请输入挂车车牌号', trigger: 'blur' }],
     plateColor: [{ required: true, message: '请选择车牌颜色', trigger: 'change' }],
     vehicleTypeProfileId: [{ required: true, message: '请选择挂车车型', trigger: 'change' }],
-    ownerName: [{ required: true, message: '请输入行驶证所有人', trigger: 'blur' }]
+    ownerName: [
+      { required: true, whitespace: true, message: '请输入行驶证所有人', trigger: 'blur' }
+    ]
   }
   const frontItems = computed<FormItem[]>(() => [
     {
@@ -322,9 +303,6 @@
       props: { type: 'date', valueFormat: 'YYYY-MM-DD', class: '!w-full' }
     }
   ]
-  const visibleItems = computed<FormItem[]>(() =>
-    activeImage.value === 'licenseBackUrl' ? backItems : frontItems.value
-  )
   const otherItems = computed<FormItem[]>(() => [
     { label: '车辆归属', key: 'ownership', type: 'select', props: { options: ownershipOptions } },
     { label: '默认牵引车', key: 'defaultTractorId', type: 'input' },
@@ -337,38 +315,40 @@
       props: { type: 'textarea', rows: 2, maxlength: 500 }
     }
   ])
+  const visibleItems = computed<FormItem[]>(() => [
+    { key: 'licenseFrontSection', label: '行驶证主页', type: 'tab' },
+    ...frontItems.value,
+    { key: 'licenseBackSection', label: '副页与尺寸', type: 'tab' },
+    ...backItems,
+    { key: 'relationshipSection', label: '归属与关系', type: 'tab' },
+    ...otherItems.value
+  ])
+  watch(activeImage, (image) => {
+    activeTab.value = image === 'licenseBackUrl' ? 'licenseBackSection' : 'licenseFrontSection'
+  })
+  watch(activeTab, (tab) => {
+    if (tab === 'licenseBackSection') activeImage.value = 'licenseBackUrl'
+    else if (tab === 'licenseFrontSection' && activeImage.value === 'licenseBackUrl')
+      activeImage.value = 'licenseFrontUrl'
+  })
 
   const openTypePicker = async () => {
     await typePickerRef.value?.handleOpen({
       tenantId: resourceTenantId.value,
-      selectedId: form.vehicleTypeProfileId
+      selectedId: form.value.vehicleTypeProfileId
     })
   }
   const selectProfile = (profile: VehicleTypeProfile) => {
-    form.vehicleTypeProfileId = profile.id
-    form.trailerType = vehicleTypeProfileLabel(profile)
-    if (profile.lengthM != null) form.lengthMm = Math.round(profile.lengthM * 1000)
-    if (profile.loadTons != null) form.approvedLoadKg = Math.round(profile.loadTons * 1000)
+    form.value.vehicleTypeProfileId = profile.id
+    form.value.trailerType = vehicleTypeProfileLabel(profile)
+    if (profile.lengthM != null) form.value.lengthMm = Math.round(profile.lengthM * 1000)
+    if (profile.loadTons != null) form.value.approvedLoadKg = Math.round(profile.loadTons * 1000)
   }
 
-  const validateRequired = (): boolean => {
-    if (
-      !form.plateNo.trim() ||
-      !form.plateColor ||
-      !form.vehicleTypeProfileId ||
-      !form.ownerName?.trim()
-    ) {
-      activeImage.value = 'licenseFrontUrl'
-      saveError.value = '请填写车牌号、车牌颜色、挂车车型和行驶证所有人，再保存档案'
-      ElMessage.warning('请填写车牌号、车牌颜色、挂车车型和行驶证所有人')
-      return false
-    }
-    return true
-  }
   const handleSubmit = async (): Promise<boolean> => {
     saveError.value = ''
-    if (!validateRequired()) return false
-    const { id, ...values } = toRaw(form)
+    if (!(await validateArtFormForSubmit(formRef.value))) return false
+    const { id, ...values } = toRaw(form.value)
     const payload: TrailerWritePayload = {
       ...values,
       plateNo: values.plateNo.trim().toUpperCase(),
@@ -399,10 +379,14 @@
   }
 
   const handleOpen = async (row?: TrailerRecord): Promise<void> => {
+    activeTab.value = 'licenseFrontSection'
     saveError.value = ''
     recordTenantId.value = row?.tenantId ?? null
     const initial = emptyForm()
-    replaceReactiveModel(form, row ? { ...initial, ...pick(row, Object.keys(initial)) } : initial)
+    replaceReactiveModel(
+      form.value,
+      row ? { ...initial, ...pick(row, Object.keys(initial)) } : initial
+    )
     activeImage.value = 'licenseFrontUrl'
     selectedTractor.value = row?.defaultTractorId
       ? [
@@ -413,10 +397,10 @@
           }
         ]
       : []
-    selectedCompany.value = form.companyOrganizationId
+    selectedCompany.value = form.value.companyOrganizationId
       ? [
           {
-            id: form.companyOrganizationId,
+            id: form.value.companyOrganizationId,
             label: row?.companyName ?? '所属公司'
           }
         ]
@@ -427,7 +411,7 @@
         if (result.error) throw result.error
         const defaultCompany = result.data?.find((company) => company.isDefault)
         if (defaultCompany) {
-          form.companyOrganizationId = defaultCompany.id
+          form.value.companyOrganizationId = defaultCompany.id
           selectedCompany.value = [defaultCompany]
         }
       } catch (error) {

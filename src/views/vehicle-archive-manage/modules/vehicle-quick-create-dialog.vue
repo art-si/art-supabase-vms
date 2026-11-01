@@ -15,15 +15,12 @@
       </div>
       <ArtForm
         ref="formRef"
-        :model-value="form"
-        @update:model-value="replaceReactiveModel(form, $event)"
+        v-model="form"
         :items="formItems"
         :rules="rules"
         :span="12"
         :gutter="20"
         label-width="110px"
-        :show-reset="false"
-        :show-submit="false"
         tenant-scope-mode="manual"
       >
         <template #vehicleTypeProfileId>
@@ -68,7 +65,6 @@
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
-  import { replaceReactiveModel } from '@/utils/form/model'
   import ArtUploadImage from '@/components/core/forms/art-upload-image/index.vue'
   import ArtSvgIcon from '@/components/core/base/art-svg-icon/index.vue'
   import { useUserStore } from '@/store/modules/user'
@@ -111,7 +107,7 @@
     volumeM3: null,
     loadTons: null
   })
-  const form = reactive<QuickCreateForm>(createForm())
+  const form = ref<QuickCreateForm>(createForm())
   const ownershipOptions = useDictionaryOptions('vehicleOwnership')
   const plateColorOptions = useDictionaryOptions('vehiclePlateColor')
   const tenantOptions = computed(() => [
@@ -166,47 +162,47 @@
   const metric = (value: number | null, unit: string): string =>
     value == null ? '参选后带入' : `${value} ${unit}`
   const clearVehicleType = (): void => {
-    form.vehicleType = ''
-    form.vehicleTypeProfileId = ''
-    form.specLengthM = null
-    form.volumeM3 = null
-    form.loadTons = null
+    form.value.vehicleType = ''
+    form.value.vehicleTypeProfileId = ''
+    form.value.specLengthM = null
+    form.value.volumeM3 = null
+    form.value.loadTons = null
   }
   const openVehicleTypePicker = (): void => {
     void vehicleTypePickerRef.value?.handleOpen({
-      tenantId: form.tenantId,
-      selectedId: form.vehicleTypeProfileId
+      tenantId: form.value.tenantId,
+      selectedId: form.value.vehicleTypeProfileId
     })
   }
   const handleVehicleTypeSelected = (profile: VehicleTypeProfile): void => {
-    form.vehicleTypeProfileId = profile.id
-    form.vehicleType = profile.category
-    form.specLengthM = profile.lengthM
-    form.volumeM3 = profile.volumeM3
-    form.loadTons = profile.loadTons
+    form.value.vehicleTypeProfileId = profile.id
+    form.value.vehicleType = profile.category
+    form.value.specLengthM = profile.lengthM
+    form.value.volumeM3 = profile.volumeM3
+    form.value.loadTons = profile.loadTons
     formRef.value?.clearValidate('vehicleTypeProfileId')
   }
   const handleOpen = async (): Promise<void> => {
-    Object.assign(form, createForm())
+    Object.assign(form.value, createForm())
     await Promise.all([
       userStore.ensureDictLoaded('vehicleOwnership'),
       userStore.ensureDictLoaded('vehiclePlateColor'),
       tenantScopeStore.loadTenantOptions()
     ])
-    await dialogRef.value?.handleOpen(form, {
+    await dialogRef.value?.handleOpen(form.value, {
       title: '新增车辆档案',
       confirmText: '保存并完善资料',
       onConfirm: async () => {
         if (!(await formRef.value?.validate().catch(() => false))) return false
         const result = await addVehicleArchive(
           {
-            tenantId: form.tenantId,
-            plateNo: form.plateNo.trim(),
-            plateColor: form.plateColor,
-            vehicleOwnership: form.vehicleOwnership,
-            vehicleType: form.vehicleType,
-            vehicleTypeProfileId: form.vehicleTypeProfileId,
-            vehiclePhotoUrl: form.vehiclePhotoUrl,
+            tenantId: form.value.tenantId,
+            plateNo: form.value.plateNo.trim(),
+            plateColor: form.value.plateColor,
+            vehicleOwnership: form.value.vehicleOwnership,
+            vehicleType: form.value.vehicleType,
+            vehicleTypeProfileId: form.value.vehicleTypeProfileId,
+            vehiclePhotoUrl: form.value.vehiclePhotoUrl,
             operationStatus: 'operating'
           },
           { showMessage: false }

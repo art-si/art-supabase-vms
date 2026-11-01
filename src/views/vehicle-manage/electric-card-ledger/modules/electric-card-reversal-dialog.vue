@@ -43,8 +43,6 @@
       :rules="formRules"
       :span="24"
       label-width="110px"
-      :show-reset="false"
-      :show-submit="false"
       class="mt-5"
     />
   </ArtDialog>
