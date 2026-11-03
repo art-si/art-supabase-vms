@@ -21,8 +21,13 @@
               </div>
               <p
                 >{{ assessment.vehicleType }} ·
-                {{ assessment.operationStatus || '运营状态未记录' }}</p
-              >
+                <ArtDictDisplay
+                  dict-code="vehicleOperationStatus"
+                  :value="assessment.operationStatus"
+                  display="text"
+                  empty-text="运营状态未记录"
+                  unknown-text="状态待核对"
+              /></p>
             </div>
           </div>
           <ElButton type="primary" plain :loading="state.loading" @click="loadAssessment">
@@ -138,6 +143,7 @@
   import ArtDrawer from '@/components/core/drawers/art-drawer/index.vue'
   import type { ArtDrawerExpose } from '@/components/core/drawers/art-drawer/types'
   import ArtSectionTitle from '@/components/core/surfaces/art-section-title/index.vue'
+  import ArtDictDisplay from '@/components/core/base/art-dict-display/index.vue'
   import ArtAsyncState from '@/components/core/feedback/art-async-state/index.vue'
   import { analyzeVehicleHealthByAi } from '@vms/api'
 

@@ -17,128 +17,145 @@
     </BusinessWorkspaceHeader>
 
     <div class="vehicle-archive-manage__workspace">
-      <ArtSectionCard
-        class="vehicle-archive-manage__navigation"
-        :class="{ 'is-expanded': navigationExpanded }"
-        title="车辆分类"
-        :subtitle="navigationKey === 'all' ? '按车辆归属和车型筛选' : `当前：${navigationLabel}`"
-        aria-label="按车辆归属和车型筛选"
-        :loading="navigationLoading"
-        loading-mode="mask"
-        :error="navigationError"
-        error-title="车辆分类加载失败"
-        :empty="!navigationLoading && !navigationError && !navigationRows.length"
-        empty-title="暂无车辆档案"
-        empty-description="新增车辆档案后，会按车辆归属和车型显示在这里。"
-        :min-height="0"
-        @retry="loadNavigation"
-      >
-        <template #actions>
-          <ElButton
-            class="vehicle-archive-manage__navigation-toggle"
-            text
-            :aria-expanded="navigationExpanded"
-            aria-label="展开或收起车辆分类"
-            @click="navigationExpanded = !navigationExpanded"
+      <ArtWorkspaceSplitter primary-size="264px" primary-min="248px" :breakpoint="1160">
+        <template #primary>
+          <ArtSectionCard
+            class="vehicle-archive-manage__navigation"
+            :class="{ 'is-expanded': navigationExpanded }"
+            title="车辆分类"
+            :subtitle="
+              navigationKey === 'all' ? '按车辆归属和车型筛选' : `当前：${navigationLabel}`
+            "
+            aria-label="按车辆归属和车型筛选"
+            :loading="navigationLoading"
+            loading-mode="mask"
+            :error="navigationError"
+            error-title="车辆分类加载失败"
+            :empty="!navigationLoading && !navigationError && !navigationRows.length"
+            empty-title="暂无车辆档案"
+            empty-description="新增车辆档案后，会按车辆归属和车型显示在这里。"
+            :min-height="0"
+            @retry="loadNavigation"
           >
-            <span class="art-icon-label">
-              <ArtSvgIcon
-                :icon="navigationExpanded ? 'ri:arrow-up-s-line' : 'ri:arrow-down-s-line'"
+            <template #actions>
+              <ElButton
+                class="vehicle-archive-manage__navigation-toggle"
+                text
+                :aria-expanded="navigationExpanded"
+                aria-label="展开或收起车辆分类"
+                @click="navigationExpanded = !navigationExpanded"
+              >
+                <span class="art-icon-label">
+                  <ArtSvgIcon
+                    :icon="navigationExpanded ? 'ri:arrow-up-s-line' : 'ri:arrow-down-s-line'"
+                  />
+                  {{ navigationExpanded ? '收起分类' : '展开分类' }}
+                </span>
+              </ElButton>
+              <ArtTreeExpandToggle
+                :tree="navigationTreeRef"
+                :data="navigationTree"
+                node-key="key"
+                label="车辆分类"
+                :default-expanded="navigationRows.length < 24"
               />
-              {{ navigationExpanded ? '收起分类' : '展开分类' }}
-            </span>
-          </ElButton>
-          <ArtTreeExpandToggle
-            :tree="navigationTreeRef"
-            :data="navigationTree"
-            node-key="key"
-            label="车辆分类"
-            :default-expanded="navigationRows.length < 24"
-          />
-          <ArtIconButton icon="ri:refresh-line" label="刷新车辆分类" @click="loadNavigation" />
+              <ArtIconButton icon="ri:refresh-line" label="刷新车辆分类" @click="loadNavigation" />
+            </template>
+
+            <template #toolbar>
+              <div class="grid gap-2.5">
+                <ElInput
+                  v-model="navigationKeyword"
+                  clearable
+                  placeholder="搜索归属或车型"
+                  aria-label="搜索车辆分类"
+                >
+                  <template #prefix><ArtSvgIcon icon="ri:search-line" /></template>
+                </ElInput>
+
+                <button
+                  type="button"
+                  class="vehicle-archive-manage__navigation-all"
+                  :class="{ 'is-current': navigationKey === 'all' }"
+                  @click="handleNavigationClick()"
+                >
+                  <span class="vehicle-archive-manage__navigation-icon" aria-hidden="true">
+                    <ArtSvgIcon icon="ri:apps-2-line" />
+                  </span>
+                  <span class="vehicle-archive-manage__navigation-copy">
+                    <strong>全部车辆</strong>
+                    <small>{{ navigationRows.length }} 辆车</small>
+                  </span>
+                  <ArtSvgIcon
+                    v-if="navigationKey === 'all'"
+                    icon="ri:check-line"
+                    aria-hidden="true"
+                  />
+                </button>
+              </div>
+            </template>
+            <ElTree
+              ref="navigationTreeRef"
+              :data="navigationTree"
+              node-key="key"
+              :default-expand-all="navigationRows.length < 24"
+              highlight-current
+              :expand-on-click-node="false"
+              :current-node-key="navigationKey === 'all' ? undefined : navigationKey"
+              :filter-node-method="filterNavigationNode"
+              @node-click="handleNavigationClick"
+            >
+              <template #default="{ data }">
+                <span class="vehicle-archive-manage__navigation-node">
+                  <ArtSvgIcon
+                    class="vehicle-archive-manage__navigation-node-icon"
+                    :icon="data.vehicleType ? 'ri:truck-line' : 'ri:folder-3-line'"
+                    aria-hidden="true"
+                  />
+                  <span :title="data.label">{{ data.label }}</span>
+                  <small :aria-label="`${data.count} 辆车`">{{ data.count }}</small>
+                </span>
+              </template>
+              <template #empty>
+                <ArtEmptyState
+                  title="未找到匹配项"
+                  description="请调整关键词或清空筛选条件。"
+                  size="compact"
+                  :visual-size="64"
+                />
+              </template>
+            </ElTree>
+          </ArtSectionCard>
         </template>
 
-        <template #toolbar>
-          <div class="grid gap-2.5">
-            <ElInput
-              v-model="navigationKeyword"
-              clearable
-              placeholder="搜索归属或车型"
-              aria-label="搜索车辆分类"
-            >
-              <template #prefix><ArtSvgIcon icon="ri:search-line" /></template>
-            </ElInput>
-
-            <button
-              type="button"
-              class="vehicle-archive-manage__navigation-all"
-              :class="{ 'is-current': navigationKey === 'all' }"
-              @click="handleNavigationClick()"
-            >
-              <span class="vehicle-archive-manage__navigation-icon" aria-hidden="true">
-                <ArtSvgIcon icon="ri:apps-2-line" />
-              </span>
-              <span class="vehicle-archive-manage__navigation-copy">
-                <strong>全部车辆</strong>
-                <small>{{ navigationRows.length }} 辆车</small>
-              </span>
-              <ArtSvgIcon v-if="navigationKey === 'all'" icon="ri:check-line" aria-hidden="true" />
-            </button>
-          </div>
-        </template>
-        <ElTree
-          ref="navigationTreeRef"
-          :data="navigationTree"
-          node-key="key"
-          :default-expand-all="navigationRows.length < 24"
-          highlight-current
-          :expand-on-click-node="false"
-          :current-node-key="navigationKey === 'all' ? undefined : navigationKey"
-          :filter-node-method="filterNavigationNode"
-          @node-click="handleNavigationClick"
+        <ArtTableQuery
+          ref="tableQueryRef"
+          v-model="table.searchQuery"
+          :search-items="table.searchItems"
+          :api-fn="fetchTableData"
+          :columns-factory="table.columnsFactory"
+          :header-actions="table.headerActions"
+          header-actions-placement="workspace"
+          :search-bar-props="table.searchBarProps"
+          :table-props="table.props"
+          :immediate="table.immediate"
+          :on-success="handleTableSuccess"
+          focus-scope-selector=".vehicle-archive-manage__workspace"
+          focusable
         >
-          <template #default="{ data }">
-            <span class="vehicle-archive-manage__navigation-node">
-              <ArtSvgIcon
-                class="vehicle-archive-manage__navigation-node-icon"
-                :icon="data.vehicleType ? 'ri:truck-line' : 'ri:folder-3-line'"
-                aria-hidden="true"
-              />
-              <span :title="data.label">{{ data.label }}</span>
-              <small :aria-label="`${data.count} 辆车`">{{ data.count }}</small>
-            </span>
-          </template>
-          <template #empty>
-            <ArtEmptyState
-              title="未找到匹配项"
-              description="请调整关键词或清空筛选条件。"
-              size="compact"
-              :visual-size="64"
+          <template #vehicleType="{ row }">
+            <ArtDictDisplay
+              dict-code="vehicleType"
+              :value="row.vehicleType"
+              :unknown-text="getVehicleTypeFallbackLabel(row.vehicleType)"
             />
           </template>
-        </ElTree>
-      </ArtSectionCard>
-
-      <ArtTableQuery
-        ref="tableQueryRef"
-        v-model="table.searchQuery"
-        :search-items="table.searchItems"
-        :api-fn="fetchTableData"
-        :columns-factory="table.columnsFactory"
-        :header-actions="table.headerActions"
-        header-actions-placement="workspace"
-        :search-bar-props="table.searchBarProps"
-        :table-props="table.props"
-        :immediate="table.immediate"
-        :on-success="handleTableSuccess"
-        focus-scope-selector=".vehicle-archive-manage__workspace"
-        focusable
-      />
+        </ArtTableQuery>
+      </ArtWorkspaceSplitter>
     </div>
 
     <MasterDataDeleteGuard ref="deleteGuardRef" @cleared="handleDeleteGuardCleared" />
     <WorkflowBusinessHistoryDrawer ref="approvalHistoryRef" />
-    <VehicleQuickCreateDialog ref="quickCreateRef" @created="handleQuickCreated" />
   </div>
 </template>
 
@@ -148,12 +165,19 @@
   import { useRecordDeleteGuard } from '@/hooks/core/useRecordDeleteGuard'
   import type { ComputedRef, UnwrapNestedRefs } from 'vue'
   import { ElMessage, ElTag, ElTree } from 'element-plus'
-  import { groupBy } from 'lodash-es'
+  import {
+    buildVehicleClassificationTree,
+    filterClassifiedVehicles,
+    type VehicleClassificationNode as NavigationNode
+  } from '@vms/views/vehicle-manage/components/vehicle-classification'
   import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
+  import ArtWorkspaceSplitter from '@/components/core/layouts/art-workspace-splitter/index.vue'
   import ArtTreeExpandToggle from '@/components/core/widget/art-tree-expand-toggle/index.vue'
   import ArtIconButton from '@/components/core/widget/art-icon-button/index.vue'
   import { RouterLink } from 'vue-router'
   import ArtButtonTable from '@/components/core/forms/art-button-table/index.vue'
+  import ArtDictDisplay from '@/components/core/base/art-dict-display/index.vue'
+  import { getVehicleTypeFallbackLabel } from '@/utils/business/vehicle-type-display'
   import ArtButtonMore, {
     type ButtonMoreItem
   } from '@/components/core/forms/art-button-more/index.vue'
@@ -167,6 +191,7 @@
   import type { ColumnOption } from '@/types'
   import { buildSupabasePageRange } from '@/utils/supabase/pagination'
   import { formatWithDayjs } from '@/utils/time'
+  import { formatVehicleAge } from '@vms/views/vehicle-archive-edit/modules/vehicle-age'
   import {
     deleteVehicleArchive,
     exportVehicleArchiveList,
@@ -190,7 +215,6 @@
     type BusinessWorkspaceMetric
   } from '@/components/business/business-workspace-header/index.vue'
   import { canViewField, mergeFieldAccessMaps } from '@/utils/field-permission'
-  import VehicleQuickCreateDialog from './modules/vehicle-quick-create-dialog.vue'
   import {
     vehicleCertificateRiskDisplay,
     vehicleCertificateRiskNeedsAttention
@@ -237,22 +261,12 @@
   const tableQueryRef = ref<ArtTableQueryExpose>()
   const deleteGuardRef = ref<MasterDataDeleteGuardExpose>()
   const approvalHistoryRef = ref<WorkflowBusinessHistoryDrawerExpose>()
-  const quickCreateRef = ref<{ handleOpen: () => Promise<void> }>()
   const initialCarrierId = String(route.query.carrierId || '')
   const initialRecordId = String(route.query.recordId || '')
   const overview = reactive<{ total: number; rows: VehicleArchive[] }>({
     total: 0,
     rows: []
   })
-  interface NavigationNode {
-    key: string
-    label: string
-    count: number
-    ownership?: string
-    vehicleType?: string
-    children?: NavigationNode[]
-    searchText?: string
-  }
   const navigationRows = ref<VehicleArchiveNavigationItem[]>([])
   const navigationTreeRef = ref<InstanceType<typeof ElTree>>()
   const navigationKeyword = ref('')
@@ -261,49 +275,15 @@
   const navigationLoading = ref(false)
   const navigationError = shallowRef<Error | null>(null)
   const navigationKey = ref('all')
-  const selectedNavigation = ref<Pick<NavigationNode, 'ownership' | 'vehicleType'>>({})
+  const selectedNavigation = ref<Pick<NavigationNode, 'vehicleOwnership' | 'vehicleType'>>({})
   const navigationIds = computed(() =>
-    navigationRows.value
-      .filter(
-        (row) =>
-          (!selectedNavigation.value.ownership ||
-            (row.vehicleOwnership || 'unassigned') === selectedNavigation.value.ownership) &&
-          (!selectedNavigation.value.vehicleType ||
-            (row.vehicleType || 'unassigned') === selectedNavigation.value.vehicleType)
-      )
-      .map((row) => row.id)
+    filterClassifiedVehicles(navigationRows.value, selectedNavigation.value).map((row) => row.id)
   )
   const navigationTree = computed<NavigationNode[]>(() =>
-    Object.entries(
-      groupBy(navigationRows.value, (row) => row.vehicleOwnership || 'unassigned')
-    ).map(([ownership, rows]) => {
-      const label =
-        userStore.getDictItemByValue('vehicleOwnership', ownership)?.label ??
-        (ownership === 'unassigned' ? '归属未设置' : ownership)
-      const children = Object.entries(groupBy(rows, (row) => row.vehicleType || 'unassigned')).map(
-        ([vehicleType, typeRows]) => {
-          const typeLabel =
-            userStore.getDictItemByValue('vehicleType', vehicleType)?.label ??
-            (vehicleType === 'unassigned' ? '车型未设置' : vehicleType)
-          return {
-            key: `type:${ownership}:${vehicleType}`,
-            label: typeLabel,
-            count: typeRows.length,
-            ownership,
-            vehicleType,
-            searchText: `${label} ${typeLabel}`
-          }
-        }
-      )
-      return {
-        key: `ownership:${ownership}`,
-        label,
-        count: rows.length,
-        ownership,
-        children,
-        searchText: `${label} ${children.map((child) => child.label).join(' ')}`
-      }
-    })
+    buildVehicleClassificationTree(
+      navigationRows.value,
+      (dictionary, value) => userStore.getDictItemByValue(dictionary, value)?.label
+    )
   )
 
   const filterNavigationNode = (keyword: string, node: Record<string, unknown>): boolean =>
@@ -340,7 +320,10 @@
     navigationKey.value = node?.key ?? 'all'
     navigationLabel.value = node?.label ?? ''
     navigationExpanded.value = false
-    selectedNavigation.value = { ownership: node?.ownership, vehicleType: node?.vehicleType }
+    selectedNavigation.value = {
+      vehicleOwnership: node?.vehicleOwnership,
+      vehicleType: node?.vehicleType
+    }
     if (!node) navigationTreeRef.value?.setCurrentKey(undefined)
     tableQueryRef.value?.clearSelection()
     void tableQueryRef.value?.refreshContext()
@@ -606,16 +589,90 @@
         formatter: (row) => renderVehicleIdentity(row)
       },
       {
-        prop: 'ownership',
-        label: '资产归属',
+        prop: 'companyName',
+        label: '所属公司',
         minWidth: 190,
         formatter: (row) => renderOwnership(row)
+      },
+      {
+        prop: 'vehiclePhotoUrl',
+        label: '图片',
+        width: 88,
+        formatter: (row) =>
+          row.vehiclePhotoUrl ? (
+            <img
+              class="vehicle-archive-manage__photo"
+              src={row.vehiclePhotoUrl}
+              alt={`${row.plateNo} 车辆图片`}
+              width="52"
+              height="40"
+            />
+          ) : (
+            '--'
+          )
+      },
+      {
+        prop: 'vehicleOwnership',
+        label: '车辆归属',
+        width: 112,
+        dict: { code: 'vehicleOwnership', display: 'auto' }
+      },
+      {
+        prop: 'primaryDriver',
+        label: '主司机',
+        minWidth: 148,
+        formatter: (row) => row.primaryDriver?.driverName || row.driverOneName || '--'
+      },
+      {
+        prop: 'carrier',
+        label: '所属承运商',
+        minWidth: 190,
+        formatter: (row) => row.carrier?.companyName || '--'
+      },
+      {
+        prop: 'plateColor',
+        label: '车牌颜色',
+        width: 110,
+        dict: { code: 'vehiclePlateColor', display: 'text' }
+      },
+      {
+        prop: 'specLengthM',
+        label: '规格/车长(米)',
+        width: 128,
+        formatter: (row) => row.specLengthM ?? '--'
+      },
+      {
+        prop: 'volumeM3',
+        label: '容积(立方米)',
+        width: 118,
+        formatter: (row) => row.volumeM3 ?? '--'
+      },
+      { prop: 'loadTons', label: '载重(吨)', width: 110, formatter: (row) => row.loadTons ?? '--' },
+      {
+        prop: 'defaultTrailerPlateNo',
+        label: '默认挂车',
+        minWidth: 120,
+        formatter: (row) => row.defaultTrailerPlateNo || '--'
+      },
+      {
+        prop: 'purchaseDate',
+        label: '购置时间',
+        width: 124,
+        formatter: (row) =>
+          row.purchaseDate ? formatWithDayjs(row.purchaseDate, 'YYYY-MM-DD') : '--'
+      },
+      {
+        prop: 'vehicleAge',
+        label: '车辆年限',
+        width: 112,
+        formatter: (row) => formatVehicleAge(row.purchaseDate)
       },
       {
         prop: 'vehicleType',
         label: '车型',
         width: 120,
-        dict: { code: 'vehicleType', display: 'auto' }
+        dict: { code: 'vehicleType', display: 'auto' },
+        useSlot: true
       },
       {
         prop: 'operationStatus',
@@ -820,13 +877,7 @@
   )
 
   const openCreatePage = (): void => {
-    void quickCreateRef.value?.handleOpen()
-  }
-
-  const handleQuickCreated = (id: string): void => {
-    void loadNavigation()
-    void tableQueryRef.value?.getData()
-    void router.push(`/vms/vehicle-archive-edit/${id}`)
+    void router.push('/vms/vehicle-archive-edit')
   }
 
   const openDetailPage = (row: VehicleArchive): void => {
@@ -933,12 +984,17 @@
     }
 
     &__workspace {
-      display: grid;
+      display: flex;
       flex: 1;
-      grid-template-columns: minmax(248px, 264px) minmax(0, 1fr);
-      gap: 12px;
       min-width: 0;
       min-height: 0;
+    }
+
+    :deep(.vehicle-archive-manage__photo) {
+      width: 52px;
+      height: 40px;
+      object-fit: cover;
+      border-radius: var(--el-border-radius-small);
     }
 
     &__navigation {
@@ -1060,6 +1116,7 @@
 
       small {
         flex: none;
+        margin-right: 21px;
         font-size: 11px;
         font-variant-numeric: tabular-nums;
         color: var(--el-text-color-placeholder);
@@ -1191,9 +1248,7 @@
       min-height: var(--art-full-height);
 
       &__workspace {
-        display: flex;
         flex: 1 0 auto;
-        flex-direction: column;
       }
 
       &__navigation {

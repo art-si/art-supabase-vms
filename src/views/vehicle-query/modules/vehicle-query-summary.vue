@@ -1,8 +1,25 @@
 <template>
   <div
-    class="vehicle-query-summary art-card-xs grid gap-7 p-6 min-[901px]:grid-cols-[220px_minmax(0,1fr)]"
+    class="vehicle-query-summary art-card-xs grid items-center gap-4 p-4"
+    :class="
+      showBack
+        ? 'min-[901px]:grid-cols-[32px_112px_minmax(0,1fr)]'
+        : 'min-[901px]:grid-cols-[112px_minmax(0,1fr)]'
+    "
   >
-    <div class="vehicle-query-summary__photo h-[150px] w-full max-w-[260px] min-[901px]:w-[220px]">
+    <ElButton
+      v-if="showBack"
+      text
+      circle
+      aria-label="返回车辆查询"
+      title="返回车辆查询"
+      @click="emit('back')"
+    >
+      <ArtSvgIcon icon="ri:arrow-left-line" />
+    </ElButton>
+    <div
+      class="vehicle-query-summary__photo h-[88px] w-[112px] overflow-hidden rounded-[var(--el-border-radius-base)]"
+    >
       <ElImage
         v-if="vehicle.vehiclePhotoUrl"
         :src="vehicle.vehiclePhotoUrl"
@@ -13,83 +30,113 @@
       />
       <div
         v-else
-        class="vehicle-query-summary__photo-empty flex h-full w-full items-center justify-center bg-[var(--el-fill-color-light)] text-[56px] text-[var(--el-text-color-placeholder)]"
+        class="vehicle-query-summary__photo-empty flex h-full w-full items-center justify-center bg-[var(--el-fill-color-light)] text-[32px] text-[var(--el-text-color-placeholder)]"
       >
         <ArtSvgIcon icon="ri:bus-2-line" />
       </div>
     </div>
 
-    <div class="vehicle-query-summary__main grid min-w-0 gap-3.5">
+    <div class="vehicle-query-summary__main grid min-w-0 gap-2">
       <header
         class="vehicle-query-summary__header flex min-w-0 gap-4 min-[641px]:items-center min-[641px]:justify-between max-[640px]:flex-col max-[640px]:items-stretch"
       >
         <div class="grid min-w-0 gap-[3px]">
-          <span class="text-base font-bold text-[var(--el-text-color-primary)]">车辆综合档案</span>
-          <small class="truncate text-[var(--el-text-color-secondary)]"
-            >汇总车辆合规、运营和维保关键数据</small
-          >
+          <div class="flex flex-wrap items-center gap-2">
+            <h1 class="m-0 text-base font-bold text-[var(--el-text-color-primary)]">{{
+              vehicle.plateNo
+            }}</h1>
+            <ArtDictDisplay
+              v-if="vehicle.operationStatus"
+              dict-code="vehicleOperationStatus"
+              :value="vehicle.operationStatus"
+              display="tag"
+              unknown-text="未识别"
+            />
+            <ArtDictDisplay
+              v-if="vehicle.auditStatus"
+              dict-code="vehicleAuditStatus"
+              :value="vehicle.auditStatus"
+              display="tag"
+              unknown-text="未识别"
+            />
+          </div>
+          <small class="truncate text-[var(--el-text-color-secondary)]">{{
+            vehicle.companyName || '未设置所属公司'
+          }}</small>
         </div>
         <ElButton v-auth="'VehicleQuery:AiAnalyze'" type="primary" plain @click="emit('analyze')">
           <ArtSvgIcon icon="ri:sparkling-2-line" />AI 车辆健康研判
         </ElButton>
       </header>
-      <ArtDescriptions :data="descriptionData" :items="descriptionItems" :label-width="128" />
+      <dl
+        class="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-[var(--el-text-color-regular)]"
+      >
+        <div class="inline-flex items-center gap-1.5"
+          ><dt>车辆归属</dt
+          ><dd class="m-0 font-medium"
+            ><ArtDictDisplay
+              dict-code="vehicleOwnership"
+              :value="vehicle.vehicleOwnership"
+              unknown-text="未识别" /></dd
+        ></div>
+        <div class="inline-flex items-center gap-1.5"
+          ><dt>主司机/电话</dt><dd class="m-0 font-medium">{{ driverContact }}</dd></div
+        >
+        <div class="inline-flex items-center gap-1.5"
+          ><dt>行驶里程</dt
+          ><dd class="m-0 font-bold text-[var(--el-text-color-primary)]">{{
+            formatMileage(summary.runningMileage)
+          }}</dd></div
+        >
+      </dl>
+      <dl
+        class="flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-[var(--el-text-color-secondary)]"
+      >
+        <div class="inline-flex items-center gap-1.5"
+          ><dt>车型</dt
+          ><dd class="m-0"
+            ><ArtDictDisplay
+              dict-code="vehicleType"
+              :value="vehicle.vehicleType"
+              display="text"
+              :unknown-text="getVehicleTypeFallbackLabel(vehicle.vehicleType)" /></dd
+        ></div>
+        <div class="inline-flex items-center gap-1.5"
+          ><dt>车长</dt><dd class="m-0">{{ formatValue(vehicle.specLengthM, ' 米') }}</dd></div
+        >
+        <div class="inline-flex items-center gap-1.5"
+          ><dt>容积</dt><dd class="m-0">{{ formatValue(vehicle.volumeM3, ' 立方米') }}</dd></div
+        >
+        <div class="inline-flex items-center gap-1.5"
+          ><dt>载重</dt><dd class="m-0">{{ formatValue(vehicle.loadTons, ' 吨') }}</dd></div
+        >
+      </dl>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
   import { ElButton, ElImage } from 'element-plus'
-  import ArtDescriptions from '@/components/core/base/art-descriptions/index.vue'
+  import ArtDictDisplay from '@/components/core/base/art-dict-display/index.vue'
   import ArtSvgIcon from '@/components/core/base/art-svg-icon/index.vue'
-  import type { InfoItem, VehicleArchive, VehicleQuerySummary } from './types'
-  import { createDescriptionItems, formatDate, formatMileage } from './query-format'
-  import { formatNumberValue } from '@/utils/ui/format'
+  import type { VehicleArchive, VehicleQuerySummary } from './types'
+  import { formatMileage, formatValue } from './query-format'
   import { canViewField } from '@/utils/field-permission'
-  import { getVehicleUsageYears } from '@vms/views/vehicle-manage/modules/vehicle-lifecycle'
+  import { getVehicleTypeFallbackLabel } from '@/utils/business/vehicle-type-display'
 
   defineOptions({ name: 'VehicleQuerySummary' })
 
   const props = defineProps<{
     vehicle: VehicleArchive
     summary: VehicleQuerySummary
+    showBack?: boolean
   }>()
-  const emit = defineEmits<{ analyze: [] }>()
-  const descriptionData = Object.freeze({})
-
-  const descriptionItems = computed(() => {
-    const years = getVehicleUsageYears(props.vehicle.startUseDate)
-    return createDescriptionItems([
-      { label: '车牌号', value: props.vehicle.plateNo },
-      { label: '所属机构', value: props.vehicle.companyName },
-      { label: '车型', value: props.vehicle.vehicleType, dictCode: 'vehicleType' },
-      { label: '车型厂商', value: props.vehicle.manufacturer },
-      ...(canViewField(props.vehicle.fieldAccess, 'vehicleIdentifiers')
-        ? [{ label: '车架号', value: props.vehicle.vin }]
-        : []),
-      { label: '购入开票日期', value: formatDate(props.vehicle.invoiceDate) },
-      { label: '启用日期', value: formatDate(props.vehicle.startUseDate) },
-      {
-        label: '运营状态',
-        value: props.vehicle.operationStatus,
-        dictCode: 'vehicleOperationStatus'
-      },
-      {
-        label: '审核状态',
-        value: props.vehicle.auditStatus,
-        dictCode: 'vehicleAuditStatus'
-      },
-      {
-        label: '运营时长',
-        value: years === null ? undefined : formatNumberValue(years),
-        suffix: '年'
-      },
-      { label: '运营行驶里程', value: formatMileage(props.summary.runningMileage) },
-      { label: '商业险到期', value: formatDate(props.summary.commercialExpireDate) },
-      { label: '交强险到期', value: formatDate(props.summary.compulsoryExpireDate) },
-      { label: '年检到期', value: formatDate(props.summary.inspectionExpireDate) },
-      { label: '下次保养里程', value: formatMileage(props.summary.nextMaintenanceMileage) },
-      { label: '下次保养时间', value: formatDate(props.summary.nextMaintenanceDate) }
-    ] satisfies InfoItem[])
+  const emit = defineEmits<{ analyze: []; back: [] }>()
+  const driverContact = computed(() => {
+    const name = props.vehicle.primaryDriver?.driverName || '未设置'
+    const phone = canViewField(props.vehicle.primaryDriver?.fieldAccess, 'contactPhone')
+      ? props.vehicle.primaryDriver?.phone
+      : undefined
+    return phone ? `${name} / ${phone}` : name
   })
 </script>

@@ -121,6 +121,7 @@
   import { canEditField, canViewField } from '@/utils/field-permission'
   import {
     EDITABLE_VEHICLE_MAINTENANCE_ACCESS,
+    calculateMaintenanceReminder,
     sanitizeVehicleMaintenancePayload
   } from './maintenance-record-model'
   import {
@@ -461,12 +462,8 @@
           : [],
       maintenanceType: [{ required: true, message: '请选择维修类型', trigger: 'change' }],
       startTime: [{ required: true, message: '请选择开始时间', trigger: 'change' }],
-      serviceDate: form.data.id
-        ? []
-        : [{ required: true, message: '请选择保养维修日期', trigger: 'change' }],
-      currentOdometerKm: form.data.id
-        ? []
-        : [{ required: true, message: '请填写当前里程', trigger: 'change' }]
+      serviceDate: [{ required: true, message: '请选择保养维修日期', trigger: 'change' }],
+      currentOdometerKm: [{ required: true, message: '请填写当前里程', trigger: 'change' }]
     }))
   })
 
@@ -491,14 +488,13 @@
       ) {
         form.data.costAmount = totalCost.value
       }
-      form.data.nextMaintenanceDate =
-        form.data.reminderMode === 'time' && form.data.serviceDate
-          ? dayjs(form.data.serviceDate).add(3, 'month').format('YYYY-MM-DD')
-          : null
-      form.data.nextMaintenanceMileage =
-        form.data.reminderMode === 'mileage' && form.data.currentOdometerKm != null
-          ? Number(form.data.currentOdometerKm) + 10000
-          : null
+      const reminder = calculateMaintenanceReminder(
+        form.data.reminderMode ?? 'time',
+        form.data.serviceDate,
+        form.data.currentOdometerKm
+      )
+      form.data.nextMaintenanceDate = reminder.nextMaintenanceDate
+      form.data.nextMaintenanceMileage = reminder.nextMaintenanceMileage
     },
     { deep: true }
   )

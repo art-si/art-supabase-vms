@@ -11,40 +11,54 @@
       ]"
       :metrics="metrics"
     >
-      <template #actions><BusinessTableWorkspaceActions :table="tableRef" /></template>
-    </BusinessWorkspaceHeader>
-    <ArtTableQuery
-      ref="tableRef"
-      v-model="search"
-      :search-items="searchItems"
-      :api-fn="fetchTableData"
-      :columns-factory="columnsFactory"
-      :header-actions="headerActions"
-      header-actions-placement="workspace"
-      :search-bar-props="{ span: 6, labelWidth: 86 }"
-      :table-props="{
-        rowKey: 'id',
-        tableLayout: 'fixed',
-        emptyText: '暂无电卡流水',
-        emptyDescription: '可登记充值或充电消费，或调整电卡和日期后重新查询。'
-      }"
-      :on-success="handleSuccess"
-      focusable
-    >
-      <template #table-header-top>
-        <div class="flex flex-wrap items-center justify-between gap-2">
-          <ElSegmented
-            :model-value="search.entryType || 'all'"
-            :options="ledgerViews"
-            aria-label="电卡流水类型视图"
-            @update:model-value="handleLedgerViewChange"
-          />
-          <span class="text-xs text-[var(--el-text-color-secondary)]">
-            按记账序号倒排；发生时间可回填，余额随记账顺序计算。
-          </span>
-        </div>
+      <template #actions>
+        <BusinessTableWorkspaceActions :table="tableRef" />
       </template>
-    </ArtTableQuery>
+    </BusinessWorkspaceHeader>
+    <ArtWorkspaceSplitter
+      class="min-h-0 flex-1"
+      primary-size="264px"
+      primary-min="248px"
+      :breakpoint="1160"
+      narrow-mode="stack"
+    >
+      <template #primary
+        ><VehicleClassificationPanel @select="handleClassificationSelect"
+      /></template>
+      <ArtTableQuery
+        ref="tableRef"
+        v-model="search"
+        :search-items="searchItems"
+        :api-fn="fetchTableData"
+        :columns-factory="columnsFactory"
+        :header-actions="headerActions"
+        header-actions-placement="workspace"
+        :search-bar-props="{ span: 6, labelWidth: 86 }"
+        :table-props="{
+          rowKey: 'id',
+          tableLayout: 'fixed',
+          emptyText: '暂无电卡流水',
+          emptyDescription: '可登记充值或充电消费，或调整电卡和日期后重新查询。'
+        }"
+        :on-success="handleSuccess"
+        focus-scope-selector=".art-workspace-splitter"
+        focusable
+      >
+        <template #table-header-top>
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <ElSegmented
+              :model-value="search.entryType || 'all'"
+              :options="ledgerViews"
+              aria-label="电卡流水类型视图"
+              @update:model-value="handleLedgerViewChange"
+            />
+            <span class="text-xs text-[var(--el-text-color-secondary)]">
+              按记账序号倒排；发生时间可回填，余额随记账顺序计算。
+            </span>
+          </div>
+        </template>
+      </ArtTableQuery>
+    </ArtWorkspaceSplitter>
     <ElectricCardEntryDialog ref="entryDialogRef" @success="tableRef?.refreshCreate()" />
     <ElectricCardReversalDialog ref="reversalDialogRef" @success="tableRef?.refreshUpdate()" />
     <CardEntryVoucherDialog
@@ -126,6 +140,10 @@
 <script setup lang="tsx">
   import { uniqBy } from 'lodash-es'
   import { ElAlert, ElButton, ElSegmented } from 'element-plus'
+  import ArtWorkspaceSplitter from '@/components/core/layouts/art-workspace-splitter/index.vue'
+  import VehicleClassificationPanel, {
+    type VehicleClassificationSelection
+  } from '../components/vehicle-classification-panel.vue'
   import type { SearchFormItem } from '@/components/core/forms/art-search-bar/index.vue'
   import type {
     ArtTableQueryExpose,
@@ -173,6 +191,12 @@
   const route = useRoute()
   const { hasAuth } = useAuth()
   const tableRef = ref<ArtTableQueryExpose>()
+  const classification = ref<VehicleClassificationSelection>({})
+  const handleClassificationSelect = (value: VehicleClassificationSelection): void => {
+    classification.value = value
+    tableRef.value?.clearSelection()
+    void tableRef.value?.refreshContext()
+  }
   const entryDialogRef = ref<{
     handleOpen: (type: 'recharge' | 'consume', card?: ElectricCard) => Promise<void>
   }>()
@@ -183,6 +207,21 @@
   const activeDetailTab = ref('transaction')
   const transactionDetailItems: ArtDescriptionItem<ElectricCardEntry>[] = [
     { key: 'cardStatus', label: '卡状态', field: 'cardStatus', dictCode: 'fuelCardStatus' },
+    { key: 'companyName', label: '所属公司', field: 'companyName' },
+    {
+      key: 'vehicleOwnership',
+      label: '车辆归属',
+      field: 'vehicleOwnership',
+      dictCode: 'vehicleOwnership'
+    },
+    { key: 'carrierName', label: '所属承运商', field: 'carrierName' },
+    {
+      key: 'vehicleDriverName',
+      label: '绑定司机',
+      value: (row: ElectricCardEntry) =>
+        [row.vehicleDriverName, row.vehicleDriverPhone].filter(Boolean).join(' · ') || '--'
+    },
+    { key: 'sourceCostNo', label: '费用单号', field: 'sourceCostNo' },
     {
       key: 'occurredAt',
       label: '流水时间',
@@ -415,6 +454,37 @@
     },
     { prop: 'plateNo', label: '绑定车牌', minWidth: 120 },
     {
+      prop: 'vehicleOwnership',
+      label: '车辆归属',
+      minWidth: 120,
+      dict: { code: 'vehicleOwnership', display: 'text' }
+    },
+    {
+      prop: 'vehicleDriverName',
+      label: '司机（电话）',
+      minWidth: 170,
+      formatter: (row) =>
+        [row.vehicleDriverName, row.vehicleDriverPhone].filter(Boolean).join(' · ') || '--'
+    },
+    {
+      prop: 'carrierName',
+      label: '所属承运商',
+      minWidth: 160,
+      formatter: (row) => row.carrierName || '--'
+    },
+    {
+      prop: 'companyName',
+      label: '所属公司',
+      minWidth: 160,
+      formatter: (row) => row.companyName || '--'
+    },
+    {
+      prop: 'sourceCostNo',
+      label: '费用单号',
+      minWidth: 165,
+      formatter: (row) => row.sourceCostNo || '--'
+    },
+    {
       prop: 'stationName',
       label: '充电站',
       minWidth: 150,
@@ -422,7 +492,7 @@
     },
     {
       prop: 'waybillNo',
-      label: '关联运单',
+      label: '运单号',
       minWidth: 170,
       formatter: (row) => row.waybillNo || '--'
     },
@@ -509,6 +579,8 @@
       current: params.current,
       size: params.size,
       cardId: params.cardId,
+      vehicleOwnership: classification.value.vehicleOwnership,
+      vehicleType: classification.value.vehicleType,
       entryType: params.entryType,
       occurredFrom: params.occurredRange?.[0],
       occurredTo: params.occurredRange?.[1]

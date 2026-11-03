@@ -128,6 +128,7 @@
   } from 'element-plus'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
+  import { useDocumentNumberRule } from '@/hooks/core/useDocumentNumberRule'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
@@ -162,6 +163,7 @@
     imageUrl: string
   }
   interface IssueForm {
+    documentNo: string
     vehicleId: string
     driverId: string
     driverName: string
@@ -208,6 +210,10 @@
   const availableParts = ref<VehiclePartStock[]>([])
   const stockError = ref(false)
   const selectedVehicleTenantId = ref('')
+  const issueNumber = useDocumentNumberRule(
+    'vehicle.part_issue',
+    () => selectedVehicleTenantId.value || undefined
+  )
   let idempotencyKey = crypto.randomUUID()
   const newLine = (): IssueLineForm => ({
     key: crypto.randomUUID(),
@@ -217,6 +223,7 @@
     imageUrl: ''
   })
   const initialForm = (): IssueForm => ({
+    documentNo: '',
     vehicleId: '',
     driverId: '',
     driverName: '',
@@ -227,6 +234,17 @@
     data: initialForm(),
     vehicleSelection: [],
     items: computed<FormItem[]>((): FormItem[] => [
+      {
+        label: '领用单号',
+        key: 'documentNo',
+        type: 'input',
+        span: 12,
+        props: {
+          disabled: true,
+          placeholder: issueNumber.rule.value?.preview || '选择车辆后，提交时自动生成'
+        },
+        description: issueNumber.description.value
+      },
       {
         label: '领用车辆',
         key: 'vehicleId',
@@ -292,6 +310,7 @@
       driverName: vehicle?.primaryDriver?.driverName || vehicle?.driverOneName || ''
     })
     selectedVehicleTenantId.value = vehicle?.tenantId || ''
+    void issueNumber.loadRule()
   }
   const handleDriverChange = (driver: VmsDriverReference | null): void => {
     Object.assign(form.data, {

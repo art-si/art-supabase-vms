@@ -204,7 +204,7 @@ export async function fetchPartsCategoryList(params: PartsCategorySearchParams) 
 }
 
 export async function fetchPartsCategoryTree(
-  params: Partial<Pick<PartsCategory, 'categoryName'>> = {},
+  params: Partial<Pick<PartsCategory, 'categoryName' | 'tenantId'>> = {},
   options?: ApiRequestOptions & ApiFeedbackOptions
 ): Promise<QueryResult<PartsCategory[]>> {
   const result = await http.get<PartsCategory[] | JavaPageResult<PartsCategory>>({
@@ -303,6 +303,14 @@ export async function addParts(params: Parts) {
   })
 }
 
+export async function addPartsBatch(rows: Parts[]) {
+  return await http.post<Parts[]>({
+    url: `${ENDPOINTS.parts}/batch`,
+    data: rows,
+    showSuccessMessage: true
+  })
+}
+
 export async function editParts(params: Parts) {
   const { id, ...data } = params
   return await http.put<Parts>({
@@ -335,12 +343,17 @@ export async function importParts(rows: Parts[]) {
   })
 }
 
-export async function fetchSupplierOptions() {
+export async function fetchSupplierOptions(params?: {
+  ids?: string[]
+  supplierName?: string
+  tenantId?: string
+}) {
   const result = await http.get<
     | Pick<Supplier, 'id' | 'supplierName' | 'contactPerson' | 'contactPhone'>[]
     | JavaPageResult<Pick<Supplier, 'id' | 'supplierName' | 'contactPerson' | 'contactPhone'>>
   >({
-    url: `${ENDPOINTS.supplier}/options`
+    url: `${ENDPOINTS.supplier}/options`,
+    params
   })
   return normalizeListResult(result)
 }

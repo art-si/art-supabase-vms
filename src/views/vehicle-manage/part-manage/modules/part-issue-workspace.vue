@@ -273,20 +273,37 @@
     {
       prop: 'documentNo',
       label: '领用单号',
-      minWidth: 210,
+      width: 150,
+      showOverflowTooltip: true,
       fixed: 'left',
       link: { permission: 'VmsPartIssue:View', onClick: (row) => void openDetail(row) }
     },
     { prop: 'plateNo', label: '领用车辆', minWidth: 120 },
     {
-      prop: 'driverName',
-      label: '领用司机',
-      minWidth: 120,
-      formatter: (row) => row.driverName || '--'
+      prop: 'vehicleOwnership',
+      label: '车辆归属',
+      minWidth: 110,
+      dict: { code: 'vehicleOwnership', display: 'auto' }
     },
+    {
+      prop: 'isNewEnergy',
+      label: '是否新能源车',
+      width: 120,
+      formatter: (row) => (row.isNewEnergy == null ? '--' : row.isNewEnergy ? '是' : '否')
+    },
+    {
+      prop: 'driverName',
+      label: '领用司机(电话)',
+      minWidth: 170,
+      formatter: (row) => [row.driverName, row.driverPhone].filter(Boolean).join(' · ') || '--'
+    },
+    { prop: 'carrierName', label: '所属承运商', minWidth: 160, showOverflowTooltip: true },
+    { prop: 'companyName', label: '所属公司', minWidth: 160, showOverflowTooltip: true },
     { prop: 'lineCount', label: '明细项', width: 92, align: 'right' },
     { prop: 'issuedQty', label: '领用数量', width: 105, align: 'right' },
     { prop: 'returnedQty', label: '已归还', width: 96, align: 'right' },
+    { prop: 'lostQty', label: '丢失', width: 80, align: 'right' },
+    { prop: 'damagedQty', label: '损坏', width: 80, align: 'right' },
     {
       prop: 'createTime',
       label: '登记时间',

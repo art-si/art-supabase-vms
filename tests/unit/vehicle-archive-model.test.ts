@@ -15,6 +15,8 @@ test('vehicle archive payload removes display and audit-only fields', () => {
     companyName: '',
     primaryDriverName: '司机甲',
     primaryDriverPhone: '13800000000',
+    defaultTrailerId: 'trailer-1',
+    defaultTrailerPlateNo: '测A1234挂',
     createBy: 'auditor',
     auditStatus: 'rejected',
     auditRemark: '请补充资料',
@@ -29,6 +31,8 @@ test('vehicle archive payload removes display and audit-only fields', () => {
   assert.deepEqual(payload.attachments, [])
   assert.equal(payload.isAirConditioned, false)
   assert.equal('primaryDriverName' in payload, false)
+  assert.equal('defaultTrailerId' in payload, false)
+  assert.equal('defaultTrailerPlateNo' in payload, false)
   assert.equal('createBy' in payload, false)
   assert.equal('auditStatus' in payload, false)
   assert.equal('auditRemark' in payload, false)

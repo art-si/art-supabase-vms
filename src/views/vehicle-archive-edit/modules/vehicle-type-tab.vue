@@ -935,15 +935,13 @@
     }
 
     &__tree-card {
-      --vehicle-tree-inline-padding: var(--art-space-2);
-
       display: flex;
       flex-direction: column;
       min-height: 0;
 
       :deep(.art-section-card__header) {
         flex: none;
-        padding-right: var(--vehicle-tree-inline-padding);
+        padding: var(--art-section-padding) var(--art-section-padding) 0;
       }
 
       :deep(.art-section-card__body) {
@@ -954,7 +952,8 @@
       }
 
       :deep(.el-tree-node) {
-        max-width: calc(100% - var(--vehicle-tree-inline-padding));
+        max-width: calc(100% - var(--art-space-4));
+        margin-inline: var(--art-space-2);
       }
     }
 

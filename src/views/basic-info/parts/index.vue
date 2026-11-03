@@ -1,5 +1,5 @@
 <template>
-  <div class="parts-page art-full-height">
+  <div class="parts-page business-workspace-page art-full-height">
     <BusinessWorkspaceHeader
       eyebrow="PARTS MASTER DATA"
       title="零部件资料"
@@ -16,24 +16,42 @@
       </template>
     </BusinessWorkspaceHeader>
 
-    <ArtTableQuery
-      ref="tableQueryRef"
-      v-model="searchQuery"
-      :search-items="searchItems"
-      :api-fn="fetchTableData"
-      :columns-factory="columnsFactory"
-      :header-actions="headerActions"
-      header-actions-placement="workspace"
-      :search-bar-props="{ span: 8, labelWidth: 90 }"
-      :table-props="{
-        rowKey: 'id',
-        tableLayout: 'fixed',
-        emptyText: '暂无零部件资料',
-        emptyDescription: '可新增零部件，或调整名称、编码、类别、品牌和状态后重新查询。'
-      }"
-      :on-success="handleTableSuccess"
-      focusable
-    />
+    <div class="parts-page__workspace">
+      <ArtWorkspaceSplitter primary-size="264px" primary-min="248px" :breakpoint="900">
+        <template #primary>
+          <PartsCategoryFilter
+            :categories="categoryTree"
+            :selected-id="selectedCategoryId"
+            :loading="categoryLoading"
+            :error="categoryError"
+            @select="handleCategorySelect"
+            @refresh="loadCategories"
+          />
+        </template>
+
+        <div class="parts-page__table-workspace">
+          <ArtTableQuery
+            ref="tableQueryRef"
+            v-model="searchQuery"
+            :search-items="searchItems"
+            :api-fn="fetchTableData"
+            :columns-factory="columnsFactory"
+            :header-actions="headerActions"
+            header-actions-placement="workspace"
+            :search-bar-props="{ span: 8, labelWidth: 90 }"
+            :table-props="{
+              rowKey: 'id',
+              tableLayout: 'fixed',
+              emptyText: selectedCategoryId ? '当前类别暂无零部件' : '暂无零部件资料',
+              emptyDescription: '可新增零部件，或调整名称、编码、品牌和状态后重新查询。'
+            }"
+            :on-success="handleTableSuccess"
+            focusable
+            focus-scope-selector=".parts-page__workspace"
+          />
+        </div>
+      </ArtWorkspaceSplitter>
+    </div>
 
     <PartsDialog ref="dialogRef" @success="handleSaveSuccess" />
     <MasterDataDeleteGuard ref="deleteGuardRef" />
@@ -56,6 +74,8 @@
   import ArtButtonTable from '@/components/core/forms/art-button-table/index.vue'
   import { ColumnOption, DialogType } from '@/types'
   import { buildSupabasePageRange } from '@/utils/supabase/pagination'
+  import TreeUtils from '@/utils/tree'
+  import { useTenantScopeStore } from '@/store/modules/tenant-scope'
   import { useUserStore } from '@/store/modules/user'
   import {
     deleteParts,
@@ -70,6 +90,8 @@
     type BusinessWorkspaceMetric
   } from '@/components/business/business-workspace-header/index.vue'
   import BusinessTableWorkspaceActions from '@/components/business/business-table-workspace-actions/index.vue'
+  import ArtWorkspaceSplitter from '@/components/core/layouts/art-workspace-splitter/index.vue'
+  import PartsCategoryFilter from './modules/parts-category-filter.vue'
 
   defineOptions({ name: 'VehicleParts' })
 
@@ -85,6 +107,25 @@
 
   const tableQueryRef = ref<ArtTableQueryExpose>()
   const dialogRef = ref<DialogExpose>()
+  const tenantScope = useTenantScopeStore()
+  const categoryTree = shallowRef<Api.Vms.BasicInfo.PartsCategory[]>([])
+  const selectedCategoryId = ref('')
+  const categoryLoading = ref(false)
+  const categoryError = ref('')
+  const treeUtils = new TreeUtils({ parentKey: 'parentId' })
+  let categoryRequest: AbortController | undefined
+  const selectedCategory = computed(() =>
+    selectedCategoryId.value
+      ? treeUtils.findNode(categoryTree.value, selectedCategoryId.value)
+      : null
+  )
+  const selectedCategoryIds = computed(() =>
+    selectedCategoryId.value
+      ? treeUtils
+          .getDescendants(categoryTree.value, selectedCategoryId.value, true)
+          .flatMap((category) => (category.id ? [category.id] : []))
+      : undefined
+  )
   const userStore = useUserStore()
   const { getDictMap } = storeToRefs(userStore)
   const overview = reactive<{ total: number; rows: Parts[] }>({ total: 0, rows: [] })
@@ -92,7 +133,9 @@
     {
       label: '零部件总数',
       value: overview.total,
-      description: '当前筛选条件下的主数据',
+      description: selectedCategory.value
+        ? `当前“${selectedCategory.value.categoryName}”及下级类别`
+        : '当前筛选条件下的主数据',
       icon: 'ri:database-2-line'
     },
     {
@@ -114,7 +157,6 @@
   const searchQuery = ref<SearchParams>({
     partName: '',
     partCode: '',
-    categoryId: undefined,
     brand: '',
     status: undefined
   })
@@ -129,20 +171,6 @@
       label: '零部件编码',
       key: 'partCode',
       type: 'input'
-    },
-    {
-      label: '零部件类别',
-      key: 'categoryId',
-      type: 'treeSelect',
-      api: fetchPartsCategoryTree,
-      resultField: 'data',
-      labelField: 'categoryName',
-      valueField: 'id',
-      childrenField: 'children',
-      props: {
-        checkStrictly: true,
-        renderAfterExpand: false
-      }
     },
     {
       label: '品牌',
@@ -160,12 +188,12 @@
   ])
 
   const partsImportColumns: ArtTableQueryExcelColumn[] = [
-    { key: 'partName', title: '零部件名称', required: true },
-    { key: 'partCode', title: '零部件编码', required: true },
+    { key: 'partName', title: '零部件名称' },
+    { key: 'partCode', title: '物料编码', required: true },
     { key: 'categoryId', title: '类别ID' },
     { key: 'brand', title: '品牌' },
     { key: 'model', title: '型号' },
-    { key: 'unit', title: '单位' },
+    { key: 'unit', title: '计量单位' },
     { key: 'isConsumable', title: '是否易损/耗件' },
     { key: 'warrantyMileage', title: '质保里程' },
     { key: 'warrantyDuration', title: '质保时长（月）' },
@@ -227,6 +255,7 @@
       exportApi: ({ selectedIds, searchParams, maxRows }) => {
         return exportPartsList({
           ...(searchParams as SearchParams),
+          categoryIds: selectedCategoryIds.value,
           ids: selectedIds.map(String),
           maxRows
         })
@@ -262,10 +291,53 @@
 
     return fetchPartsList({
       ...params,
+      categoryIds: selectedCategoryIds.value,
       from,
       to
     })
   }
+
+  const loadCategories = async (): Promise<void> => {
+    categoryRequest?.abort()
+    const controller = new AbortController()
+    categoryRequest = controller
+    categoryLoading.value = true
+    categoryError.value = ''
+    try {
+      const { data, error } = await fetchPartsCategoryTree(
+        {},
+        { signal: controller.signal, showErrorMessage: false }
+      )
+      if (controller.signal.aborted) return
+      if (error || !data) throw new Error('零部件类别加载失败，请重试', { cause: error })
+      categoryTree.value = data
+      if (selectedCategoryId.value && !treeUtils.findNode(data, selectedCategoryId.value)) {
+        selectedCategoryId.value = ''
+        await tableQueryRef.value?.getData()
+      }
+    } catch {
+      if (!controller.signal.aborted) categoryError.value = '零部件类别加载失败，请重试'
+    } finally {
+      if (categoryRequest === controller) categoryLoading.value = false
+    }
+  }
+
+  const handleCategorySelect = async (id: string): Promise<void> => {
+    if (selectedCategoryId.value === id) return
+    selectedCategoryId.value = id
+    await tableQueryRef.value?.getData()
+  }
+
+  onMounted(() => void loadCategories())
+  onBeforeUnmount(() => categoryRequest?.abort())
+  watch(
+    () => tenantScope.effectiveTenantId,
+    () => {
+      categoryTree.value = []
+      selectedCategoryId.value = ''
+      void loadCategories()
+    }
+  )
 
   const columnsFactory = (): ColumnOption<Parts>[] => [
     {
@@ -374,7 +446,21 @@
 
 <style scoped lang="scss">
   .parts-page {
-    gap: 12px;
     min-width: 0;
+
+    &__workspace {
+      display: flex;
+      flex: 1 1 auto;
+      min-width: 0;
+      min-height: 0;
+    }
+
+    &__table-workspace {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      height: 100%;
+      min-height: 0;
+    }
   }
 </style>

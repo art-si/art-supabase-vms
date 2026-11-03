@@ -11,6 +11,7 @@ declare global {
 
         interface CarrierReference {
           id: string
+          tenantId?: string
           carrierCode?: string
           companyName: string
           enabled?: boolean
@@ -71,7 +72,8 @@ declare global {
           selfNo?: string
           vehicleType: string
           vehicleTypeProfileId?: string | null
-          vehicleOwnership?: 'self_operated' | 'franchise' | 'third_party'
+          vehicleOwnership?:
+            'self_operated' | 'franchise' | 'third_party' | 'carrier' | 'individual_affiliation'
           specLengthM?: number | null
           volumeM3?: number | null
           loadTons?: number | null
@@ -90,6 +92,7 @@ declare global {
           issueDate?: string
           invoiceDate?: string
           purchaseDate?: string
+          defaultTrailerPlateNo?: string | null
           startUseDate?: string
           serviceYears?: number | null
           approvedPassengerCount?: number | null
@@ -368,6 +371,11 @@ declare global {
           vehicleId?: string | null
           plateNo: string
           companyName?: string
+          vehicleOwnership?: string | null
+          driverName?: string | null
+          driverPhone?: string | null
+          carrierName?: string | null
+          waybillNo?: string | null
           runningMileage?: number | string | null
           startTime?: string
           startMileage?: number | string | null
@@ -385,6 +393,8 @@ declare global {
           Pick<VehicleMileageRecord, 'vehicleId' | 'companyName' | 'plateNo'> &
             Api.Common.CommonSearchParams & {
               drivingTimeRange?: string[]
+              vehicleOwnership?: string
+              vehicleType?: string
             }
         >
 
@@ -894,6 +904,12 @@ declare global {
         interface Parts {
           id?: string
           tenantId?: string
+          materialId?: string | null
+          material?: {
+            id: string
+            materialCode: string
+            materialName: string
+          } | null
           partName: string
           partCode: string
           categoryId?: string | null
@@ -901,6 +917,8 @@ declare global {
           brand?: string
           model?: string
           unit?: string
+          unitId?: string | null
+          unitRef?: { id: string; unitCode: string; unitName: string } | null
           supplierId?: string | null
           supplier?: Pick<Supplier, 'id' | 'supplierName' | 'contactPerson' | 'contactPhone'> | null
           manufacturer?: string
@@ -924,7 +942,7 @@ declare global {
             'partName' | 'partCode' | 'categoryId' | 'brand' | 'model' | 'supplierId' | 'status'
           > &
             Api.Common.CommonSearchParams
-        >
+        > & { categoryIds?: string[] }
       }
     }
 

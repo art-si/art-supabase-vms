@@ -13,8 +13,12 @@
     >
       <template #actions>
         <ElRadioGroup v-model="viewMode" size="small" aria-label="油卡展示方式">
-          <ElRadioButton value="list">明细</ElRadioButton>
-          <ElRadioButton value="cards">卡片</ElRadioButton>
+          <ElRadioButton
+            v-for="option in viewModeOptions"
+            :key="option.value"
+            :value="option.value"
+            >{{ option.label }}</ElRadioButton
+          >
         </ElRadioGroup>
         <BusinessTableWorkspaceActions
           :table="tableRef"
@@ -22,105 +26,68 @@
         />
       </template>
     </BusinessWorkspaceHeader>
-    <ArtTableQuery
-      ref="tableRef"
-      v-model="search"
-      :search-items="searchItems"
-      :api-fn="fetchTableData"
-      :columns-factory="columnsFactory"
-      :header-actions="headerActions"
-      header-actions-placement="workspace"
-      :search-bar-props="{ span: 6, labelWidth: 80 }"
-      :table-props="{
-        rowKey: 'id',
-        tableLayout: 'fixed',
-        emptyText: '暂无油卡档案',
-        emptyDescription: '可创建油卡并绑定已审批车辆，或调整筛选条件后重新查询。'
-      }"
-      :on-success="handleSuccess"
-      focusable
+    <ArtWorkspaceSplitter
+      class="min-h-0 flex-1"
+      primary-size="264px"
+      primary-min="248px"
+      :breakpoint="1160"
+      narrow-mode="stack"
     >
-      <template v-if="viewMode === 'cards'" #content>
-        <ArtAsyncState
-          :loading="cardDataState.loading"
-          :error="cardDataState.error"
-          :empty="!cardDataState.loading && !cardDataState.error && cardRows.length === 0"
-          empty-text="暂无油卡档案"
-          empty-description="可创建油卡并绑定已审批车辆，或调整筛选条件后重新查询。"
-          :min-height="260"
-          @retry="tableRef?.refreshData()"
-        >
-          <div class="fuel-card-archive__cards grid gap-3 p-4">
-            <article
-              v-for="card in cardRows"
-              :key="card.id"
-              class="min-w-0 rounded-[var(--el-border-radius-base)] border border-[var(--el-border-color-light)] bg-[var(--el-bg-color)] p-4"
-            >
-              <div class="flex min-w-0 items-start justify-between gap-3">
-                <img
-                  v-if="imagePreviews[card.imagePath || '']"
-                  :src="imagePreviews[card.imagePath || '']"
-                  :alt="`${card.cardNo} 卡面照片`"
-                  width="56"
-                  height="56"
-                  class="h-14 w-14 shrink-0 rounded-[var(--el-border-radius-base)] object-cover"
-                />
-                <span
-                  v-else
-                  class="flex h-14 w-14 shrink-0 items-center justify-center rounded-[var(--el-border-radius-base)] bg-[var(--el-fill-color-light)] text-[var(--theme-color)]"
-                  aria-hidden="true"
-                  ><ArtSvgIcon icon="ri:bank-card-line" class="text-2xl"
-                /></span>
-                <div class="min-w-0 flex-1">
-                  <p class="text-xs text-[var(--el-text-color-secondary)]">{{ card.plateNo }}</p>
-                  <button
-                    type="button"
-                    class="mt-1 block max-w-full truncate text-left text-lg font-semibold text-[var(--theme-color)] hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--theme-color)]"
-                    :title="card.cardNo"
-                    @click="openDetail(card)"
-                    >{{ card.cardNo }}</button
-                  >
-                </div>
-                <ArtDictDisplay class="shrink-0" dict-code="fuelCardStatus" :value="card.status" />
-              </div>
-              <div class="mt-4 border-t border-[var(--el-border-color-lighter)] pt-3">
-                <span class="text-xs text-[var(--el-text-color-secondary)]">当前余额</span>
-                <strong
-                  class="mt-1 block text-2xl tabular-nums text-[var(--el-text-color-primary)]"
-                  >{{ formatCurrencyValue(card.balance) }}</strong
-                >
-              </div>
-              <div class="mt-3 flex min-w-0 items-end justify-between gap-2 text-sm">
-                <div class="min-w-0 text-[var(--el-text-color-secondary)]">
-                  <p class="truncate" :title="`卡归属人：${card.ownerEmployeeName || '未指定'}`"
-                    >卡归属人 {{ card.ownerEmployeeName || '未指定' }}</p
-                  >
-                  <p class="mt-1 truncate" :title="`司机：${card.driverName || '未指定'}`"
-                    >司机 {{ card.driverName || '未指定' }}</p
-                  >
-                </div>
-                <ElButton
-                  v-if="hasAuth('FuelCardLedger:View')"
-                  link
-                  type="primary"
-                  @click="openLedger(card)"
-                  >查看流水</ElButton
-                >
-              </div>
-            </article>
-          </div>
-          <div class="flex justify-end border-t border-[var(--el-border-color-lighter)] px-4 py-3">
-            <ElPagination
-              :current-page="cardPagination.current"
-              :page-size="cardPagination.size"
-              :total="cardPagination.total"
-              layout="total, prev, pager, next"
-              @current-change="tableRef?.changePage($event)"
-            />
-          </div>
-        </ArtAsyncState>
+      <template #primary>
+        <VehicleClassificationPanel @select="handleClassificationSelect" />
       </template>
-    </ArtTableQuery>
+      <ArtTableQuery
+        ref="tableRef"
+        v-model="search"
+        :search-items="searchItems"
+        :api-fn="fetchTableData"
+        :columns-factory="columnsFactory"
+        :header-actions="headerActions"
+        header-actions-placement="workspace"
+        :search-bar-props="{ span: 6, labelWidth: 80 }"
+        :table-props="{
+          rowKey: 'id',
+          tableLayout: 'fixed',
+          emptyText: '暂无油卡档案',
+          emptyDescription: '可创建油卡并绑定已审批车辆，或调整筛选条件后重新查询。'
+        }"
+        :on-success="handleSuccess"
+        focus-scope-selector=".art-workspace-splitter"
+        focusable
+      >
+        <template v-if="viewMode === 'cards'" #content>
+          <ArtAsyncState
+            :loading="cardDataState.loading"
+            :error="cardDataState.error"
+            :empty="!cardDataState.loading && !cardDataState.error && cardRows.length === 0"
+            empty-text="暂无油卡档案"
+            empty-description="可创建油卡并绑定已审批车辆，或调整筛选条件后重新查询。"
+            :min-height="260"
+            @retry="tableRef?.refreshData()"
+          >
+            <EnergyCardGrid
+              :cards="cardRows"
+              :image-previews="imagePreviews"
+              kind="fuel"
+              :can-view-ledger="hasAuth('FuelCardLedger:View')"
+              @detail="openCardDetailById"
+              @ledger="openCardLedgerById"
+            />
+            <div
+              class="flex justify-end border-t border-[var(--el-border-color-lighter)] px-4 py-3"
+            >
+              <ElPagination
+                :current-page="cardPagination.current"
+                :page-size="cardPagination.size"
+                :total="cardPagination.total"
+                layout="total, prev, pager, next"
+                @current-change="tableRef?.changePage($event)"
+              />
+            </div>
+          </ArtAsyncState>
+        </template>
+      </ArtTableQuery>
+    </ArtWorkspaceSplitter>
     <FuelCardDialog ref="dialogRef" @success="tableRef?.refreshCreate()" />
     <ArtDrawer ref="detailRef" :show-footer="false" size="md">
       <div v-if="selectedCard" class="space-y-4">
@@ -159,6 +126,17 @@
             ><dd class="mt-1 font-medium">{{ selectedCard.companyName || '--' }}</dd></div
           >
           <div
+            ><dt class="text-xs text-[var(--el-text-color-secondary)]">车辆归属</dt
+            ><dd class="mt-1 font-medium"
+              ><ArtDictDisplay
+                dict-code="vehicleOwnership"
+                :value="selectedCard.vehicleOwnership" /></dd
+          ></div>
+          <div
+            ><dt class="text-xs text-[var(--el-text-color-secondary)]">所属承运商</dt
+            ><dd class="mt-1 font-medium">{{ selectedCard.carrierName || '--' }}</dd></div
+          >
+          <div
             ><dt class="text-xs text-[var(--el-text-color-secondary)]">所属油品</dt
             ><dd class="mt-1 font-medium"
               ><ArtDictDisplay dict-code="fuelCardFuelType" :value="selectedCard.fuelType" /></dd
@@ -169,7 +147,10 @@
           >
           <div
             ><dt class="text-xs text-[var(--el-text-color-secondary)]">当前司机</dt
-            ><dd class="mt-1 font-medium">{{ selectedCard.driverName || '--' }}</dd></div
+            ><dd class="mt-1 font-medium">{{
+              [selectedCard.driverName, selectedCard.driverPhone].filter(Boolean).join(' · ') ||
+              '--'
+            }}</dd></div
           >
           <div
             ><dt class="text-xs text-[var(--el-text-color-secondary)]">开户人</dt
@@ -211,6 +192,11 @@
 
 <script setup lang="tsx">
   import { ElButton, ElPagination, ElRadioButton, ElRadioGroup } from 'element-plus'
+  import ArtWorkspaceSplitter from '@/components/core/layouts/art-workspace-splitter/index.vue'
+  import VehicleClassificationPanel, {
+    type VehicleClassificationSelection
+  } from '../components/vehicle-classification-panel.vue'
+  import EnergyCardGrid from '../components/energy-card-grid.vue'
   import type { SearchFormItem } from '@/components/core/forms/art-search-bar/index.vue'
   import type {
     ArtTableQueryExpose,
@@ -256,6 +242,7 @@
   const detailRef = ref<ArtDrawerExpose<FuelCard>>()
   const dialogRef = ref<{ handleOpen: (card?: FuelCard) => Promise<void> }>()
   const viewMode = ref<'list' | 'cards'>('list')
+  const classification = ref<VehicleClassificationSelection>({})
   const selectedCard = ref<FuelCard | null>(null)
   const imagePreviews = ref<Record<string, string>>({})
   let imageLoadSequence = 0
@@ -276,6 +263,7 @@
     typeof route.query.recordId === 'string' ? route.query.recordId : undefined
   )
   const statusOptions = useDictionaryOptions('fuelCardStatus')
+  const viewModeOptions = useDictionaryOptions('vmsCardViewMode')
   watch(
     () => [search.keyword, search.status],
     () => {
@@ -293,7 +281,17 @@
     }
   )
   const fetchTableData = (params: Parameters<typeof fetchFuelCardList>[0]) =>
-    fetchFuelCardList({ ...params, cardId: linkedCardId.value })
+    fetchFuelCardList({
+      ...params,
+      cardId: linkedCardId.value,
+      vehicleOwnership: classification.value.vehicleOwnership,
+      vehicleType: classification.value.vehicleType
+    })
+  const handleClassificationSelect = (value: VehicleClassificationSelection): void => {
+    classification.value = value
+    tableRef.value?.clearSelection()
+    void tableRef.value?.refreshContext()
+  }
   const searchItems = computed<SearchFormItem[]>(() => [
     {
       label: '油卡/车牌',
@@ -359,6 +357,8 @@
       exportApi: ({ selectedIds, searchParams, maxRows }) =>
         exportFuelCardList({
           selectedIds: selectedIds.length ? selectedIds.map(String) : undefined,
+          vehicleOwnership: classification.value.vehicleOwnership,
+          vehicleType: classification.value.vehicleType,
           keyword: String(searchParams.keyword || ''),
           status: searchParams.status as FuelCardStatus | undefined,
           cardId: linkedCardId.value,
@@ -369,6 +369,24 @@
   const columnsFactory = (): ColumnOption<FuelCard>[] => [
     { type: 'selection', width: 48, fixed: 'left', reserveSelection: true },
     { type: 'globalIndex', label: '序号', width: 64 },
+    {
+      prop: 'imagePath',
+      label: '卡图片',
+      width: 82,
+      formatter: (row) =>
+        imagePreviews.value[row.imagePath || ''] ? (
+          <img
+            src={imagePreviews.value[row.imagePath || '']}
+            alt={`${row.cardNo} 卡面照片`}
+            class="size-9 rounded-[var(--el-border-radius-base)] object-cover"
+          />
+        ) : (
+          <ArtSvgIcon
+            icon="ri:bank-card-line"
+            class="text-xl text-[var(--el-text-color-placeholder)]"
+          />
+        )
+    },
     {
       prop: 'cardNo',
       label: '油卡号',
@@ -424,9 +442,27 @@
     },
     {
       prop: 'driverName',
-      label: '司机',
+      label: '司机（电话）',
+      minWidth: 170,
+      formatter: (row) => [row.driverName, row.driverPhone].filter(Boolean).join(' · ') || '--'
+    },
+    {
+      prop: 'vehicleOwnership',
+      label: '车辆归属',
       minWidth: 120,
-      formatter: (row) => row.driverName || '--'
+      dict: { code: 'vehicleOwnership', display: 'text' }
+    },
+    {
+      prop: 'carrierName',
+      label: '所属承运商',
+      minWidth: 160,
+      formatter: (row) => row.carrierName || '--'
+    },
+    {
+      prop: 'companyName',
+      label: '所属公司',
+      minWidth: 160,
+      formatter: (row) => row.companyName || '--'
     },
     {
       prop: 'ownerEmployeeName',
@@ -501,6 +537,14 @@
   const openLedger = (card: FuelCard): void => {
     void router.push(`/vms/vehicle-manage/fuel-card-ledger?cardId=${card.id}`)
   }
+  const openCardDetailById = (id: string): void => {
+    const card = cardRows.value.find((item) => item.id === id)
+    if (card) void openDetail(card)
+  }
+  const openCardLedgerById = (id: string): void => {
+    const card = cardRows.value.find((item) => item.id === id)
+    if (card) openLedger(card)
+  }
   const statusActions = (card: FuelCard): ButtonMoreItem[] => [
     { key: 'edit', label: '编辑档案', icon: 'ri:edit-line', auth: 'FuelCardArchive:Edit' },
     ...(card.status === 'active'
@@ -556,9 +600,3 @@
     }
   }
 </script>
-
-<style scoped>
-  .fuel-card-archive__cards {
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
-  }
-</style>

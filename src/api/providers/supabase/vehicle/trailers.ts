@@ -7,10 +7,12 @@ import {
   signVmsPrivateDocuments
 } from './private-documents'
 import { normalizeTrailerRelationIds } from './trailer-write-payload'
+import type { MasterDataDeleteDependencyDetail } from '@/api/master-data-delete'
 import type {
   TrailerCompanyOption,
   TrailerRecord,
   TrailerSearchParams,
+  TrailerTractorOption,
   TrailerWritePayload
 } from '@vms/types/trailer'
 
@@ -80,6 +82,49 @@ export async function fetchTrailerCompanyOptions(keyword = '', trailerId: string
         p_trailer_id: trailerId
       }),
     { showErrorMessage: true }
+  )
+}
+
+export async function fetchTrailerTractorOptions(params: {
+  trailerId?: string | null
+  tenantId?: string | null
+  keyword?: string
+  from?: number
+  to?: number
+}) {
+  const result = await responseHandle<{ records: TrailerTractorOption[]; total: number }>(
+    () =>
+      supabase.rpc('vms_list_trailer_tractor_options_secure', {
+        p_trailer_id: params.trailerId ?? null,
+        p_tenant_id: params.tenantId ?? null,
+        p_keyword: normalizeNullableText(params.keyword),
+        p_from: params.from ?? 0,
+        p_to: params.to ?? 19
+      }),
+    { showErrorMessage: true }
+  )
+  return { data: result.data?.records ?? [], total: result.data?.total ?? 0, error: result.error }
+}
+
+export async function fetchVehicleTrailers(vehicleId: string) {
+  const result = await responseHandle<TrailerRecord[]>(
+    () => supabase.rpc('vms_list_vehicle_trailers_secure', { p_vehicle_id: vehicleId }),
+    { showErrorMessage: true }
+  )
+  return { ...result, data: await Promise.all((result.data ?? []).map(signTrailer)) }
+}
+
+export async function fetchTrailerDeleteDependencies(ids: string[]) {
+  return await responseHandle<MasterDataDeleteDependencyDetail[]>(
+    () => supabase.rpc('vms_get_trailer_delete_dependencies_secure', { p_ids: ids }),
+    { breakReturn: true, showErrorMessage: false }
+  )
+}
+
+export async function deleteTrailer(id: string) {
+  return await responseHandle<number>(
+    () => supabase.rpc('vms_delete_trailer_secure', { p_id: id }),
+    { breakReturn: true, showErrorMessage: false, requireAffected: true }
   )
 }
 

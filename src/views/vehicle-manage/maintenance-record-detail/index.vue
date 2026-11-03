@@ -131,11 +131,10 @@
         class="maintenance-record-detail__section"
         v-if="canViewDocuments"
       >
-        <ArtTable
-          :data="detail.data?.attachments ?? []"
-          :columns="attachmentColumns"
-          :pagination="undefined"
-          :show-table-header="false"
+        <VehicleAttachmentTable
+          :attachments="detail.data?.attachments ?? []"
+          :name-min-width="180"
+          :removable="false"
           empty-height="180px"
         />
       </ArtPageSection>
@@ -143,9 +142,8 @@
   </ArtPageShell>
 </template>
 
-<script setup lang="tsx">
+<script setup lang="ts">
   import { getFriendlySupabaseErrorMessage } from '@/utils/supabase'
-  import BusinessAttachmentRowActions from '@/components/business/business-attachment-row-actions/index.vue'
   import { formatArtValue } from '@/utils/ui/format'
   import { isNil } from 'lodash-es'
   import ArtDescriptions from '@/components/core/base/art-descriptions/index.vue'
@@ -153,6 +151,7 @@
   import ArtDictDisplay from '@/components/core/base/art-dict-display/index.vue'
   import ArtPageSection from '@/components/core/layouts/art-page-section/index.vue'
   import ArtTable from '@/components/core/tables/art-table/index.vue'
+  import VehicleAttachmentTable from '../vehicle-attachment-table.vue'
   import type { ColumnOption } from '@/types'
   import {
     fetchVehicleMaintenanceCostSource,
@@ -161,14 +160,12 @@
   } from '@vms/api'
   import { getWaybillCostDetailPath } from '@/router/business-paths'
   import { useAuth } from '@/hooks/core/useAuth'
-  import { attachmentTableLink } from '@/components/core/media/art-file-viewer/table-link'
   import { canViewField, formatSensitiveNumberWithAffix } from '@/utils/field-permission'
 
   defineOptions({ name: 'VehicleMaintenanceDetail' })
 
   type MaintenanceRecord = Api.Vms.VehicleManage.VehicleMaintenanceRecord
   type MaintenanceItem = Api.Vms.VehicleManage.VehicleMaintenanceItem
-  type Attachment = Api.Vms.VehicleManage.VehicleAttachment
 
   const route = useRoute()
   const router = useRouter()
@@ -220,6 +217,13 @@
     { key: 'initiator', label: '经办人', field: 'initiator' },
     { key: 'serviceDate', label: '保养维修日期', field: 'serviceDate', format: 'date' },
     { key: 'currentOdometerKm', label: '当前里程（公里）', field: 'currentOdometerKm' },
+    {
+      key: 'reminderMode',
+      label: '提醒方式',
+      field: 'reminderMode',
+      formatter: (value: unknown) =>
+        value === 'time' ? '按时间（3 个月）' : value === 'mileage' ? '按里程（10,000 公里）' : '--'
+    },
     {
       key: 'nextMaintenanceDate',
       label: '下次保养日期',
@@ -276,25 +280,6 @@
       label: '合计',
       width: 120,
       formatter: (row) => formatSensitiveNumberWithAffix(row.totalAmount, { suffix: ' 元' })
-    }
-  ]
-
-  const attachmentColumns: ColumnOption<Attachment>[] = [
-    { type: 'globalIndex', label: '序号', width: 56 },
-    { prop: 'name', label: '附件名称', minWidth: 180, link: attachmentTableLink },
-    {
-      prop: 'fileType',
-      label: '格式类型',
-      width: 110,
-      dict: { code: 'FILE_EXTENSION_LABEL_MAP', display: 'text' }
-    },
-    { prop: 'fileSize', label: '附件大小', width: 110 },
-    {
-      prop: 'operation',
-      label: '操作',
-      width: 104,
-      fixed: 'right',
-      formatter: (row) => <BusinessAttachmentRowActions file={row} />
     }
   ]
 

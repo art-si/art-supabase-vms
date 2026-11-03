@@ -10,6 +10,7 @@ export type VehicleArchiveForm = VehicleArchive & {
   secondaryDriverName: string
   secondaryDriverPhone: string
   vehicleAgeDisplay: string
+  defaultTrailerId?: string
 }
 
 export type VehicleArchiveWritePayload = Record<string, unknown> & { id?: string }
@@ -136,6 +137,7 @@ export function createInitialVehicleArchiveForm(): VehicleArchiveForm {
     plateColor: '',
     purchaseDate: '',
     vehicleAgeDisplay: '',
+    defaultTrailerId: undefined,
     transportIndustry: '',
     operationType: '',
     ownerName: '',
@@ -194,6 +196,8 @@ export function sanitizeVehicleArchivePayload(
     'secondaryDriverName',
     'secondaryDriverPhone',
     'vehicleAgeDisplay',
+    'defaultTrailerId',
+    'defaultTrailerPlateNo',
     'ownerId',
     'specLengthM',
     'volumeM3',

@@ -48,6 +48,37 @@
             <dl
               v-if="archive"
               class="vehicle-archive-detail__header-specs"
+              aria-label="车辆归属和运行信息"
+            >
+              <div
+                ><dt>车辆归属</dt
+                ><dd
+                  ><ArtDictDisplay
+                    dict-code="vehicleOwnership"
+                    :value="archive.vehicleOwnership" /></dd
+              ></div>
+              <div
+                ><dt>主司机/电话</dt><dd>{{ driverContact }}</dd></div
+              >
+              <div>
+                <dt>行驶里程</dt>
+                <dd v-if="runningMileageError">
+                  暂时无法读取
+                  <button
+                    type="button"
+                    class="vehicle-archive-detail__mileage-retry"
+                    @click="loadRunningMileage(String(archive.id || ''))"
+                    >重试</button
+                  >
+                </dd>
+                <dd v-else class="vehicle-archive-detail__mileage">{{
+                  runningMileageLoading ? '读取中' : formatMileage(runningMileage)
+                }}</dd>
+              </div>
+            </dl>
+            <dl
+              v-if="archive"
+              class="vehicle-archive-detail__header-specs"
               aria-label="车型和运力参数"
             >
               <div>
@@ -57,6 +88,7 @@
                     dict-code="vehicleType"
                     :value="archive.vehicleType"
                     display="text"
+                    :unknown-text="getVehicleTypeFallbackLabel(archive.vehicleType)"
                   />
                 </dd>
               </div>
@@ -150,6 +182,9 @@
           />
         </section>
       </ElTabPane>
+      <ElTabPane v-if="hasAuth('VehicleArchive:TabTrailers')" label="挂车管理" name="trailers" lazy>
+        <VehicleTrailersPanel v-if="archive?.id" :vehicle-id="archive.id" />
+      </ElTabPane>
       <ElTabPane
         v-if="hasAuth('VehicleArchive:TabApprovalHistory')"
         label="审批历程"
@@ -190,6 +225,10 @@
   import { attachmentTableLink } from '@/components/core/media/art-file-viewer/table-link'
   import { canViewField } from '@/utils/field-permission'
   import { formatVehicleAge } from '@vms/views/vehicle-archive-edit/modules/vehicle-age'
+  import { formatMileage } from '@vms/views/vehicle-query/modules/query-format'
+  import { loadVehicleQuerySummary } from '@vms/views/vehicle-query/modules/load-vehicle-query-summary'
+  import VehicleTrailersPanel from '@vms/views/trailer-manage/modules/vehicle-trailers-panel.vue'
+  import { getVehicleTypeFallbackLabel } from '@/utils/business/vehicle-type-display'
 
   defineOptions({ name: 'VehicleArchiveDetailContent' })
 
@@ -250,6 +289,7 @@
     body: 'VehicleArchive:TabBody',
     engine: 'VehicleArchive:TabEngine',
     other: 'VehicleArchive:TabOther',
+    trailers: 'VehicleArchive:TabTrailers',
     approvalHistory: 'VehicleArchive:TabApprovalHistory'
   } as const
   const availableTabNames = computed(() =>
@@ -265,12 +305,21 @@
     { immediate: true }
   )
   const archive = ref<VehicleArchive>()
+  const runningMileage = ref<number | null>(null)
+  const runningMileageLoading = ref(false)
+  const runningMileageError = ref(false)
+  let mileageRequestId = 0
   const loading = ref(false)
   const loadError = shallowRef<Error | null>(null)
   const canViewArchiveField = (field: Api.Vms.ArchiveManage.VehicleArchiveFieldKey): boolean =>
     canViewField(archive.value?.fieldAccess, field)
   const canViewDriverPhone = (driver?: Api.Vms.Integration.DriverReference | null): boolean =>
     canViewField(driver?.fieldAccess, 'contactPhone')
+  const driverContact = computed(() => {
+    const driver = archive.value?.primaryDriver
+    const name = driver?.driverName || '未设置'
+    return driver && canViewDriverPhone(driver) && driver.phone ? `${name} / ${driver.phone}` : name
+  })
 
   onMounted(async () => {
     await Promise.all([
@@ -384,7 +433,7 @@
   ])
 
   const otherInfoItems = computed<InfoItem[]>(() => [
-    { label: '车牌颜色', value: getDictLabel('vehicleColor', archive.value?.plateColor) },
+    { label: '车牌颜色', value: getDictLabel('vehiclePlateColor', archive.value?.plateColor) },
     {
       label: '运输行业',
       value: getDictLabel('vehicleTransportIndustry', archive.value?.transportIndustry)
@@ -491,15 +540,35 @@
     }
     loading.value = true
     loadError.value = null
+    runningMileage.value = null
+    runningMileageLoading.value = false
+    runningMileageError.value = false
+    mileageRequestId += 1
     try {
       const { data } = await fetchVehicleArchiveDetail(id)
       if (!data) return
 
       archive.value = { ...data, attachments: data.attachments ?? [] }
+      void loadRunningMileage(id)
     } catch (error) {
       loadError.value = error instanceof Error ? error : new Error('车辆档案详情加载失败')
     } finally {
       loading.value = false
+    }
+  }
+
+  const loadRunningMileage = async (id: string): Promise<void> => {
+    if (!id) return
+    const requestId = ++mileageRequestId
+    runningMileageLoading.value = true
+    runningMileageError.value = false
+    try {
+      const { summary } = await loadVehicleQuerySummary(id)
+      if (requestId === mileageRequestId) runningMileage.value = summary.runningMileage ?? null
+    } catch {
+      if (requestId === mileageRequestId) runningMileageError.value = true
+    } finally {
+      if (requestId === mileageRequestId) runningMileageLoading.value = false
     }
   }
 
@@ -515,7 +584,13 @@
 
   const getDictLabel = (dictCode: string, value?: string): VNodeChild => {
     return (
-      <ArtDictDisplay dictCode={dictCode} value={value} display="text" emptyText={value || '--'} />
+      <ArtDictDisplay
+        dictCode={dictCode}
+        value={value}
+        display="text"
+        emptyText="--"
+        unknownText={value && /[\u3400-\u9fff]/u.test(value) ? value : '未识别'}
+      />
     )
   }
 
@@ -590,6 +665,23 @@
         font-size: 13px;
         font-weight: 600;
         color: var(--el-text-color-primary);
+      }
+    }
+
+    &__mileage {
+      font-weight: 700 !important;
+    }
+
+    &__mileage-retry {
+      padding: 0 4px;
+      color: var(--el-color-primary);
+      cursor: pointer;
+      background: none;
+      border: 0;
+
+      &:focus-visible {
+        outline: 2px solid var(--el-color-primary);
+        outline-offset: 2px;
       }
     }
 

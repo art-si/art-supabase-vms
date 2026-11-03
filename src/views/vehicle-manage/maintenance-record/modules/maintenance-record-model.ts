@@ -1,7 +1,23 @@
 import { omitNonEditableFieldGroups, omitWriteMetadata } from '@/utils/field-permission'
+import dayjs from 'dayjs'
 
 export type VehicleMaintenanceRecord = Api.Vms.VehicleManage.VehicleMaintenanceRecord
 export type VehicleMaintenanceFieldKey = Api.Vms.VehicleManage.VehicleMaintenanceFieldKey
+
+export function calculateMaintenanceReminder(
+  mode: 'time' | 'mileage',
+  serviceDate: string | null | undefined,
+  currentOdometerKm: number | null | undefined
+): { nextMaintenanceDate: string | null; nextMaintenanceMileage: number | null } {
+  return {
+    nextMaintenanceDate:
+      mode === 'time' && serviceDate
+        ? dayjs(serviceDate).add(3, 'month').format('YYYY-MM-DD')
+        : null,
+    nextMaintenanceMileage:
+      mode === 'mileage' && currentOdometerKm != null ? currentOdometerKm + 10000 : null
+  }
+}
 
 export const EDITABLE_VEHICLE_MAINTENANCE_ACCESS: Api.Vms.VehicleManage.VehicleMaintenanceFieldAccessMap =
   {

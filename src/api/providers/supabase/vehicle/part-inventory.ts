@@ -79,10 +79,17 @@ export interface VehiclePartIssue {
   plateNo: string
   driverId: string | null
   driverName: string | null
+  driverPhone: string | null
+  vehicleOwnership: string | null
+  isNewEnergy: boolean | null
+  carrierName: string | null
+  companyName: string | null
   remark: string | null
   lineCount: number
   issuedQty: number
   returnedQty: number
+  lostQty: number
+  damagedQty: number
   createTime: string
 }
 
@@ -102,6 +109,13 @@ export interface VehiclePartStockMovement {
   balanceAfter: number
   occurredAt: string
   referenceNo: string | null
+  plateNo: string | null
+  vehicleOwnership: string | null
+  isNewEnergy: boolean | null
+  driverName: string | null
+  driverPhone: string | null
+  carrierName: string | null
+  companyName: string | null
   remark: string | null
 }
 

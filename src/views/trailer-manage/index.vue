@@ -42,6 +42,7 @@
     />
 
     <TrailerDialog ref="dialogRef" @success="handleSaveSuccess" />
+    <MasterDataDeleteGuard ref="deleteGuardRef" @cleared="handleSaveSuccess" />
   </div>
 </template>
 
@@ -49,6 +50,7 @@
   import { h } from 'vue'
   import dayjs from 'dayjs'
   import ArtButtonTable from '@/components/core/forms/art-button-table/index.vue'
+  import BusinessTableRowActions from '@/components/business/business-table-row-actions/index.vue'
   import ArtEmptyState from '@/components/core/feedback/art-empty-state/index.vue'
   import { useAuth } from '@/hooks/core/useAuth'
   import BusinessWorkspaceHeader, {
@@ -68,6 +70,8 @@
   import type { TrailerRecord } from '@vms/types/trailer'
   import TrailerDialog from './modules/trailer-dialog.vue'
   import MasterDeleteProcessingNotice from '@/components/business/master-delete-processing-notice/index.vue'
+  import MasterDataDeleteGuard from '@/components/business/master-data-delete-guard/index.vue'
+  import { useTrailerDeletion } from './modules/use-trailer-deletion'
 
   defineOptions({ name: 'TrailerManage' })
 
@@ -76,6 +80,7 @@
   const canView = computed(() => hasAuth('TrailerManage:View'))
   const tableQueryRef = ref<ArtTableQueryExpose>()
   const dialogRef = ref<{ handleOpen: (row?: TrailerRecord) => Promise<void> }>()
+  const { deleteGuardRef, remove } = useTrailerDeletion()
   const searchQuery = ref({ plateNo: '' })
   const overview = reactive<{ total: number; rows: TrailerRecord[] }>({ total: 0, rows: [] })
 
@@ -168,9 +173,15 @@
     },
     {
       prop: 'companyName',
-      label: '所属组织',
+      label: '所属公司',
       minWidth: 150,
       formatter: (row) => textOrDash(row.companyName)
+    },
+    {
+      prop: 'carrierName',
+      label: '所属承运商',
+      minWidth: 160,
+      formatter: (row) => textOrDash(row.carrierName)
     },
     { prop: 'trailerType', label: '挂车类型', minWidth: 170 },
     {
@@ -218,14 +229,25 @@
     {
       prop: 'operation',
       label: '操作',
-      width: 100,
+      width: 108,
       fixed: 'right',
       formatter: (row) => (
-        <ArtButtonTable
-          type="edit"
-          permission="TrailerManage:Edit"
-          onClick={() => dialogRef.value?.handleOpen(row)}
-        />
+        <BusinessTableRowActions row={row}>
+          <ArtButtonTable
+            type="edit"
+            permission="TrailerManage:Edit"
+            onClick={() => dialogRef.value?.handleOpen(row)}
+          />
+          <ArtButtonTable
+            type="delete"
+            permission="TrailerManage:Delete"
+            onClick={() =>
+              remove(row, async () => {
+                await tableQueryRef.value?.refreshRemove()
+              })
+            }
+          />
+        </BusinessTableRowActions>
       )
     }
   ]

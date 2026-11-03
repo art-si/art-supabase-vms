@@ -1,7 +1,11 @@
 import { normalizeNullableText } from '@/utils/form/normalize'
-import { uniq } from 'lodash-es'
+import { chunk, countBy, groupBy, omit, uniq } from 'lodash-es'
 import TreeUtils from '@/utils/tree'
 import { fetchAllRangePages } from '@/utils/supabase/pagination'
+import { fetchPartUnitOptions } from '@/api/mdm-material-select'
+import { useTenantScopeStore } from '@/store/modules/tenant-scope'
+import { useUserStore } from '@/store/modules/user'
+import { resolvePartImportUnit, type PartImportMaterial } from './parts-import'
 import { useSupabase } from '@/hooks/core/useSupabase'
 import { withRequestOptions } from '@/api/providers/supabase/query'
 import type { ApiFeedbackOptions, ApiRequestOptions } from '@/types/api/request'
@@ -254,7 +258,7 @@ export async function fetchPartsCategoryList(
 }
 
 export async function fetchPartsCategoryTree(
-  params: Partial<Pick<PartsCategory, 'categoryName'>> = {},
+  params: Partial<Pick<PartsCategory, 'categoryName' | 'tenantId'>> = {},
   options?: ApiRequestOptions & ApiFeedbackOptions
 ): Promise<QueryResult<PartsCategory[]>> {
   const result = await fetchAllRangePages<PartsCategory>(async ({ from, to }) => {
@@ -268,6 +272,7 @@ export async function fetchPartsCategoryTree(
     if (params.categoryName) {
       query = query.ilike('category_name', `%${params.categoryName}%`)
     }
+    if (params.tenantId) query = query.eq('tenant_id', params.tenantId)
     return responseHandle<PartsCategory[]>(() => withRequestOptions(query, options), {
       showErrorMessage: options?.showErrorMessage ?? true
     })
@@ -359,7 +364,9 @@ export async function importPartsCategories(rows: PartsCategory[]) {
 const getPartsSearchFilters = (params: PartsSearchParams): FilterSpec[] => [
   { col: 'partName', op: 'ilike', val: params.partName ? `%${params.partName}%` : undefined },
   { col: 'partCode', op: 'ilike', val: params.partCode ? `%${params.partCode}%` : undefined },
-  { col: 'categoryId', op: 'eq', val: params.categoryId },
+  ...(!params.categoryIds?.length
+    ? [{ col: 'categoryId', op: 'eq' as const, val: params.categoryId }]
+    : []),
   { col: 'brand', op: 'ilike', val: params.brand ? `%${params.brand}%` : undefined },
   { col: 'model', op: 'ilike', val: params.model ? `%${params.model}%` : undefined },
   { col: 'supplierId', op: 'eq', val: params.supplierId },
@@ -368,6 +375,8 @@ const getPartsSearchFilters = (params: PartsSearchParams): FilterSpec[] => [
 
 const PARTS_SELECT = `
   *,
+  material:mdm_material!mdm_part_material_tenant_fkey(id,material_code,material_name),
+  unitRef:mdm_unit_of_measure!mdm_part_unit_tenant_fkey(id,unit_code,unit_name),
   category:mdm_part_category!vehicle_parts_category_id_fkey(
     id,
     category_name
@@ -405,6 +414,7 @@ export async function fetchPartsList(params: PartsSearchParams, options?: ApiReq
     .range(from, to)
 
   query = applyFilters(query, filters, { skipEmpty: true, camelToSnake: true })
+  if (params.categoryIds?.length) query = query.in('category_id', params.categoryIds)
   const result = await responseHandle<Parts[]>(() => withRequestOptions(query, options), {
     showErrorMessage: true
   })
@@ -427,6 +437,7 @@ export async function exportPartsList(
     query = query.in('id', ids)
   } else {
     query = applyFilters(query, filters, { skipEmpty: true, camelToSnake: true })
+    if (params.categoryIds?.length) query = query.in('category_id', params.categoryIds)
   }
 
   const result = await responseHandle<Parts[]>(() => query, {
@@ -437,6 +448,14 @@ export async function exportPartsList(
 
 export async function addParts(params: Parts) {
   return await responseHandle(() => supabase.from('mdm_part').insert(keysToSnakeDeep(params)), {
+    showMessage: true,
+    breakReturn: true
+  })
+}
+
+export async function addPartsBatch(rows: Parts[]) {
+  if (!rows.length) throw new Error('请至少选择一个物料')
+  return await responseHandle(() => supabase.from('mdm_part').insert(keysToSnakeDeep(rows)), {
     showMessage: true,
     breakReturn: true
   })
@@ -475,9 +494,75 @@ export async function deletePartsBatch(ids: string[]) {
 }
 
 export async function importParts(rows: Parts[]) {
+  const selectedTenantId = useTenantScopeStore().effectiveTenantId
+  const homeTenantId = useUserStore().getUserInfo.tenantId
+  if (!homeTenantId) throw new Error('无法确定当前账号所属租户，请刷新后重试')
+  const indexedRows = rows.map((row, index) => {
+    const tenantId = row.tenantId || selectedTenantId || homeTenantId
+    if (selectedTenantId && tenantId !== selectedTenantId) {
+      throw new Error(`第 ${index + 1} 行租户与当前选择不一致，请调整后重试`)
+    }
+    return { row, index, tenantId }
+  })
+  if (uniq(indexedRows.map(({ tenantId }) => tenantId)).length > 1) {
+    throw new Error('一次只能导入同一租户的零部件，请按租户拆分文件后重试')
+  }
+  const resolvedRows: Parts[] = []
+  for (const [tenantId, group] of Object.entries(groupBy(indexedRows, 'tenantId'))) {
+    const codeCounts = countBy(group, ({ row }) => String(row.partCode ?? '').trim())
+    const invalid = group.find(({ row }) => {
+      const code = String(row.partCode ?? '').trim()
+      return !code || codeCounts[code] > 1
+    })
+    if (invalid) {
+      throw new Error(`第 ${invalid.index + 1} 行物料编码为空或重复，请检查文件`)
+    }
+    const codes = uniq(group.map(({ row }) => String(row.partCode).trim()))
+    const materialBatches: PartImportMaterial[][] = []
+    for (const codeBatch of chunk(codes, 100)) {
+      const result = await responseHandle<PartImportMaterial[]>(
+        () =>
+          supabase
+            .from('mdm_material')
+            .select('id,tenant_id,material_code,material_name,base_unit_id,status')
+            .eq('tenant_id', tenantId)
+            .eq('status', 'enabled')
+            .in('material_code', codeBatch),
+        {
+          breakReturn: true,
+          showErrorMessage: false,
+          errorMessage: '物料编码核对失败，请重试'
+        }
+      )
+      materialBatches.push(result.data ?? [])
+    }
+    const materialByCode = new Map(
+      materialBatches.flat().map((material) => [material.materialCode, material])
+    )
+    const units = await fetchPartUnitOptions(tenantId)
+    for (const { row, index } of group) {
+      const material = materialByCode.get(String(row.partCode ?? '').trim())
+      if (!material) {
+        throw new Error(`第 ${index + 1} 行物料编码未在当前租户的 MDM 主数据中找到`)
+      }
+      const unit = resolvePartImportUnit(row, material, units)
+      if (!unit) {
+        throw new Error(`第 ${index + 1} 行计量单位未在当前租户的 MDM 主数据中找到`)
+      }
+      resolvedRows.push({
+        ...omit(row, ['category', 'material', 'unitRef', 'supplier']),
+        tenantId,
+        materialId: material.id,
+        unitId: unit.id,
+        partName: material.materialName,
+        partCode: material.materialCode,
+        unit: unit.unitName
+      })
+    }
+  }
   return await responseHandle(
     () =>
-      supabase.from('mdm_part').upsert(keysToSnakeDeep(rows), {
+      supabase.from('mdm_part').upsert(keysToSnakeDeep(resolvedRows), {
         onConflict: 'tenant_id,part_code'
       }),
     { showMessage: true, breakReturn: true }
@@ -485,16 +570,22 @@ export async function importParts(rows: Parts[]) {
 }
 
 export async function fetchSupplierOptions(
-  params?: { ids?: string[]; supplierName?: string },
+  params?: { ids?: string[]; supplierName?: string; tenantId?: string },
   options?: ApiRequestOptions
 ) {
   const result = await responseHandle<SecureSupplierPayload>(
     () =>
       withRequestOptions(
-        supabase.rpc(
-          'vms_list_vehicle_suppliers_secure',
-          createSupplierRpcParams({ ...params, from: 0, to: 9999 }, 'options')
-        ),
+        params?.tenantId
+          ? supabase.rpc('vms_list_vehicle_supplier_options_for_tenant_secure', {
+              p_tenant_id: params.tenantId,
+              p_ids: params.ids?.length ? params.ids : null,
+              p_supplier_name: normalizeNullableText(String(params.supplierName ?? ''))
+            })
+          : supabase.rpc(
+              'vms_list_vehicle_suppliers_secure',
+              createSupplierRpcParams({ ...params, from: 0, to: 9999 }, 'options')
+            ),
         options
       ),
     { showErrorMessage: true }

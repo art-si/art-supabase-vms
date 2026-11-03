@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   EDITABLE_VEHICLE_MAINTENANCE_ACCESS,
+  calculateMaintenanceReminder,
   sanitizeVehicleMaintenancePayload
 } from '../../src/views/vehicle-manage/maintenance-record/modules/maintenance-record-model'
 
@@ -66,4 +67,18 @@ test('maintenance create can submit a calculated initial cost', () => {
   })
 
   assert.equal(payload.costAmount, 2680)
+})
+
+test('time reminder advances three calendar months and clears the mileage target', () => {
+  assert.deepEqual(calculateMaintenanceReminder('time', '2026-01-31', 12500), {
+    nextMaintenanceDate: '2026-04-30',
+    nextMaintenanceMileage: null
+  })
+})
+
+test('mileage reminder accepts a zero odometer and clears the date target', () => {
+  assert.deepEqual(calculateMaintenanceReminder('mileage', '2026-11-02', 0), {
+    nextMaintenanceDate: null,
+    nextMaintenanceMileage: 10000
+  })
 })

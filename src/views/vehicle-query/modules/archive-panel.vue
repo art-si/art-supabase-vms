@@ -1,6 +1,15 @@
 <template>
   <div class="vehicle-query-archive-panel [&_.el-tabs__content]:pt-2">
     <ElTabs v-model="panel.activeTab">
+      <ElTabPane v-if="hasAuth('VehicleQuery:TabBasic')" label="综合概览" name="overview">
+        <ArtPageSection title="综合概览">
+          <ArtDescriptions
+            :data="descriptionData"
+            :items="overviewDescriptionItems"
+            :label-width="128"
+          />
+        </ArtPageSection>
+      </ElTabPane>
       <ElTabPane v-if="hasAuth('VehicleQuery:TabBasic')" label="基础信息" name="basic">
         <ArtPageSection title="基础信息">
           <ArtDescriptions
@@ -47,27 +56,33 @@
 </template>
 
 <script setup lang="ts">
+  import { h } from 'vue'
   import { ElTabPane, ElTabs } from 'element-plus'
+  import ArtDictDisplay from '@/components/core/base/art-dict-display/index.vue'
+  import { getVehicleTypeFallbackLabel } from '@/utils/business/vehicle-type-display'
   import ArtEmptyState from '@/components/core/feedback/art-empty-state/index.vue'
   import { useAuth } from '@/hooks/core/useAuth'
   import ArtDescriptions from '@/components/core/base/art-descriptions/index.vue'
   import ArtPageSection from '@/components/core/layouts/art-page-section/index.vue'
-  import type { InfoItem, VehicleArchive } from './types'
-  import { createDescriptionItems } from './query-format'
-  import { formatArtValue } from '@/utils/ui/format'
+  import type { InfoItem, VehicleArchive, VehicleQuerySummary } from './types'
+  import { createDescriptionItems, formatDate, formatMileage } from './query-format'
+  import { formatArtValue, formatNumberValue } from '@/utils/ui/format'
   import { canViewField } from '@/utils/field-permission'
+  import { getVehicleUsageYears } from '@vms/views/vehicle-manage/modules/vehicle-lifecycle'
 
   defineOptions({ name: 'VehicleQueryArchivePanel' })
 
   const props = defineProps<{
     vehicle: VehicleArchive
+    summary: VehicleQuerySummary
   }>()
   const { hasAuth } = useAuth()
 
   const panel = reactive({
-    activeTab: 'basic'
+    activeTab: 'overview'
   })
   const tabPermissions = {
+    overview: 'VehicleQuery:TabBasic',
     basic: 'VehicleQuery:TabBasic',
     body: 'VehicleQuery:TabBody',
     engine: 'VehicleQuery:TabEngine',
@@ -87,12 +102,65 @@
   )
   const descriptionData = Object.freeze({})
 
+  const overviewDescriptionItems = computed(() => {
+    const years = getVehicleUsageYears(props.vehicle.startUseDate)
+    return createDescriptionItems([
+      { label: '车牌号', value: props.vehicle.plateNo },
+      { label: '车辆归属', value: props.vehicle.vehicleOwnership, dictCode: 'vehicleOwnership' },
+      { label: '所属公司', value: props.vehicle.companyName },
+      {
+        label: '车型',
+        value: props.vehicle.vehicleType,
+        render: () =>
+          h(ArtDictDisplay, {
+            dictCode: 'vehicleType',
+            value: props.vehicle.vehicleType,
+            display: 'text',
+            unknownText: getVehicleTypeFallbackLabel(props.vehicle.vehicleType)
+          })
+      },
+      { label: '车型厂商', value: props.vehicle.manufacturer },
+      ...(canViewField(props.vehicle.fieldAccess, 'vehicleIdentifiers')
+        ? [{ label: '车架号', value: props.vehicle.vin }]
+        : []),
+      { label: '购入开票日期', value: formatDate(props.vehicle.invoiceDate) },
+      { label: '启用日期', value: formatDate(props.vehicle.startUseDate) },
+      {
+        label: '运营状态',
+        value: props.vehicle.operationStatus,
+        dictCode: 'vehicleOperationStatus'
+      },
+      { label: '审核状态', value: props.vehicle.auditStatus, dictCode: 'vehicleAuditStatus' },
+      {
+        label: '运营时长',
+        value: years === null ? undefined : formatNumberValue(years),
+        suffix: '年'
+      },
+      { label: '运营行驶里程', value: formatMileage(props.summary.runningMileage) },
+      { label: '商业险到期', value: formatDate(props.summary.commercialExpireDate) },
+      { label: '交强险到期', value: formatDate(props.summary.compulsoryExpireDate) },
+      { label: '年检到期', value: formatDate(props.summary.inspectionExpireDate) },
+      { label: '下次保养里程', value: formatMileage(props.summary.nextMaintenanceMileage) },
+      { label: '下次保养时间', value: formatDate(props.summary.nextMaintenanceDate) }
+    ] satisfies InfoItem[])
+  })
+
   const basicDescriptionItems = computed(() =>
     createDescriptionItems([
       { label: '车牌号', value: props.vehicle.plateNo },
       { label: '所属公司', value: props.vehicle.companyName },
       { label: '自编号', value: props.vehicle.selfNo },
-      { label: '车型', value: props.vehicle.vehicleType, dictCode: 'vehicleType' },
+      {
+        label: '车型',
+        value: props.vehicle.vehicleType,
+        render: () =>
+          h(ArtDictDisplay, {
+            dictCode: 'vehicleType',
+            value: props.vehicle.vehicleType,
+            display: 'text',
+            unknownText: getVehicleTypeFallbackLabel(props.vehicle.vehicleType)
+          })
+      },
       { label: '国产/进口', value: props.vehicle.originType, dictCode: 'vehicleOriginType' },
       ...(canViewField(props.vehicle.fieldAccess, 'vehicleIdentifiers')
         ? [{ label: '车架号（VIN）', value: props.vehicle.vin }]
@@ -176,7 +244,7 @@
 
   const otherDescriptionItems = computed(() =>
     createDescriptionItems([
-      { label: '车牌颜色', value: props.vehicle.plateColor, dictCode: 'vehicleColor' },
+      { label: '车牌颜色', value: props.vehicle.plateColor, dictCode: 'vehiclePlateColor' },
       {
         label: '运输行业',
         value: props.vehicle.transportIndustry,

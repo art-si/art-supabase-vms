@@ -1,60 +1,81 @@
 <template>
-  <div class="business-workspace-page art-full-height min-w-0 gap-3">
+  <div class="part-inventory-workspace business-workspace-page art-full-height min-w-0">
     <BusinessWorkspaceHeader
       eyebrow="PARTS INVENTORY"
       title="配件库存台账"
       description="入库、车辆领用和归还逐笔留痕；当前库存由台账自动结算。"
       icon="ri:archive-stack-line"
+      density="compact"
       :tags="[
         { label: '实物库存', type: 'primary' },
         { label: '领用自动出库', type: 'info' }
       ]"
       :metrics="metrics"
     >
-      <template #actions><BusinessTableWorkspaceActions :table="tableRef" /></template>
+      <template v-if="activeTab === 'movements'" #actions>
+        <BusinessTableWorkspaceActions :table="tableRef" />
+      </template>
     </BusinessWorkspaceHeader>
 
-    <ArtSectionCard
-      title="当前库存"
-      subtitle="同一物料的入库、领用和归还数量自动汇总"
-      :loading="stock.loading"
-      :error="stock.error"
-      :empty="!stock.loading && !stock.error && stock.rows.length === 0"
-      empty-title="暂无库存记录"
-      empty-description="先登记配件入库，之后可在“领用归还”中按车领用。"
-      :scroll-max-height="228"
-      @retry="loadStock"
-    >
-      <template #actions>
-        <ElButton v-if="hasAuth('VmsPartInventory:Receipt')" type="primary" @click="openReceipt">
+    <div class="part-inventory-workspace__content flex min-h-0 min-w-0 flex-1 flex-col gap-3">
+      <div class="flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 px-1">
+        <ElTabs
+          v-model="activeTab"
+          class="part-inventory-workspace__tabs w-full min-w-0 flex-none sm:w-auto sm:flex-1"
+          aria-label="配件库存台账视图"
+        >
+          <ElTabPane label="当前库存" name="stock" />
+          <ElTabPane label="配件流水" name="movements" />
+        </ElTabs>
+        <ElButton
+          v-if="activeTab === 'stock' && hasAuth('VmsPartInventory:Receipt')"
+          type="primary"
+          @click="openReceipt"
+        >
           <span class="art-icon-label"><ArtSvgIcon icon="ri:add-line" />登记入库</span>
         </ElButton>
-      </template>
-      <ArtTable
-        :data="stock.rows"
-        :columns="stockColumns"
-        :pagination="false"
-        table-layout="fixed"
-        size="small"
-        row-key="id"
-      />
-    </ArtSectionCard>
+      </div>
 
-    <ArtTableQuery
-      ref="tableRef"
-      v-model="search"
-      :search-items="searchItems"
-      :api-fn="fetchMovements"
-      :columns-factory="columnsFactory"
-      :search-bar-props="{ span: 6, labelWidth: 90 }"
-      :table-props="{
-        rowKey: 'id',
-        tableLayout: 'fixed',
-        emptyText: '暂无库存变动',
-        emptyDescription: '登记入库或领用配件后，出入库流水会显示在这里。'
-      }"
-      focusable
-    />
+      <ArtSectionCard
+        v-if="activeTab === 'stock'"
+        class="part-inventory-workspace__stock"
+        aria-label="当前库存明细"
+        :loading="stock.loading"
+        :error="stock.error"
+        :empty="!stock.loading && !stock.error && stock.rows.length === 0"
+        empty-title="暂无库存记录"
+        empty-description="先登记配件入库，之后可在“领用归还”中按车领用。"
+        :scroll-max-height="440"
+        @retry="loadStock"
+      >
+        <ArtTable
+          :data="stock.rows"
+          :columns="stockColumns"
+          :pagination="false"
+          table-layout="fixed"
+          size="default"
+          row-key="id"
+        />
+      </ArtSectionCard>
+
+      <ArtTableQuery
+        v-else
+        ref="tableRef"
+        v-model="search"
+        :search-items="searchItems"
+        :api-fn="fetchMovements"
+        :columns-factory="columnsFactory"
+        :search-bar-props="{ span: 6, labelWidth: 90 }"
+        :table-props="{
+          rowKey: 'id',
+          tableLayout: 'fixed',
+          emptyText: '暂无库存变动',
+          emptyDescription: '登记入库或领用配件后，出入库流水会显示在这里。'
+        }"
+        focus-scope-selector=".part-inventory-workspace__content"
+        focusable
+      />
+    </div>
     <PartStockReceiptDialog ref="receiptRef" @success="refresh" />
   </div>
 </template>
@@ -86,6 +107,7 @@
   const props = defineProps<{ initialPartId?: string }>()
 
   const { hasAuth } = useAuth()
+  const activeTab = ref<'stock' | 'movements'>(props.initialPartId ? 'movements' : 'stock')
   const tableRef = ref<ArtTableQueryExpose>()
   const receiptRef = ref<{ handleOpen: () => Promise<void> }>()
   const stock = reactive<{ rows: VehiclePartStock[]; loading: boolean; error: string | null }>({
@@ -98,6 +120,7 @@
     () => props.initialPartId,
     (partId) => {
       search.partId = partId
+      if (partId) activeTab.value = 'movements'
       void nextTick(() => tableRef.value?.refreshData())
     }
   )
@@ -145,7 +168,10 @@
             <ArtSvgIcon icon="ri:tools-line" />
           </span>
           <div class="min-w-0">
-            <p class="truncate font-medium" title={row.partName}>
+            <p
+              class="truncate font-medium text-[var(--el-text-color-primary)]"
+              title={row.partName}
+            >
               {row.partName}
             </p>
             <p class="truncate text-xs text-[var(--el-text-color-secondary)]" title={row.partCode}>
@@ -260,6 +286,27 @@
       minWidth: 170,
       formatter: (row) => row.referenceNo || '--'
     },
+    { prop: 'plateNo', label: '领用车牌', minWidth: 120, formatter: (row) => row.plateNo || '--' },
+    {
+      prop: 'vehicleOwnership',
+      label: '车辆归属',
+      minWidth: 110,
+      dict: { code: 'vehicleOwnership', display: 'auto' }
+    },
+    {
+      prop: 'isNewEnergy',
+      label: '是否新能源车',
+      width: 120,
+      formatter: (row) => (row.isNewEnergy == null ? '--' : row.isNewEnergy ? '是' : '否')
+    },
+    {
+      prop: 'driverName',
+      label: '领用司机(电话)',
+      minWidth: 170,
+      formatter: (row) => [row.driverName, row.driverPhone].filter(Boolean).join(' · ') || '--'
+    },
+    { prop: 'carrierName', label: '所属承运商', minWidth: 160, showOverflowTooltip: true },
+    { prop: 'companyName', label: '所属公司', minWidth: 160, showOverflowTooltip: true },
     {
       prop: 'occurredAt',
       label: '发生时间',
@@ -277,3 +324,24 @@
     void loadStock()
   })
 </script>
+
+<style scoped lang="scss">
+  .part-inventory-workspace {
+    &__tabs {
+      :deep(.el-tabs__header) {
+        margin: 0;
+      }
+
+      :deep(.el-tabs__item) {
+        font-size: var(--el-font-size-base);
+        font-weight: 500;
+      }
+    }
+
+    :deep(.el-table th.el-table__cell) {
+      height: 44px;
+      font-weight: 600;
+      color: var(--el-text-color-primary);
+    }
+  }
+</style>

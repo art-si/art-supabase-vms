@@ -7,6 +7,19 @@ export type VmsCarrierReference = Api.Vms.Integration.CarrierReference
 
 export type VmsDriverReference = Api.Vms.Integration.DriverReference
 
+export interface VmsAssetReferenceParams {
+  tenantId?: string | null
+  vehicleId?: string | null
+  trailerId?: string | null
+  keyword?: string
+}
+
+export interface VmsAssetCompanyOption {
+  id: string
+  label: string
+  isDefault: boolean
+}
+
 export interface VmsHrEmployeeReference {
   id: string
   employeeNo: string
@@ -35,6 +48,36 @@ interface DriverReferenceParams {
 }
 
 const { supabase, responseHandle } = useSupabase()
+
+function assetReferenceParams(params: VmsAssetReferenceParams) {
+  return {
+    p_tenant_id: params.tenantId || null,
+    p_vehicle_id: params.vehicleId || null,
+    p_trailer_id: params.trailerId || null,
+    p_keyword: normalizeNullableText(params.keyword)
+  }
+}
+
+export async function fetchVmsAssetCompanyOptions(params: VmsAssetReferenceParams = {}) {
+  return await responseHandle<VmsAssetCompanyOption[]>(
+    () => supabase.rpc('vms_list_asset_company_options_secure', assetReferenceParams(params)),
+    { showErrorMessage: false }
+  )
+}
+
+export async function fetchVmsAssetCarrierReferences(
+  params: VmsAssetReferenceParams & { ids?: string[]; maxRows?: number } = {}
+) {
+  return await responseHandle<VmsCarrierReference[]>(
+    () =>
+      supabase.rpc('vms_list_asset_carrier_options_secure', {
+        ...assetReferenceParams(params),
+        p_ids: params.ids?.length ? params.ids : null,
+        p_max_rows: params.maxRows ?? 200
+      }),
+    { showErrorMessage: false }
+  )
+}
 
 /**
  * VMS consumer adapter for TMS-owned carrier data.

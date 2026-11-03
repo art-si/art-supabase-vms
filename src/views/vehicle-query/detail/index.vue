@@ -9,17 +9,12 @@
     empty-description="请返回车辆查询重新选择，或刷新后重试。"
     @retry="loadVehicle"
   >
-    <ArtPageHeader
-      :title="page.vehicle?.plateNo || '车辆综合查询'"
-      :subtitle="vehicleSubtitle"
-      show-back
-      @back="goBack"
-    />
-
     <VehicleQuerySummary
       v-if="page.vehicle"
       :vehicle="page.vehicle"
       :summary="page.summary"
+      show-back
+      @back="goBack"
       @analyze="openHealthAdvisor"
     />
 
@@ -89,6 +84,16 @@
           v-if="page.activeTab === 'orders' && page.vehicle.id"
           :vehicle-id="page.vehicle.id || ''"
         />
+        <ArchivePanel
+          v-else-if="page.activeTab === 'archive'"
+          :vehicle="page.vehicle"
+          :summary="page.summary"
+        />
+        <VehicleTrailersPanel
+          v-else-if="page.activeTab === 'trailers' && page.vehicle.id"
+          :vehicle-id="page.vehicle.id"
+          read-only
+        />
         <FuelExecutionPanel
           v-else-if="page.activeTab === 'fuel' && page.vehicle.id"
           :vehicle-id="page.vehicle.id || ''"
@@ -96,11 +101,13 @@
         <FuelCardSourcePanel
           v-else-if="page.activeTab === 'fuelCard'"
           kind="archive"
+          :energy="page.vehicle.isNewEnergy ? 'electric' : 'fuel'"
           :vehicle-id="page.vehicle.id || ''"
         />
         <FuelCardSourcePanel
           v-else-if="page.activeTab === 'fuelLedger'"
           kind="ledger"
+          :energy="page.vehicle.isNewEnergy ? 'electric' : 'fuel'"
           :vehicle-id="page.vehicle.id || ''"
         />
         <MainlineCostsPanel
@@ -139,6 +146,7 @@
   import TransportOrdersPanel from '../modules/transport-orders-panel.vue'
   import FuelExecutionPanel from '../modules/fuel-execution-panel.vue'
   import FuelCardSourcePanel from '../modules/fuel-card-source-panel.vue'
+  import VehicleTrailersPanel from '../../trailer-manage/modules/vehicle-trailers-panel.vue'
   import MainlineCostsPanel from '@/components/business/mainline-costs-panel/index.vue'
   import PartsPanel from '../modules/parts-panel.vue'
   import InsurancePanel from '../modules/insurance-panel.vue'
@@ -191,11 +199,12 @@
     current: TransportMainlineRelation[]
   }>({ loading: false, error: null, current: [] })
 
-  const tabs: VehicleQueryTab[] = [
+  const allTabs: VehicleQueryTab[] = [
     { key: 'view', label: '车辆视图' },
     { key: 'archive', label: '车辆档案' },
     { key: 'documents', label: '车辆证件' },
     { key: 'driver', label: '司机管理' },
+    { key: 'trailers', label: '挂车管理' },
     { key: 'orders', label: '运输订单' },
     { key: 'fuel', label: '油耗与加油' },
     { key: 'fuelCard', label: '油卡档案' },
@@ -212,11 +221,24 @@
     { key: 'device', label: '绑定设备' }
   ]
 
+  const tabs = computed<VehicleQueryTab[]>(() =>
+    allTabs
+      .filter((tab) => tab.key !== 'fuel' || !page.vehicle?.isNewEnergy)
+      .map((tab) => {
+        if (tab.key === 'fuelCard')
+          return { ...tab, label: page.vehicle?.isNewEnergy ? '电卡档案' : '油卡档案' }
+        if (tab.key === 'fuelLedger')
+          return { ...tab, label: page.vehicle?.isNewEnergy ? '电卡流水' : '油卡流水' }
+        return tab
+      })
+  )
+
   const panelMap = {
     view: VehicleViewPanel,
     archive: ArchivePanel,
     documents: DocumentsPanel,
     driver: DriverPanel,
+    trailers: VehicleTrailersPanel,
     orders: TransportOrdersPanel,
     fuel: FuelExecutionPanel,
     fuelCard: FuelCardSourcePanel,
@@ -234,11 +256,6 @@
   }
 
   const activePanel = computed(() => panelMap[page.activeTab])
-  const vehicleSubtitle = computed(() => {
-    if (!page.vehicle) return '集中查看车辆档案、合规、运营、维保与设备信息'
-    return [page.vehicle.companyName, page.vehicle.vin].filter(Boolean).join(' / ') || '--'
-  })
-
   const openHealthAdvisor = (): void => {
     const vehicleId = page.vehicle?.id
     const plateNo = page.vehicle?.plateNo
@@ -330,10 +347,6 @@
       min-width: 0;
       padding: 28px 40px 48px;
       overflow: hidden;
-    }
-
-    :deep(.vehicle-query-summary) {
-      margin-top: var(--art-space-4);
     }
   }
 

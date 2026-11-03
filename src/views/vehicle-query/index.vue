@@ -17,25 +17,132 @@
       </template>
     </BusinessWorkspaceHeader>
 
-    <ArtTableQuery
-      ref="tableQueryRef"
-      v-model="table.searchQuery"
-      :search-items="table.searchItems"
-      :api-fn="fetchTableData"
-      :columns-factory="table.columnsFactory"
-      :header-actions="headerActions"
-      header-actions-placement="workspace"
-      :search-bar-props="{ span: 6, labelWidth: 90 }"
-      :table-props="table.props"
-      :on-success="handleTableSuccess"
-      focusable
-    />
+    <div class="vehicle-query-page__workspace">
+      <ArtWorkspaceSplitter primary-size="264px" primary-min="248px" :breakpoint="900">
+        <template #primary>
+          <ArtSectionCard
+            class="vehicle-query-page__navigation"
+            title="车辆分类"
+            :subtitle="
+              navigationKey === 'all' ? '按车辆归属和车型筛选' : `当前：${navigationLabel}`
+            "
+            :loading="navigationLoading"
+            loading-mode="mask"
+            :error="navigationError"
+            error-title="车辆分类加载失败"
+            :empty="!navigationLoading && !navigationError && !navigationRows.length"
+            empty-title="暂无车辆档案"
+            empty-description="车辆档案会按归属和车型显示在这里。"
+            :min-height="0"
+            @retry="loadNavigation"
+          >
+            <template #actions>
+              <ArtTreeExpandToggle
+                :tree="navigationTreeRef"
+                :data="navigationTree"
+                node-key="key"
+                label="车辆分类"
+                :default-expanded="navigationRows.length < 24"
+              />
+              <ArtIconButton icon="ri:refresh-line" label="刷新车辆分类" @click="loadNavigation" />
+            </template>
+            <template #toolbar>
+              <div class="grid gap-2.5">
+                <ElInput
+                  v-model="navigationKeyword"
+                  clearable
+                  placeholder="搜索归属或车型"
+                  aria-label="搜索车辆分类"
+                >
+                  <template #prefix><ArtSvgIcon icon="ri:search-line" /></template>
+                </ElInput>
+                <button
+                  type="button"
+                  class="vehicle-query-page__navigation-all"
+                  :class="{ 'is-current': navigationKey === 'all' }"
+                  @click="handleNavigationClick()"
+                >
+                  <ArtSvgIcon icon="ri:apps-2-line" aria-hidden="true" />
+                  <span
+                    ><strong>全部车辆</strong><small>{{ navigationRows.length }} 辆车</small></span
+                  >
+                </button>
+              </div>
+            </template>
+            <ElTree
+              ref="navigationTreeRef"
+              :data="navigationTree"
+              node-key="key"
+              :default-expand-all="navigationRows.length < 24"
+              highlight-current
+              :expand-on-click-node="false"
+              :current-node-key="navigationKey === 'all' ? undefined : navigationKey"
+              :filter-node-method="filterNavigationNode"
+              @node-click="handleNavigationClick"
+            >
+              <template #default="{ data }">
+                <span class="vehicle-query-page__navigation-node">
+                  <ArtSvgIcon
+                    :icon="data.vehicleType ? 'ri:truck-line' : 'ri:folder-3-line'"
+                    aria-hidden="true"
+                  />
+                  <span :title="data.label">{{ data.label }}</span>
+                  <small :aria-label="`${data.count} 辆车`">{{ data.count }}</small>
+                </span>
+              </template>
+              <template #empty
+                ><ArtEmptyState
+                  title="未找到匹配项"
+                  description="请调整关键词或清空筛选条件。"
+                  size="compact"
+                  :visual-size="64"
+              /></template>
+            </ElTree>
+          </ArtSectionCard>
+        </template>
+        <ArtTableQuery
+          ref="tableQueryRef"
+          v-model="table.searchQuery"
+          :search-items="table.searchItems"
+          :api-fn="fetchTableData"
+          :columns-factory="table.columnsFactory"
+          :header-actions="headerActions"
+          header-actions-placement="workspace"
+          :search-bar-props="{ span: 6, labelWidth: 90 }"
+          :table-props="table.props"
+          :on-success="handleTableSuccess"
+          focus-scope-selector=".vehicle-query-page__workspace"
+          focusable
+        >
+          <template #vehicleType="{ row }">
+            <ArtDictDisplay
+              dict-code="vehicleType"
+              :value="row.vehicleType"
+              :unknown-text="getVehicleTypeFallbackLabel(row.vehicleType)"
+            />
+          </template>
+        </ArtTableQuery>
+      </ArtWorkspaceSplitter>
+    </div>
   </div>
 </template>
 
 <script setup lang="tsx">
   import type { ComputedRef, UnwrapNestedRefs } from 'vue'
+  import { ElTree } from 'element-plus'
+  import {
+    buildVehicleClassificationTree,
+    filterClassifiedVehicles,
+    type VehicleClassificationNode as NavigationNode
+  } from '@vms/views/vehicle-manage/components/vehicle-classification'
+  import ArtEmptyState from '@/components/core/feedback/art-empty-state/index.vue'
+  import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
+  import ArtWorkspaceSplitter from '@/components/core/layouts/art-workspace-splitter/index.vue'
+  import ArtTreeExpandToggle from '@/components/core/widget/art-tree-expand-toggle/index.vue'
+  import ArtIconButton from '@/components/core/widget/art-icon-button/index.vue'
   import ArtButtonTable from '@/components/core/forms/art-button-table/index.vue'
+  import ArtDictDisplay from '@/components/core/base/art-dict-display/index.vue'
+  import { getVehicleTypeFallbackLabel } from '@/utils/business/vehicle-type-display'
   import BusinessWorkspaceHeader, {
     type BusinessWorkspaceMetric
   } from '@/components/business/business-workspace-header/index.vue'
@@ -47,7 +154,14 @@
     ArtTableQueryProps
   } from '@/components/core/tables/art-table-query/index.vue'
   import type { ColumnOption } from '@/types'
-  import { exportVehicleArchiveList, fetchVehicleArchiveList } from '@vms/api'
+  import {
+    exportVehicleArchiveList,
+    fetchCarrierOptions,
+    fetchVehicleArchiveList,
+    fetchVehicleArchiveNavigation,
+    type VehicleArchiveNavigationItem,
+    type VmsCarrierReference
+  } from '@vms/api'
   import BusinessTableWorkspaceActions from '@/components/business/business-table-workspace-actions/index.vue'
   import { useUserStore } from '@/store/modules/user'
   import { buildSupabasePageRange } from '@/utils/supabase/pagination'
@@ -58,6 +172,7 @@
   import { isNil } from 'lodash-es'
   import { canViewField, mergeFieldAccessMaps } from '@/utils/field-permission'
   import { getVehicleUsageYears } from '@vms/views/vehicle-manage/modules/vehicle-lifecycle'
+  import { formatVehicleAge } from '@vms/views/vehicle-archive-edit/modules/vehicle-age'
 
   defineOptions({ name: 'VehicleQuery' })
 
@@ -88,6 +203,71 @@
   const overview = reactive<{ total: number; rows: VehicleQueryRow[] }>({
     total: 0,
     rows: []
+  })
+  const userStore = useUserStore()
+  const navigationRows = ref<VehicleArchiveNavigationItem[]>([])
+  const navigationTreeRef = ref<InstanceType<typeof ElTree>>()
+  const navigationKeyword = ref('')
+  const navigationLoading = ref(false)
+  const navigationError = shallowRef<Error | null>(null)
+  const navigationKey = ref('all')
+  const navigationLabel = ref('')
+  const selectedNavigation = ref<Pick<NavigationNode, 'vehicleOwnership' | 'vehicleType'>>({})
+  const navigationIds = computed(() =>
+    filterClassifiedVehicles(navigationRows.value, selectedNavigation.value).map((row) => row.id)
+  )
+  const navigationTree = computed<NavigationNode[]>(() =>
+    buildVehicleClassificationTree(
+      navigationRows.value,
+      (dictionary, value) => userStore.getDictItemByValue(dictionary, value)?.label
+    )
+  )
+  const filterNavigationNode = (keyword: string, node: Record<string, unknown>): boolean =>
+    !keyword ||
+    String(node.searchText ?? '')
+      .toLocaleLowerCase()
+      .includes(keyword.toLocaleLowerCase())
+  watch(navigationKeyword, (keyword) => navigationTreeRef.value?.filter(keyword.trim()))
+  watch(
+    navigationTree,
+    async () => {
+      await nextTick()
+      navigationTreeRef.value?.filter(navigationKeyword.value.trim())
+    },
+    { flush: 'post' }
+  )
+  const loadNavigation = async (): Promise<void> => {
+    navigationLoading.value = true
+    navigationError.value = null
+    try {
+      const result = await fetchVehicleArchiveNavigation()
+      if (result.error) throw result.error
+      navigationRows.value = result.data ?? []
+    } catch (error) {
+      navigationError.value = error instanceof Error ? error : new Error('车辆分类加载失败')
+    } finally {
+      navigationLoading.value = false
+    }
+  }
+  const handleNavigationClick = (node?: NavigationNode): void => {
+    navigationKey.value = node?.key ?? 'all'
+    navigationLabel.value = node?.label ?? ''
+    selectedNavigation.value = {
+      vehicleOwnership: node?.vehicleOwnership,
+      vehicleType: node?.vehicleType
+    }
+    if (!node) navigationTreeRef.value?.setCurrentKey(undefined)
+    tableQueryRef.value?.clearSelection()
+    void tableQueryRef.value?.refreshContext()
+  }
+  onMounted(async () => {
+    await Promise.all(
+      ['vehicleOwnership', 'vehicleType'].map((code) => userStore.ensureDictLoaded(code))
+    )
+    await loadNavigation()
+  })
+  onActivated(() => {
+    void loadNavigation()
   })
   const listFieldAccess = ref<Api.Vms.ArchiveManage.VehicleArchiveFieldAccessMap>({})
   const effectiveFieldAccess = computed(() =>
@@ -149,6 +329,7 @@
 
   const table: UnwrapNestedRefs<TableGroup> = reactive<TableGroup>({
     searchQuery: {
+      carrierId: '',
       companyName: '',
       plateNo: '',
       manufacturer: '',
@@ -157,6 +338,22 @@
       auditStatus: undefined
     },
     searchItems: computed<SearchFormItem[]>(() => [
+      {
+        label: '所属承运商',
+        key: 'carrierId',
+        type: 'select',
+        api: fetchCarrierOptions,
+        resultField: 'data',
+        labelField: 'companyName',
+        valueField: 'id',
+        labelFn: (option) => {
+          const carrier = option as VmsCarrierReference
+          return carrier.carrierCode
+            ? `${carrier.companyName}（${carrier.carrierCode}）`
+            : carrier.companyName
+        },
+        props: { clearable: true, filterable: true, placeholder: '请选择承运商' }
+      },
       {
         label: '所属公司',
         key: 'companyName',
@@ -207,12 +404,85 @@
         link: { permission: 'VehicleQuery:View', onClick: openDetail },
         formatter: (row) => renderVehicleIdentity(row)
       },
+      {
+        prop: 'vehiclePhotoUrl',
+        label: '图片',
+        width: 88,
+        formatter: (row) =>
+          row.vehiclePhotoUrl ? (
+            <img
+              class="vehicle-query-page__photo"
+              src={row.vehiclePhotoUrl}
+              alt={`${row.plateNo} 车辆图片`}
+              width="52"
+              height="40"
+            />
+          ) : (
+            '--'
+          )
+      },
+      {
+        prop: 'vehicleOwnership',
+        label: '车辆归属',
+        width: 112,
+        dict: { code: 'vehicleOwnership', display: 'auto' }
+      },
+      {
+        prop: 'primaryDriver',
+        label: '主司机',
+        minWidth: 148,
+        formatter: (row) => row.primaryDriver?.driverName || row.driverOneName || '--'
+      },
+      {
+        prop: 'carrier',
+        label: '所属承运商',
+        minWidth: 190,
+        formatter: (row) => row.carrier?.companyName || '--'
+      },
       { prop: 'companyName', label: '所属公司', minWidth: 170, showOverflowTooltip: true },
+      {
+        prop: 'plateColor',
+        label: '车牌颜色',
+        width: 110,
+        dict: { code: 'vehiclePlateColor', display: 'text' }
+      },
+      {
+        prop: 'specLengthM',
+        label: '规格/车长(米)',
+        width: 128,
+        formatter: (row) => row.specLengthM ?? '--'
+      },
+      {
+        prop: 'volumeM3',
+        label: '容积(立方米)',
+        width: 118,
+        formatter: (row) => row.volumeM3 ?? '--'
+      },
+      { prop: 'loadTons', label: '载重(吨)', width: 110, formatter: (row) => row.loadTons ?? '--' },
+      {
+        prop: 'defaultTrailerPlateNo',
+        label: '默认挂车',
+        minWidth: 120,
+        formatter: (row) => row.defaultTrailerPlateNo || '--'
+      },
+      {
+        prop: 'purchaseDate',
+        label: '购置时间',
+        width: 124,
+        formatter: (row) => formatDate(row.purchaseDate)
+      },
+      {
+        prop: 'vehicleAge',
+        label: '车辆年限',
+        width: 112,
+        formatter: (row) => formatVehicleAge(row.purchaseDate)
+      },
       {
         prop: 'vehicleType',
         label: '车型',
         width: 110,
-        dict: { code: 'vehicleType', display: 'auto' }
+        dict: { code: 'vehicleType', display: 'auto' },
+        useSlot: true
       },
       {
         prop: 'operationStatus',
@@ -286,9 +556,13 @@
   })
 
   const fetchTableData = async (params: TableParams) => {
+    if (navigationKey.value !== 'all' && !navigationIds.value.length) {
+      return { data: [], total: 0, fieldAccess: listFieldAccess.value }
+    }
     const { from, to } = buildSupabasePageRange({ current: params.current, size: params.size })
     const result = await fetchVehicleArchiveList({
       ...params,
+      ids: navigationKey.value === 'all' ? undefined : navigationIds.value,
       from,
       to
     })
@@ -373,6 +647,102 @@
 <style scoped lang="scss">
   .vehicle-query-page {
     min-width: 0;
+
+    &__workspace {
+      display: flex;
+      flex: 1;
+      min-width: 0;
+      min-height: 0;
+    }
+
+    &__navigation {
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+
+      :deep(.el-tree) {
+        background: transparent;
+      }
+
+      :deep(.el-tree-node__content) {
+        min-height: 42px;
+        border-radius: var(--el-border-radius-base);
+      }
+
+      :deep(.el-tree-node.is-current > .el-tree-node__content) {
+        color: var(--theme-color);
+        background: color-mix(in srgb, var(--theme-color) 10%, var(--default-box-color));
+        box-shadow: inset 3px 0 0 var(--theme-color);
+      }
+    }
+
+    &__navigation-all {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      width: 100%;
+      min-height: 56px;
+      padding: 8px 10px;
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+      background: var(--art-gray-100);
+      border: 1px solid transparent;
+      border-radius: var(--el-border-radius-base);
+
+      &.is-current {
+        color: var(--theme-color);
+        background: color-mix(in srgb, var(--theme-color) 9%, var(--default-box-color));
+        box-shadow: inset 3px 0 0 var(--theme-color);
+      }
+
+      &:focus-visible {
+        outline: 2px solid var(--theme-color);
+        outline-offset: 2px;
+      }
+
+      span {
+        display: grid;
+      }
+
+      small {
+        color: var(--el-text-color-secondary);
+      }
+    }
+
+    &__navigation-node {
+      display: flex;
+      gap: 7px;
+      align-items: center;
+      width: 100%;
+      min-width: 0;
+
+      > span {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      small {
+        flex: none;
+        margin-right: 21px;
+        font-variant-numeric: tabular-nums;
+        color: var(--el-text-color-secondary);
+      }
+    }
+
+    :deep(.vehicle-query-page__photo) {
+      width: 52px;
+      height: 40px;
+      object-fit: cover;
+      border-radius: var(--el-border-radius-small);
+    }
+
+    :deep(.art-table-query) {
+      min-width: 0;
+    }
 
     &__overview {
       flex: 0 0 auto;
@@ -632,6 +1002,10 @@
     }
 
     @media (width <= 900px) {
+      &__navigation {
+        max-height: 300px;
+      }
+
       &__hero {
         align-items: flex-start;
       }

@@ -111,12 +111,11 @@
         >
           附件内容已脱敏
         </div>
-        <ArtTable
+        <VehicleAttachmentTable
           v-else
-          :data="detail.data?.attachments ?? []"
-          :columns="attachmentColumns"
-          :pagination="undefined"
-          :show-table-header="false"
+          :attachments="detail.data?.attachments ?? []"
+          :name-min-width="180"
+          :removable="false"
           empty-height="180px"
         />
       </ArtPageSection>
@@ -124,24 +123,20 @@
   </ArtPageShell>
 </template>
 
-<script setup lang="tsx">
+<script setup lang="ts">
   import { getFriendlySupabaseErrorMessage } from '@/utils/supabase'
-  import BusinessAttachmentRowActions from '@/components/business/business-attachment-row-actions/index.vue'
   import { formatArtValue } from '@/utils/ui/format'
   import ArtDescriptions from '@/components/core/base/art-descriptions/index.vue'
   import type { ArtDescriptionItem } from '@/components/core/base/art-descriptions/types'
   import ArtDictDisplay from '@/components/core/base/art-dict-display/index.vue'
   import ArtPageSection from '@/components/core/layouts/art-page-section/index.vue'
-  import ArtTable from '@/components/core/tables/art-table/index.vue'
-  import type { ColumnOption } from '@/types'
+  import VehicleAttachmentTable from '../vehicle-attachment-table.vue'
   import { fetchVehicleRoutineInspectionDetail } from '@vms/api'
-  import { attachmentTableLink } from '@/components/core/media/art-file-viewer/table-link'
   import { canViewField } from '@/utils/field-permission'
 
   defineOptions({ name: 'VehicleRoutineInspectionDetail' })
 
   type RoutineInspection = Api.Vms.VehicleManage.VehicleRoutineInspectionRecord
-  type Attachment = Api.Vms.VehicleManage.VehicleAttachment
 
   const route = useRoute()
   const router = useRouter()
@@ -184,25 +179,6 @@
         ] as ArtDescriptionItem<Partial<RoutineInspection>>[])
       : [])
   ])
-
-  const attachmentColumns: ColumnOption<Attachment>[] = [
-    { type: 'globalIndex', label: '序号', width: 56 },
-    { prop: 'name', label: '附件名称', minWidth: 180, link: attachmentTableLink },
-    {
-      prop: 'fileType',
-      label: '格式类型',
-      width: 110,
-      dict: { code: 'FILE_EXTENSION_LABEL_MAP', display: 'text' }
-    },
-    { prop: 'fileSize', label: '附件大小', width: 110 },
-    {
-      prop: 'operation',
-      label: '操作',
-      width: 104,
-      fixed: 'right',
-      formatter: (row) => <BusinessAttachmentRowActions file={row} />
-    }
-  ]
 
   onMounted(() => {
     void loadDetail()

@@ -19,6 +19,10 @@ export interface TrailerRecord {
   ownership: string
   defaultTractorId: string | null
   defaultTractorPlateNo?: string | null
+  tractorIds: string[]
+  tractors?: TrailerTractorOption[]
+  carrierId: string | null
+  carrierName: string | null
   companyOrganizationId: string | null
   companyName: string | null
   source: string | null
@@ -51,6 +55,9 @@ export type TrailerWritePayload = Pick<
   | 'mandatoryScrapDate'
   | 'ownership'
   | 'defaultTractorId'
+  | 'tractorIds'
+  | 'carrierId'
+  | 'companyName'
   | 'companyOrganizationId'
   | 'source'
   | 'remark'
@@ -70,4 +77,16 @@ export interface TrailerCompanyOption {
   id: string
   label: string
   isDefault?: boolean
+}
+
+export interface TrailerTractorOption {
+  id: string
+  plateNo: string
+  vehicleType: string | null
+  ownership: string | null
+  carrierName: string | null
+  driverName: string | null
+  driverPhone: string | null
+  companyName: string | null
+  isDefault: boolean
 }

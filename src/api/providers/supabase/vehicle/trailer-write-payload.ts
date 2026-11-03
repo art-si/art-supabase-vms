@@ -6,6 +6,8 @@ export function normalizeTrailerRelationIds(payload: TrailerWritePayload): Trail
   return {
     ...payload,
     defaultTractorId: normalizeNullableText(payload.defaultTractorId),
+    carrierId: normalizeNullableText(payload.carrierId),
+    companyName: normalizeNullableText(payload.companyName),
     companyOrganizationId: normalizeNullableText(payload.companyOrganizationId)
   }
 }

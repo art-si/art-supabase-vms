@@ -1,5 +1,5 @@
 <template>
-  <div class="mileage-record-page art-full-height min-w-0 gap-3">
+  <div class="mileage-record-page business-workspace-page art-full-height min-w-0">
     <BusinessWorkspaceHeader
       eyebrow="MILEAGE LEDGER"
       title="车辆里程"
@@ -16,24 +16,32 @@
       </template>
     </BusinessWorkspaceHeader>
 
-    <ArtTableQuery
-      ref="tableQueryRef"
-      v-model="table.searchQuery"
-      :search-items="table.searchItems"
-      :api-fn="fetchTableData"
-      :columns-factory="table.columnsFactory"
-      :header-actions="table.headerActions"
-      header-actions-placement="workspace"
-      :search-bar-props="{ span: 6, labelWidth: 90 }"
-      :table-props="{
-        rowKey: 'id',
-        tableLayout: 'fixed',
-        emptyText: '暂无车辆里程记录',
-        emptyDescription: '可调整所属公司、车牌号或行驶时间范围后重新查询。'
-      }"
-      :on-success="handleTableSuccess"
-      focusable
-    />
+    <div class="mileage-record-page__workspace flex min-h-0 min-w-0 flex-1 flex-col">
+      <ArtWorkspaceSplitter primary-size="264px" primary-min="248px" :breakpoint="900">
+        <template #primary>
+          <VehicleClassificationPanel @select="handleClassificationSelect" />
+        </template>
+        <ArtTableQuery
+          ref="tableQueryRef"
+          v-model="table.searchQuery"
+          :search-items="table.searchItems"
+          :api-fn="fetchTableData"
+          :columns-factory="table.columnsFactory"
+          :header-actions="table.headerActions"
+          header-actions-placement="workspace"
+          :search-bar-props="{ span: 6, labelWidth: 90 }"
+          :table-props="{
+            rowKey: 'id',
+            tableLayout: 'fixed',
+            emptyText: '暂无车辆里程记录',
+            emptyDescription: '可调整所属公司、车牌号或行驶时间范围后重新查询。'
+          }"
+          :on-success="handleTableSuccess"
+          focus-scope-selector=".mileage-record-page__workspace"
+          focusable
+        />
+      </ArtWorkspaceSplitter>
+    </div>
   </div>
 </template>
 
@@ -54,6 +62,8 @@
     type BusinessWorkspaceMetric
   } from '@/components/business/business-workspace-header/index.vue'
   import BusinessTableWorkspaceActions from '@/components/business/business-table-workspace-actions/index.vue'
+  import ArtWorkspaceSplitter from '@/components/core/layouts/art-workspace-splitter/index.vue'
+  import VehicleClassificationPanel from '../components/vehicle-classification-panel.vue'
   import {
     canViewField,
     mergeFieldAccessMaps,
@@ -74,6 +84,7 @@
   }
 
   const tableQueryRef = ref<ArtTableQueryExpose>()
+  const classification = ref<Pick<SearchParams, 'vehicleOwnership' | 'vehicleType'>>({})
   const overview = reactive<{ total: number; rows: MileageRecord[] }>({ total: 0, rows: [] })
   const listFieldAccess = ref<Api.Vms.VehicleManage.VehicleMileageFieldAccessMap>({})
   const effectiveFieldAccess = computed(() =>
@@ -144,6 +155,7 @@
         exportApi: ({ selectedIds, searchParams, maxRows }) =>
           exportVehicleMileageList({
             ...(searchParams as SearchParams),
+            ...classification.value,
             ids: selectedIds.map(String),
             maxRows
           })
@@ -154,6 +166,21 @@
       { type: 'globalIndex', label: '序号', width: 64 },
       { prop: 'companyName', label: '所属公司', minWidth: 220 },
       { prop: 'plateNo', label: '车牌号', width: 120 },
+      {
+        prop: 'vehicleOwnership',
+        label: '车辆归属',
+        width: 120,
+        dict: { code: 'vehicleOwnership', display: 'auto' }
+      },
+      {
+        prop: 'driverName',
+        label: '司机(电话)',
+        minWidth: 210,
+        formatter: (row: MileageRecord) =>
+          [row.driverName, row.driverPhone].filter(Boolean).join(' / ') || '--'
+      },
+      { prop: 'carrierName', label: '所属承运商', minWidth: 200 },
+      { prop: 'waybillNo', label: '运单号', minWidth: 180 },
       ...(canViewField(effectiveFieldAccess.value, 'tripTimeline')
         ? [
             {
@@ -205,6 +232,11 @@
   const mileageExcelColumns = computed<ArtTableQueryExcelColumn[]>(() => [
     { key: 'companyName', title: '所属公司' },
     { key: 'plateNo', title: '车牌号', required: true },
+    { key: 'vehicleOwnership', title: '车辆归属' },
+    { key: 'driverName', title: '司机' },
+    { key: 'driverPhone', title: '司机电话' },
+    { key: 'carrierName', title: '所属承运商' },
+    { key: 'waybillNo', title: '运单号' },
     ...(canViewField(effectiveFieldAccess.value, 'tripTimeline')
       ? [
           { key: 'startTime', title: '开始时间' },
@@ -222,9 +254,21 @@
 
   const fetchTableData = async (params: TableParams) => {
     const { from, to } = buildSupabasePageRange({ current: params.current, size: params.size })
-    const result = await fetchVehicleMileageList({ ...params, from, to })
+    const result = await fetchVehicleMileageList({ ...params, ...classification.value, from, to })
     listFieldAccess.value = result.fieldAccess ?? {}
     return result
+  }
+
+  const handleClassificationSelect = (selection: {
+    vehicleOwnership?: string
+    vehicleType?: string
+  }): void => {
+    classification.value = {
+      vehicleOwnership: selection.vehicleOwnership,
+      vehicleType: selection.vehicleType
+    }
+    tableQueryRef.value?.clearSelection()
+    void tableQueryRef.value?.refreshContext()
   }
 
   const handleTableSuccess: NonNullable<ArtTableQueryProps['onSuccess']> = (rows, response) => {

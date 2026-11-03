@@ -34,7 +34,8 @@ export const createDescriptionItems = (items: InfoItem[]): ArtDescriptionItem[] 
     label: item.label,
     value: item.value,
     dictCode: item.dictCode,
-    formatter: item.dictCode ? undefined : () => formatValue(item.value, item.suffix)
+    render: item.render,
+    formatter: item.dictCode || item.render ? undefined : () => formatValue(item.value, item.suffix)
   }))
 
 export const getLatestByDate = <TRecord>(

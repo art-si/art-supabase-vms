@@ -89,7 +89,8 @@
 </template>
 
 <script setup lang="ts">
-  import { ElAlert, ElButton, type FormRules } from 'element-plus'
+  import { h } from 'vue'
+  import { ElAlert, ElButton, ElMessage, type FormRules } from 'element-plus'
   import { pick } from 'lodash-es'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
@@ -103,14 +104,16 @@
   import VehicleTypePicker from '../../vehicle-archive-edit/modules/vehicle-type-picker.vue'
   import { vehicleTypeProfileLabel } from '../../vehicle-archive-edit/modules/vehicle-type-catalog'
   import type { VehicleTypeProfile } from '@vms/types/vehicle-type'
-  import type { TrailerRecord, TrailerWritePayload } from '@vms/types/trailer'
+  import type { TrailerRecord, TrailerTractorOption, TrailerWritePayload } from '@vms/types/trailer'
   import {
-    fetchVehicleArchiveOptions,
-    fetchTrailerCompanyOptions,
+    fetchTrailerTractorOptions,
+    fetchVehicleArchiveDetail,
+    fetchVmsAssetCompanyOptions,
+    fetchVmsAssetCarrierReferences,
     saveTrailer,
     uploadTrailerPrivateImage
   } from '@vms/api'
-  import type { TrailerCompanyOption } from '@vms/types/trailer'
+  import type { VmsCarrierReference } from '@vms/api/integration'
   import { replaceReactiveModel } from '@/utils/form/model'
   import { normalizeNullableText, normalizeNullableNumber } from '@/utils/form/normalize'
   import { useDictionaryOptions } from '@/hooks/core/useDictionaryOptions'
@@ -118,6 +121,7 @@
   import { useUserStore } from '@/store/modules/user'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
   import { getFriendlySupabaseErrorMessage } from '@/utils/supabase'
+  import { copyTextToClipboard } from '@/utils/file/clipboard'
 
   type ImageKey = 'licenseFrontUrl' | 'licenseBackUrl' | 'licenseBackReverseUrl' | 'rearPhotoUrl'
   type TrailerForm = TrailerWritePayload & { id: string | null }
@@ -136,8 +140,8 @@
   const activeTab = ref('licenseFrontSection')
   const saveError = ref('')
   const recordTenantId = ref<string | null>(null)
-  const selectedTractor = ref<Api.Vms.VehicleManage.VehicleOption[]>([])
-  const selectedCompany = ref<TrailerCompanyOption[]>([])
+  const selectedTractor = ref<TrailerTractorOption[]>([])
+  const carrierOptions = ref<VmsCarrierReference[]>([])
 
   const imageItems: { key: ImageKey; label: string }[] = [
     { key: 'licenseFrontUrl', label: '行驶证主页' },
@@ -165,6 +169,9 @@
     mandatoryScrapDate: null,
     ownership: 'self_operated',
     defaultTractorId: null,
+    tractorIds: [],
+    carrierId: null,
+    companyName: null,
     companyOrganizationId: null,
     source: null,
     remark: null,
@@ -187,34 +194,64 @@
     () => imageItems.find((item) => item.key === activeImage.value)?.label ?? ''
   )
   const filledImageCount = computed(() => imageItems.filter((item) => form.value[item.key]).length)
-  const tractorId = computed({
-    get: () => form.value.defaultTractorId ?? undefined,
-    set: (value?: string | number) => {
-      form.value.defaultTractorId = value ? String(value) : null
-    }
-  })
-  const companyOrganizationId = computed({
-    get: () => form.value.companyOrganizationId ?? undefined,
-    set: (value?: string | number) => {
-      form.value.companyOrganizationId = value ? String(value) : null
+  const tractorIds = computed({
+    get: () => form.value.tractorIds,
+    set: (value: string[] | number[] | undefined) => {
+      form.value.tractorIds = (value ?? []).map(String)
+      if (!form.value.tractorIds.includes(form.value.defaultTractorId ?? '')) {
+        form.value.defaultTractorId = form.value.tractorIds[0] ?? null
+      }
     }
   })
 
-  const tractorColumns: DataSelectColumn<Api.Vms.VehicleManage.VehicleOption>[] = [
+  const tractorColumns: DataSelectColumn<TrailerTractorOption>[] = [
     { prop: 'plateNo', label: '车牌号', width: 150 },
     { prop: 'vehicleType', label: '车型', minWidth: 160 },
-    { prop: 'companyName', label: '所属公司', minWidth: 160 }
+    {
+      prop: 'ownership',
+      label: '车辆归属',
+      minWidth: 110,
+      dict: { code: 'vehicleOwnership', display: 'auto' }
+    },
+    { prop: 'carrierName', label: '所属承运商', minWidth: 150 },
+    { prop: 'driverName', label: '司机', minWidth: 100 },
+    { prop: 'driverPhone', label: '电话', minWidth: 130 },
+    { prop: 'companyName', label: '所属公司', minWidth: 150 },
+    {
+      prop: 'isDefault',
+      label: '默认值',
+      width: 85,
+      formatter: (row) => (row.isDefault ? '当前默认' : '—')
+    }
   ]
   const fetchTractorOptions = async (params: DataSelectFetchParams) => {
-    const result = await fetchVehicleArchiveOptions({ plateNo: params.keyword })
-    return { data: result.data ?? [], total: result.data?.length ?? 0, error: result.error }
+    const from = (params.page - 1) * params.pageSize
+    const result = await fetchTrailerTractorOptions({
+      trailerId: form.value.id,
+      tenantId: resourceTenantId.value,
+      keyword: params.keyword,
+      from,
+      to: from + params.pageSize - 1
+    })
+    return { data: result.data ?? [], total: result.total, error: result.error }
   }
-  const companyColumns: DataSelectColumn<TrailerCompanyOption>[] = [
-    { prop: 'label', label: '公司名称', minWidth: 230 }
-  ]
-  const fetchCompanyOptions = async (params: DataSelectFetchParams) => {
-    const result = await fetchTrailerCompanyOptions(params.keyword, form.value.id)
-    return { data: result.data ?? [], total: result.data?.length ?? 0, error: result.error }
+  const loadCarrierOptions = async () => {
+    const result = await fetchVmsAssetCarrierReferences({
+      trailerId: form.value.id,
+      tenantId: resourceTenantId.value
+    })
+    if (!result.error) carrierOptions.value = result.data ?? []
+    return result
+  }
+  const copyCarrier = async () => {
+    const carrier = carrierOptions.value.find((item) => item.id === form.value.carrierId)
+    if (!carrier) return
+    try {
+      await copyTextToClipboard(carrier.companyName)
+      ElMessage.success('已复制承运商名称')
+    } catch (error) {
+      ElMessage.error(getFriendlySupabaseErrorMessage(error, '复制失败，请手动复制承运商名称'))
+    }
   }
 
   const rules: FormRules<TrailerForm> = {
@@ -223,6 +260,16 @@
     vehicleTypeProfileId: [{ required: true, message: '请选择挂车车型', trigger: 'change' }],
     ownerName: [
       { required: true, whitespace: true, message: '请输入行驶证所有人', trigger: 'blur' }
+    ],
+    ownership: [{ required: true, message: '请选择车辆归属', trigger: 'change' }],
+    defaultTractorId: [
+      {
+        validator: (_rule, value, callback) => {
+          if (form.value.tractorIds.length && !value) callback(new Error('请指定一辆默认牵引车'))
+          else callback()
+        },
+        trigger: 'change'
+      }
     ]
   }
   const frontItems = computed<FormItem[]>(() => [
@@ -274,17 +321,24 @@
     }
   ]
   const otherItems = computed<FormItem[]>(() => [
-    { label: '车辆归属', key: 'ownership', type: 'select', props: { options: ownershipOptions } },
     {
-      label: '默认牵引车',
-      key: 'defaultTractorId',
+      label: '车辆归属',
+      key: 'ownership',
+      type: 'radioGroup',
+      span: 24,
+      props: { options: ownershipOptions, optionType: 'button' }
+    },
+    {
+      label: '牵引车',
+      key: 'tractorIds',
       type: 'dataSelect',
+      span: 24,
       props: {
         mode: 'table',
-        multiple: false,
-        modelValue: tractorId.value,
-        'onUpdate:modelValue': (value: typeof tractorId.value) => {
-          tractorId.value = value
+        multiple: true,
+        modelValue: tractorIds.value,
+        'onUpdate:modelValue': (value: string[] | number[] | undefined) => {
+          tractorIds.value = value
         },
         selectedData: selectedTractor.value,
         'onUpdate:selectedData': (value: typeof selectedTractor.value) => {
@@ -295,40 +349,80 @@
         rowKey: 'id',
         labelKey: 'plateNo',
         descriptionKey: 'companyName',
-        title: '参选默认牵引车',
+        title: '参选牵引车',
         searchPlaceholder: '输入牵引车车牌号',
-        placeholder: '请选择默认牵引车（选填）',
+        placeholder: '请选择牵引车（可多选）',
         clearable: true,
         showSelectedPanel: false,
+        showTableHeader: true,
         showPagination: Boolean(fetchTractorOptions)
       }
     },
     {
-      label: '所属公司',
-      key: 'companyOrganizationId',
-      type: 'dataSelect',
+      label: '默认牵引车',
+      key: 'defaultTractorId',
+      type: 'radioGroup',
+      span: 24,
       props: {
-        mode: 'table',
-        multiple: false,
-        modelValue: companyOrganizationId.value,
-        'onUpdate:modelValue': (value: typeof companyOrganizationId.value) => {
-          companyOrganizationId.value = value
-        },
-        selectedData: selectedCompany.value,
-        'onUpdate:selectedData': (value: typeof selectedCompany.value) => {
-          selectedCompany.value = value
-        },
-        apiFn: fetchCompanyOptions,
-        columns: companyColumns,
-        rowKey: 'id',
-        labelKey: 'label',
-        title: '参选所属公司',
-        searchPlaceholder: '输入公司名称',
-        placeholder: '请选择所属公司（可留空）',
+        options: selectedTractor.value.map((item) => ({ label: item.plateNo, value: item.id })),
+        optionType: 'button'
+      },
+      description: selectedTractor.value.length
+        ? '已参选车辆中只能指定一辆默认牵引车。'
+        : '先参选牵引车，再指定默认值。'
+    },
+    {
+      label: () =>
+        h('span', { class: 'art-icon-label' }, [
+          h('span', '所属承运商'),
+          h(
+            ElButton,
+            {
+              link: true,
+              type: 'primary',
+              size: 'small',
+              disabled: !form.value.carrierId,
+              title: '复制承运商名称',
+              'aria-label': '复制承运商名称',
+              onClick: copyCarrier
+            },
+            () => '复制'
+          )
+        ]),
+      key: 'carrierId',
+      type: 'select',
+      span: 24,
+      api: loadCarrierOptions,
+      resultField: 'data',
+      labelField: 'companyName',
+      valueField: 'id',
+      props: {
+        filterable: true,
         clearable: true,
-        showSelectedPanel: false,
-        showPagination: Boolean(fetchCompanyOptions)
+        placeholder: '请选择所属承运商（选填）',
+        onChange: (value?: string) => {
+          const carrier = carrierOptions.value.find((item) => item.id === value)
+          if (carrier) {
+            form.value.companyName = carrier.companyName
+            form.value.companyOrganizationId = null
+            form.value.ownership = 'carrier'
+          }
+        }
       }
+    },
+    {
+      label: '所属公司',
+      key: 'companyName',
+      type: 'input',
+      span: 24,
+      props: {
+        maxlength: 100,
+        placeholder: '请输入所属公司',
+        onInput: () => {
+          form.value.companyOrganizationId = null
+        }
+      },
+      description: '默认为租户法人公司，可按实际归属修改。'
     },
     {
       label: '备注',
@@ -401,7 +495,7 @@
     }
   }
 
-  const handleOpen = async (row?: TrailerRecord): Promise<void> => {
+  const handleOpen = async (row?: TrailerRecord, vehicleId?: string): Promise<void> => {
     activeTab.value = 'licenseFrontSection'
     saveError.value = ''
     recordTenantId.value = row?.tenantId ?? null
@@ -411,31 +505,38 @@
       row ? { ...initial, ...pick(row, Object.keys(initial)) } : initial
     )
     activeImage.value = 'licenseFrontUrl'
-    selectedTractor.value = row?.defaultTractorId
-      ? [
-          {
-            id: row.defaultTractorId,
-            plateNo: row.defaultTractorPlateNo ?? '牵引车',
-            companyName: row.companyName ?? undefined
-          }
-        ]
-      : []
-    selectedCompany.value = form.value.companyOrganizationId
-      ? [
-          {
-            id: form.value.companyOrganizationId,
-            label: row?.companyName ?? '所属公司'
-          }
-        ]
-      : []
+    selectedTractor.value = row?.tractors ?? []
+    if (!row && vehicleId) {
+      const vehicleResult = await fetchVehicleArchiveDetail(vehicleId)
+      if (vehicleResult.error || !vehicleResult.data) {
+        notifyFriendlyError(vehicleResult.error, '关联车辆加载失败，请重试')
+        return
+      }
+      recordTenantId.value = vehicleResult.data.tenantId ?? null
+      form.value.tractorIds = [vehicleId]
+      form.value.defaultTractorId = vehicleId
+      selectedTractor.value = [
+        {
+          id: vehicleId,
+          plateNo: vehicleResult.data.plateNo ?? '牵引车',
+          vehicleType: vehicleResult.data.vehicleType ?? null,
+          ownership: vehicleResult.data.vehicleOwnership ?? null,
+          carrierName: vehicleResult.data.carrier?.companyName ?? null,
+          driverName: vehicleResult.data.primaryDriver?.driverName ?? null,
+          driverPhone: vehicleResult.data.primaryDriver?.phone ?? null,
+          companyName: vehicleResult.data.companyName ?? null,
+          isDefault: true
+        }
+      ]
+    }
     if (!row) {
       try {
-        const result = await fetchTrailerCompanyOptions()
+        const result = await fetchVmsAssetCompanyOptions({ tenantId: resourceTenantId.value })
         if (result.error) throw result.error
         const defaultCompany = result.data?.find((company) => company.isDefault)
         if (defaultCompany) {
           form.value.companyOrganizationId = defaultCompany.id
-          selectedCompany.value = [defaultCompany]
+          form.value.companyName = defaultCompany.label
         }
       } catch (error) {
         notifyFriendlyError(error, '默认公司加载失败，可在表单中重新参选')

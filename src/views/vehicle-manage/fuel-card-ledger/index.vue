@@ -11,40 +11,54 @@
       ]"
       :metrics="metrics"
     >
-      <template #actions><BusinessTableWorkspaceActions :table="tableRef" /></template>
-    </BusinessWorkspaceHeader>
-    <ArtTableQuery
-      ref="tableRef"
-      v-model="search"
-      :search-items="searchItems"
-      :api-fn="fetchTableData"
-      :columns-factory="columnsFactory"
-      :header-actions="headerActions"
-      header-actions-placement="workspace"
-      :search-bar-props="{ span: 6, labelWidth: 86 }"
-      :table-props="{
-        rowKey: 'id',
-        tableLayout: 'fixed',
-        emptyText: '暂无油卡流水',
-        emptyDescription: '可登记充值或消费，或调整油卡与日期后重新查询。'
-      }"
-      :on-success="handleSuccess"
-      focusable
-    >
-      <template #table-header-top>
-        <div class="flex flex-wrap items-center justify-between gap-2">
-          <ElSegmented
-            :model-value="search.entryType || 'all'"
-            :options="ledgerViewOptions"
-            aria-label="油卡流水类型视图"
-            @update:model-value="handleLedgerViewChange"
-          />
-          <span class="text-xs text-[var(--el-text-color-secondary)]">
-            充值与消费按原流水核算；冲正及期初记录在全部流水中保留。
-          </span>
-        </div>
+      <template #actions>
+        <BusinessTableWorkspaceActions :table="tableRef" />
       </template>
-    </ArtTableQuery>
+    </BusinessWorkspaceHeader>
+    <ArtWorkspaceSplitter
+      class="min-h-0 flex-1"
+      primary-size="264px"
+      primary-min="248px"
+      :breakpoint="1160"
+      narrow-mode="stack"
+    >
+      <template #primary
+        ><VehicleClassificationPanel @select="handleClassificationSelect"
+      /></template>
+      <ArtTableQuery
+        ref="tableRef"
+        v-model="search"
+        :search-items="searchItems"
+        :api-fn="fetchTableData"
+        :columns-factory="columnsFactory"
+        :header-actions="headerActions"
+        header-actions-placement="workspace"
+        :search-bar-props="{ span: 6, labelWidth: 86 }"
+        :table-props="{
+          rowKey: 'id',
+          tableLayout: 'fixed',
+          emptyText: '暂无油卡流水',
+          emptyDescription: '可登记充值或消费，或调整油卡与日期后重新查询。'
+        }"
+        :on-success="handleSuccess"
+        focus-scope-selector=".art-workspace-splitter"
+        focusable
+      >
+        <template #table-header-top>
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <ElSegmented
+              :model-value="search.entryType || 'all'"
+              :options="ledgerViewOptions"
+              aria-label="油卡流水类型视图"
+              @update:model-value="handleLedgerViewChange"
+            />
+            <span class="text-xs text-[var(--el-text-color-secondary)]">
+              充值与消费按原流水核算；冲正及期初记录在全部流水中保留。
+            </span>
+          </div>
+        </template>
+      </ArtTableQuery>
+    </ArtWorkspaceSplitter>
     <FuelCardEntryDialog ref="entryDialogRef" @success="tableRef?.refreshCreate()" />
     <FuelCardReversalDialog ref="reversalDialogRef" @success="tableRef?.refreshUpdate()" />
     <CardEntryVoucherDialog
@@ -131,6 +145,10 @@
 
 <script setup lang="tsx">
   import { ElButton } from 'element-plus'
+  import ArtWorkspaceSplitter from '@/components/core/layouts/art-workspace-splitter/index.vue'
+  import VehicleClassificationPanel, {
+    type VehicleClassificationSelection
+  } from '../components/vehicle-classification-panel.vue'
   import { uniqBy } from 'lodash-es'
   import type { SearchFormItem } from '@/components/core/forms/art-search-bar/index.vue'
   import type {
@@ -185,6 +203,12 @@
   const router = useRouter()
   const { hasAuth } = useAuth()
   const tableRef = ref<ArtTableQueryExpose>()
+  const classification = ref<VehicleClassificationSelection>({})
+  const handleClassificationSelect = (value: VehicleClassificationSelection): void => {
+    classification.value = value
+    tableRef.value?.clearSelection()
+    void tableRef.value?.refreshContext()
+  }
   const entryDialogRef = ref<{ handleOpen: (type: 'recharge' | 'consume') => Promise<void> }>()
   const reversalDialogRef = ref<{ handleOpen: (entry: FuelCardEntry) => Promise<void> }>()
   const voucherDialogRef = ref<{ handleOpen: (entry: FuelCardEntry) => Promise<void> }>()
@@ -201,6 +225,19 @@
         row.occurredAt ? formatWithDayjs(row.occurredAt) : row.occurredOn
     },
     { key: 'companyName', label: '所属公司', field: 'companyName' },
+    {
+      key: 'vehicleOwnership',
+      label: '车辆归属',
+      field: 'vehicleOwnership',
+      dictCode: 'vehicleOwnership'
+    },
+    { key: 'carrierName', label: '所属承运商', field: 'carrierName' },
+    {
+      key: 'vehicleDriverName',
+      label: '绑定司机',
+      value: (row: FuelCardEntry) =>
+        [row.vehicleDriverName, row.vehicleDriverPhone].filter(Boolean).join(' · ') || '--'
+    },
     {
       key: 'paymentMethod',
       label: '支付方式',
@@ -418,6 +455,8 @@
       exportApi: ({ selectedIds, searchParams, maxRows }) =>
         exportFuelCardLedgerList({
           selectedIds: selectedIds.length ? selectedIds.map(String) : undefined,
+          vehicleOwnership: classification.value.vehicleOwnership,
+          vehicleType: classification.value.vehicleType,
           cardId: searchParams.cardId ? String(searchParams.cardId) : undefined,
           entryType: searchParams.entryType
             ? (String(searchParams.entryType) as EntryType)
@@ -530,6 +569,43 @@
       }
     },
     {
+      prop: 'vehicleOwnership',
+      label: '车辆归属',
+      minWidth: 120,
+      dict: { code: 'vehicleOwnership', display: 'text' }
+    },
+    {
+      prop: 'vehicleDriverName',
+      label: '司机（电话）',
+      minWidth: 170,
+      formatter: (row) =>
+        [row.vehicleDriverName, row.vehicleDriverPhone].filter(Boolean).join(' · ') || '--'
+    },
+    {
+      prop: 'carrierName',
+      label: '所属承运商',
+      minWidth: 160,
+      formatter: (row) => row.carrierName || '--'
+    },
+    {
+      prop: 'companyName',
+      label: '所属公司',
+      minWidth: 160,
+      formatter: (row) => row.companyName || '--'
+    },
+    {
+      prop: 'sourceCostNo',
+      label: '费用单号',
+      minWidth: 165,
+      formatter: (row) => row.sourceCostNo || '--'
+    },
+    {
+      prop: 'waybillNo',
+      label: '运单号',
+      minWidth: 165,
+      formatter: (row) => row.waybillNo || '--'
+    },
+    {
       prop: 'entryType',
       label: '类型',
       width: 96,
@@ -616,6 +692,8 @@
       current: params.current,
       size: params.size,
       cardId: params.cardId,
+      vehicleOwnership: classification.value.vehicleOwnership,
+      vehicleType: classification.value.vehicleType,
       entryType: params.entryType,
       occurredFrom: params.occurredRange?.[0],
       occurredTo: params.occurredRange?.[1]

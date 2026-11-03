@@ -33,6 +33,8 @@ const createVehicleMileageRpcParams = (
     p_vehicle_id: params.vehicleId || null,
     p_company_name: normalizeNullableText(String(params.companyName ?? '')),
     p_plate_no: normalizeNullableText(String(params.plateNo ?? '')),
+    p_vehicle_ownership: normalizeNullableText(params.vehicleOwnership),
+    p_vehicle_type: normalizeNullableText(params.vehicleType),
     p_start_time_from: toDateStartTimestamp(params.drivingTimeRange?.[0]),
     p_start_time_to: toDateEndTimestamp(params.drivingTimeRange?.[1]),
     p_ids: params.ids?.length ? params.ids : null,

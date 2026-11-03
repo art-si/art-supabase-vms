@@ -4,7 +4,8 @@
     :columns="columns"
     :pagination="undefined"
     :show-table-header="false"
-    empty-height="160px"
+    :fixed-column-min-width="0"
+    :empty-height="emptyHeight"
   />
 </template>
 
@@ -21,9 +22,10 @@
       attachments: Attachment[]
       nameLabel?: string
       nameMinWidth?: number
+      emptyHeight?: string
       removable: boolean
     }>(),
-    { nameLabel: '附件名称' }
+    { nameLabel: '附件名称', emptyHeight: '160px' }
   )
   const emit = defineEmits<{ remove: [row: Attachment] }>()
 
@@ -45,7 +47,6 @@
     {
       prop: 'operation',
       label: '操作',
-      width: 144,
       fixed: 'right',
       formatter: (row) => (
         <BusinessAttachmentRowActions

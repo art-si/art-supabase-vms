@@ -1,4 +1,5 @@
 import type { ColumnOption } from '@/types'
+import type { ArtDescriptionItem } from '@/components/core/base/art-descriptions/types'
 
 export type VehicleArchive = Api.Vms.ArchiveManage.VehicleArchive
 export type VehiclePartUsage = Api.Vms.VehicleManage.VehiclePartUsage
@@ -16,6 +17,7 @@ export type VehicleQueryTabKey =
   | 'archive'
   | 'documents'
   | 'driver'
+  | 'trailers'
   | 'orders'
   | 'fuel'
   | 'fuelCard'
@@ -41,6 +43,7 @@ export interface InfoItem {
   value?: unknown
   dictCode?: string
   suffix?: string
+  render?: ArtDescriptionItem['render']
 }
 
 export interface VehicleQueryPanelProps {

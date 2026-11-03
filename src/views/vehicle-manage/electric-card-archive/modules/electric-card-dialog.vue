@@ -11,7 +11,8 @@
       :model-value="cardForm"
       :items="formItems"
       :rules="formRules"
-      :span="24"
+      :span="12"
+      :gutter="20"
       label-width="110px"
     >
     </ArtForm>
@@ -31,6 +32,7 @@
   } from '@/components/core/forms/art-data-select/types'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
+  import { useDocumentNumberRule } from '@/hooks/core/useDocumentNumberRule'
 
   import type { EmployeeIntegrationItem } from '@/api/integration/employees'
   import {
@@ -91,6 +93,7 @@
   const selectedVehicleTenantId = computed(
     () => editingCard.value?.tenantId || vehicleSelection.value[0]?.tenantId || ''
   )
+  const cardNumber = useDocumentNumberRule('vms.electric_card', selectedVehicleTenantId)
   const selectedOwner = ref<EmployeeIntegrationItem[]>([])
   const selectedOpener = ref<EmployeeIntegrationItem[]>([])
   const uploadCardImage = (file: File) =>
@@ -106,6 +109,36 @@
   }
   const vehicleColumns: DataSelectColumn[] = [
     { prop: 'plateNo', label: '车牌号', minWidth: 140 },
+    {
+      prop: 'isNewEnergy',
+      label: '新能源车',
+      width: 100,
+      dict: { code: 'commonBoolean', display: 'text' }
+    },
+    {
+      prop: 'vehicleOwnership',
+      label: '车辆归属',
+      minWidth: 120,
+      dict: { code: 'vehicleOwnership', display: 'text' }
+    },
+    {
+      prop: 'carrier',
+      label: '所属承运商',
+      minWidth: 180,
+      formatter: (row) => row.carrier?.companyName || '—'
+    },
+    {
+      prop: 'primaryDriver',
+      label: '司机',
+      minWidth: 120,
+      formatter: (row) => row.primaryDriver?.driverName || '—'
+    },
+    {
+      prop: 'primaryDriverPhone',
+      label: '电话',
+      minWidth: 140,
+      formatter: (row) => row.primaryDriver?.phone || '—'
+    },
     { prop: 'companyName', label: '所属公司', minWidth: 220 }
   ]
   const formItems = computed<FormItem[]>(() => [
@@ -113,6 +146,7 @@
       key: 'cardImageUrl',
       label: '电卡图片',
       type: 'uploadImage',
+      span: 24,
       description: editingCard.value
         ? '上传或更换卡面照片，仅同租户授权用户可查看。'
         : '先选车辆，再上传卡面照片；影像仅供同租户授权用户查看。',
@@ -133,12 +167,17 @@
       label: '电卡号',
       key: 'cardNo',
       type: 'input',
-      props: { maxlength: 64, placeholder: '请输入卡面号码', disabled: Boolean(editingCard.value) }
+      description: cardNumber.description.value,
+      props: {
+        maxlength: 64,
+        ...cardNumber.inputProps(Boolean(editingCard.value), '请输入电卡号', true)
+      }
     },
     {
       label: '绑定车辆',
       key: 'vehicleId',
       type: editingCard.value ? 'text' : 'dataSelect',
+      span: 24,
       props: editingCard.value
         ? { formatter: () => editingCard.value?.plateNo || '—' }
         : {
@@ -152,15 +191,16 @@
             'onUpdate:selectedData': (rows: typeof vehicleSelection.value) => {
               vehicleSelection.value = rows
             },
-            apiFn: fetchApprovedVehicleSelectData,
+            apiFn: (params: Parameters<typeof fetchApprovedVehicleSelectData>[0]) =>
+              fetchApprovedVehicleSelectData({ ...params, isNewEnergy: true }),
             columns: vehicleColumns,
             rowKey: 'id',
             labelKey: 'plateNo',
             descriptionKey: 'companyName',
-            title: '选择已审批车辆',
+            title: '选择已审批新能源车',
             searchPlaceholder: '输入车牌号或所属公司',
-            emptyText: '暂无可绑定车辆',
-            emptyDescription: '请先完成车辆档案审批后重试。',
+            emptyText: '暂无可绑定新能源车',
+            emptyDescription: '请先完成新能源车档案审批后重试。',
             showPagination: true,
             showSelectedPanel: false,
             onChange: handleVehicleChange
@@ -219,11 +259,20 @@
       label: '备注',
       key: 'remark',
       type: 'input',
+      span: 24,
       props: { type: 'textarea', rows: 3, maxlength: 500, showWordLimit: true }
     }
   ])
   const formRules: FormRules<ElectricCardForm> = {
-    cardNo: [{ required: true, message: '请输入电卡号', trigger: 'blur' }],
+    cardNo: [
+      {
+        validator: (_rule, value: string, callback) => {
+          if (editingCard.value || cardNumber.automatic.value || value?.trim()) callback()
+          else callback(new Error('请输入电卡号'))
+        },
+        trigger: 'blur'
+      }
+    ],
     vehicleId: [{ required: true, message: '请选择已审批车辆', trigger: 'change' }],
     openingBalance: [
       { required: true, type: 'number', min: 0, message: '期初余额不能为负数', trigger: 'change' }
@@ -326,6 +375,7 @@
     await dialogRef.value?.handleOpen(undefined, {
       title: card ? '编辑电卡资料' : '新增电卡',
       confirmText: card ? '保存修改' : '创建电卡',
+      onOpen: () => cardNumber.loadRule(),
       onConfirm: handleConfirm
     })
   }

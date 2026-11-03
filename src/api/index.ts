@@ -4,14 +4,24 @@ import * as supabaseVehicleApi from '@vms/api/providers/supabase/vehicle'
 import { startWorkflow } from '@/api/workflow'
 
 export * from './providers/supabase/vehicle/part-inventory'
+export {
+  fetchPartMaterialOptions,
+  fetchPartMaterialCategories,
+  fetchPartUnitOptions
+} from '@/api/mdm-material-select'
+export type { PartMaterialOption, PartUnitOption } from '@/api/mdm-material-select'
 
 export {
+  fetchVmsAssetCompanyOptions,
+  fetchVmsAssetCarrierReferences,
   fetchVmsCarrierReferences as fetchCarrierOptions,
   fetchVmsDriverReferences as fetchDriverOptions,
   fetchVmsVehicleDriverReferences as fetchVehicleDriverOptions,
   fetchVmsHrEmployeeReferences as fetchHrEmployeeOptions
 } from '@vms/api/integration'
 export type {
+  VmsAssetReferenceParams,
+  VmsAssetCompanyOption,
   VmsCarrierReference,
   VmsDriverReference,
   VmsHrEmployeeReference
@@ -53,6 +63,7 @@ export const importPartsCategories = vehicleApi.importPartsCategories
 export const fetchPartsList = vehicleApi.fetchPartsList
 export const exportPartsList = vehicleApi.exportPartsList
 export const addParts = vehicleApi.addParts
+export const addPartsBatch = vehicleApi.addPartsBatch
 export const editParts = vehicleApi.editParts
 export const deleteParts = vehicleApi.deleteParts
 export const deletePartsBatch = vehicleApi.deletePartsBatch
@@ -87,6 +98,10 @@ export async function submitVehicleArchiveForApproval(id: string, plateNo: strin
 export const fetchVehicleArchiveOptions = supabaseVehicleApi.fetchVehicleArchiveOptions
 export const fetchTrailerList = supabaseVehicleApi.fetchTrailerList
 export const fetchTrailerDetail = supabaseVehicleApi.fetchTrailerDetail
+export const fetchVehicleTrailers = supabaseVehicleApi.fetchVehicleTrailers
+export const fetchTrailerTractorOptions = supabaseVehicleApi.fetchTrailerTractorOptions
+export const fetchTrailerDeleteDependencies = supabaseVehicleApi.fetchTrailerDeleteDependencies
+export const deleteTrailer = supabaseVehicleApi.deleteTrailer
 export const fetchTrailerCompanyOptions = supabaseVehicleApi.fetchTrailerCompanyOptions
 export const saveTrailer = supabaseVehicleApi.saveTrailer
 export const uploadTrailerPrivateImage = supabaseVehicleApi.uploadTrailerPrivateImage

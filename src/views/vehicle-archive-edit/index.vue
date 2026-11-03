@@ -20,7 +20,7 @@
         <ElTabPane v-if="hasAuth('VehicleArchive:TabBasic')" label="基础信息" name="basic">
           <ArtForm
             ref="basicFormRef"
-            :model-value="basicFormModel"
+            v-model="form"
             :items="basicItems"
             :rules="rules"
             :span="8"
@@ -203,6 +203,31 @@
         <ElTabPane v-if="hasAuth('VehicleArchive:TabTypes')" label="车型" name="types" lazy>
           <VehicleTypeTab :key="vehicleTypeContextKey" :tenant-id="form.tenantId" />
         </ElTabPane>
+        <ElTabPane
+          v-if="hasAuth('VehicleArchive:TabTrailers')"
+          label="挂车管理"
+          name="trailers"
+          lazy
+        >
+          <VehicleTrailersPanel
+            v-if="isEdit"
+            :vehicle-id="String(route.params.id)"
+            @changed="loadDefaultTrailer"
+          />
+          <ArtEmptyState
+            v-else
+            title="保存车辆档案后可管理挂车"
+            description="先在基础信息中保存车辆草稿，再返回车辆档案维护关联挂车。"
+          >
+            <ElButton
+              v-if="hasAuth('VehicleArchive:TabBasic')"
+              type="primary"
+              @click="page.activeTab = 'basic'"
+            >
+              返回基础信息
+            </ElButton>
+          </ArtEmptyState>
+        </ElTabPane>
       </ElTabs>
       <ArtEmptyState
         v-if="!availableTabNames.length"
@@ -212,7 +237,7 @@
     </div>
 
     <ArtStickyActionBar
-      v-if="availableTabNames.length && page.activeTab !== 'types'"
+      v-if="availableTabNames.length && page.activeTab !== 'types' && page.activeTab !== 'trailers'"
       class="vehicle-archive-edit__footer"
       hint="带 * 的信息为必填项；提交前请确认车辆、证件与运营信息完整。"
     >
@@ -293,7 +318,6 @@
   import { focusFirstInvalidFormField } from '@/utils/form/validation'
   import { useDraftAttachmentRemoval } from '@/hooks/core/useDraftAttachmentRemoval'
   import type { ComputedRef, Ref, UnwrapNestedRefs } from 'vue'
-  import { toRefs } from 'vue'
   import type { FormRules } from 'element-plus'
   import { ElAlert, ElButton, ElCheckbox, ElMessage, ElTabPane, ElTabs } from 'element-plus'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
@@ -308,6 +332,7 @@
   import ArtSectionTitle from '@/components/core/surfaces/art-section-title/index.vue'
   import ArtUploadImage from '@/components/core/forms/art-upload-image/index.vue'
   import ArtSvgIcon from '@/components/core/base/art-svg-icon/index.vue'
+  import ArtTooltip from '@/components/core/feedback/art-tooltip/index.vue'
   import OcrOriginalText from '@/components/business/ocr-original-text/index.vue'
   import type { ColumnOption } from '@/types'
   import {
@@ -318,7 +343,8 @@
     fetchDefaultTrailer,
     fetchTrailerOptions,
     setDefaultTrailer,
-    fetchCarrierOptions,
+    fetchVmsAssetCompanyOptions,
+    fetchVmsAssetCarrierReferences,
     fetchDriverOptions,
     fetchVehicleArchiveDetail,
     submitVehicleArchiveForApproval,
@@ -334,6 +360,7 @@
   import { useDocumentNumberRule } from '@/hooks/core/useDocumentNumberRule'
   import { useAuth } from '@/hooks/core/useAuth'
   import { getFileExtension } from '@/utils/file'
+  import { copyTextToClipboard } from '@/utils/file/clipboard'
   import { attachmentTableLink } from '@/components/core/media/art-file-viewer/table-link'
   import { canEditField, canViewField } from '@/utils/field-permission'
   import { getFriendlySupabaseErrorMessage } from '@/utils/supabase'
@@ -346,6 +373,7 @@
     type VehicleArchiveForm
   } from './modules/vehicle-archive-model'
   import VehicleTypeTab from './modules/vehicle-type-tab.vue'
+  import VehicleTrailersPanel from '../trailer-manage/modules/vehicle-trailers-panel.vue'
   import VehicleTypePicker from './modules/vehicle-type-picker.vue'
   import type {
     DataSelectColumn,
@@ -358,7 +386,7 @@
   type ArchiveAttachment = Api.Vms.ArchiveManage.VehicleArchiveAttachment
   type CarrierOption = VmsCarrierReference
   type DriverOption = VmsDriverReference
-  type ArchiveTabName = 'basic' | 'body' | 'engine' | 'other' | 'types'
+  type ArchiveTabName = 'basic' | 'body' | 'engine' | 'other' | 'types' | 'trailers'
   type BooleanDictOption = Omit<Api.DataCenter.DictListItem, 'value'> & { value: boolean }
   type ImageKey =
     | 'vehiclePhotoUrl'
@@ -453,7 +481,6 @@
   const defaultTrailer = shallowRef<TrailerOption | null>(null)
   const defaultTrailerError = ref(false)
   const trailerSaving = ref(false)
-  const defaultTrailerId = ref<string>()
   const defaultTrailerSelection = ref<TrailerOption[]>([])
   const defaultTrailerColumns: DataSelectColumn<TrailerOption>[] = [
     { prop: 'plateNo', label: '车牌号', width: 150 },
@@ -480,12 +507,14 @@
     { name: 'engine', formRef: engineFormRef },
     { name: 'other', formRef: otherFormRef }
   ]
+  const isEdit = computed(() => typeof route.params.id === 'string' && route.params.id.length > 0)
   const tabPermissions: Record<ArchiveTabName, string> = {
     basic: 'VehicleArchive:TabBasic',
     body: 'VehicleArchive:TabBody',
     engine: 'VehicleArchive:TabEngine',
     other: 'VehicleArchive:TabOther',
-    types: 'VehicleArchive:TabTypes'
+    types: 'VehicleArchive:TabTypes',
+    trailers: 'VehicleArchive:TabTrailers'
   }
   const availableTabNames = computed<ArchiveTabName[]>(() =>
     (Object.keys(tabPermissions) as ArchiveTabName[]).filter((name) =>
@@ -501,7 +530,6 @@
   )
   const driverCache = ref(new Map<string, DriverOption>())
 
-  const isEdit = computed(() => typeof route.params.id === 'string' && route.params.id.length > 0)
   const isCopy = computed(() => !isEdit.value && typeof route.query.copyFrom === 'string')
   const savePermission = computed(() =>
     isEdit.value ? 'VehicleArchive:Edit' : 'VehicleArchive:Add'
@@ -557,7 +585,54 @@
   const createInitialForm = createInitialVehicleArchiveForm
 
   const form = ref<VehicleArchiveForm>(createInitialForm())
-  const basicFormModel = computed(() => reactive({ ...toRefs(form.value), defaultTrailerId }))
+  const defaultTrailerId = computed({
+    get: () => form.value.defaultTrailerId,
+    set: (value: string | undefined) => {
+      form.value.defaultTrailerId = value
+    }
+  })
+  const carrierOptions = shallowRef<CarrierOption[]>([])
+  let companyRequest = 0
+  const loadDefaultCompany = async (tenantId?: string): Promise<void> => {
+    const request = ++companyRequest
+    const result = await fetchVmsAssetCompanyOptions({ tenantId })
+    if (request !== companyRequest || form.value.tenantId !== tenantId) return
+    if (result.error) throw new Error('法人公司加载失败，请重试', { cause: result.error })
+    if (!form.value.carrierId && !form.value.companyName) {
+      form.value.companyName = result.data?.find((company) => company.isDefault)?.label ?? ''
+    }
+  }
+  const loadCarrierOptions = async () => {
+    const tenantId = form.value.tenantId
+    const vehicleId = isEdit.value ? String(route.params.id) : undefined
+    const result = await fetchVmsAssetCarrierReferences({
+      tenantId,
+      vehicleId
+    })
+    if (
+      form.value.tenantId !== tenantId ||
+      (isEdit.value ? String(route.params.id) : undefined) !== vehicleId
+    )
+      return { ...result, data: [] }
+    const selectedCarrier = form.value.carrier
+    const data = [...(result.data ?? [])]
+    if (selectedCarrier && !data.some((carrier) => carrier.id === selectedCarrier.id)) {
+      data.push(selectedCarrier)
+    }
+    if (!result.error) carrierOptions.value = data
+    return { ...result, data }
+  }
+  const copyCarrier = async (): Promise<void> => {
+    const carrier =
+      carrierOptions.value.find((item) => item.id === form.value.carrierId) ?? form.value.carrier
+    if (!carrier) return
+    try {
+      await copyTextToClipboard(carrier.companyName)
+      ElMessage.success('已复制承运商名称')
+    } catch (error) {
+      ElMessage.error(getFriendlySupabaseErrorMessage(error, '复制失败，请手动复制承运商名称'))
+    }
+  }
   const documentTenantId = computed(
     () =>
       form.value.tenantId ??
@@ -643,6 +718,9 @@
     ],
     plateColor: [{ required: true, message: '请选择车牌颜色', trigger: 'change' }],
     vehicleOwnership: [{ required: true, message: '请选择车辆归属', trigger: 'change' }],
+    isNewEnergy: [
+      { required: true, type: 'boolean', message: '请选择是否新能源车', trigger: 'change' }
+    ],
     registerDate: submitIntent.value
       ? [{ required: true, message: '请选择登记日期', trigger: 'change' }]
       : [],
@@ -667,65 +745,12 @@
   const basicItems = computed<FormItem[]>(() =>
     [
       { label: '车辆基础信息', key: 'identitySection', type: 'divider', span: 24 },
-      {
-        key: 'vehiclePhotoUrl',
-        label: '车辆图片',
-        type: 'uploadImage',
-        span: 24,
-        description: '上传车辆外观照片，便于调度和车管快速识别。',
-        props: {
-          resourceTenantId: form.value.tenantId,
-          title: '车辆图片',
-          size: 120,
-          limit: 1,
-          readonly: !form.value.tenantId || !hasAuth(savePermission.value)
-        }
-      },
       { label: '车牌号', key: 'plateNo', type: 'input' },
       {
         label: '车牌颜色',
         key: 'plateColor',
         type: 'select',
         props: { options: options.plateColor }
-      },
-      {
-        label: '车型',
-        key: 'vehicleType',
-        type: 'input',
-        span: 6
-      },
-      {
-        label: '规格 / 车长（米）',
-        key: 'specLengthM',
-        type: 'input',
-        span: 6,
-        props: derivedMetricInputProps
-      },
-      {
-        label: '容积（立方米）',
-        key: 'volumeM3',
-        type: 'input',
-        span: 6,
-        props: derivedMetricInputProps
-      },
-      {
-        label: '载重（吨）',
-        key: 'loadTons',
-        type: 'input',
-        span: 6,
-        props: derivedMetricInputProps
-      },
-      { label: '购置时间', key: 'purchaseDate', type: 'date', span: 12, props: dateProps },
-      {
-        label: '车辆年限',
-        key: 'vehicleAgeDisplay',
-        type: 'input',
-        span: 12,
-        props: {
-          readonly: true,
-          placeholder: '选择购置时间后自动计算',
-          class: 'vehicle-archive-edit__derived-input'
-        }
       },
       ...(tenantScopeStore.isAllTenants && !isEdit.value
         ? [
@@ -749,12 +774,14 @@
                 filterable: true,
                 placeholder: '默认平台租户，可选择其他所属租户',
                 onChange: (tenantId: string) => {
-                  form.value.companyName =
-                    (tenantId === userStore.getUserInfo.tenantId
-                      ? userStore.getUserInfo.tenant?.tenantName
-                      : tenantScopeStore.tenantOptions.find((tenant) => tenant.id === tenantId)
-                          ?.tenantName) ?? ''
+                  form.value.companyName = ''
+                  void loadDefaultCompany(tenantId).catch(() =>
+                    ElMessage.error('法人公司加载失败，请重新选择租户或重试')
+                  )
                   form.value.carrierId = null
+                  form.value.carrier = null
+                  carrierOptions.value = []
+                  void nextTick(() => basicFormRef.value?.reloadOptions('carrierId'))
                   form.value.vehicleTypeProfileId = null
                   form.value.vehicleType = ''
                   form.value.primaryDriverId = null
@@ -775,10 +802,26 @@
           ]
         : []),
       {
-        label: '所属承运商',
+        label: () => (
+          <span class="art-icon-label">
+            <span>所属承运商</span>
+            <ArtTooltip content="复制承运商名称">
+              <ElButton
+                link
+                type="primary"
+                size="small"
+                disabled={!form.value.carrierId}
+                aria-label="复制承运商名称"
+                onClick={copyCarrier}
+              >
+                <ArtSvgIcon icon="ri:file-copy-line" />
+              </ElButton>
+            </ArtTooltip>
+          </span>
+        ),
         key: 'carrierId',
         type: 'select',
-        api: fetchCarrierOptions,
+        api: loadCarrierOptions,
         resultField: 'data',
         labelField: 'companyName',
         valueField: 'id',
@@ -793,6 +836,12 @@
           clearable: true,
           placeholder: '请选择所属承运商（选填）',
           onChange: (value?: string) => {
+            const carrier = carrierOptions.value.find((item) => item.id === value)
+            form.value.carrier = carrier ?? null
+            if (carrier) {
+              form.value.companyName = carrier.companyName
+              form.value.vehicleOwnership = 'carrier'
+            }
             if (!value) {
               form.value.primaryDriverId = null
               form.value.primaryDriver = null
@@ -821,7 +870,13 @@
           }
         }
       },
-      { label: '所属公司', key: 'companyName', type: 'input', props: { readonly: true } },
+      {
+        label: '所属公司',
+        key: 'companyName',
+        type: 'input',
+        props: { maxlength: 200, clearable: true },
+        description: '新增默认法人公司；选择承运商后带入承运商名称，可继续修改。'
+      },
       {
         label: '自编号',
         key: 'selfNo',
@@ -865,7 +920,10 @@
         label: '是否新能源车',
         key: 'isNewEnergy',
         type: 'radioGroup',
-        props: { options: options.boolean }
+        props: { options: options.boolean, optionType: 'button' },
+        description: form.value.isNewEnergy
+          ? '关联电卡档案及电卡流水。'
+          : '燃油车关联油卡档案及油卡流水。'
       },
       {
         label: '车身颜色',
@@ -874,6 +932,33 @@
         props: { options: options.color }
       },
       { label: '车型与运力', key: 'capacitySection', type: 'divider', span: 24 },
+      {
+        label: '车型',
+        key: 'vehicleType',
+        type: 'input',
+        span: 6
+      },
+      {
+        label: '规格 / 车长（米）',
+        key: 'specLengthM',
+        type: 'input',
+        span: 6,
+        props: derivedMetricInputProps
+      },
+      {
+        label: '容积（立方米）',
+        key: 'volumeM3',
+        type: 'input',
+        span: 6,
+        props: derivedMetricInputProps
+      },
+      {
+        label: '载重（吨）',
+        key: 'loadTons',
+        type: 'input',
+        span: 6,
+        props: derivedMetricInputProps
+      },
       { label: '吨位/座位', key: 'tonnageOrSeat', type: 'input' },
       {
         label: '核定乘员数',
@@ -883,6 +968,23 @@
         props: numberProps
       },
       { label: '座位数', key: 'seatCount', type: 'number', props: numberProps },
+      { label: '登记与使用', key: 'registrationSection', type: 'divider', span: 24 },
+      { label: '购置时间', key: 'purchaseDate', type: 'date', span: 12, props: dateProps },
+      {
+        label: '车辆年限',
+        key: 'vehicleAgeDisplay',
+        type: 'input',
+        span: 12,
+        props: {
+          readonly: true,
+          placeholder: '选择购置时间后自动计算',
+          class: 'vehicle-archive-edit__derived-input'
+        }
+      },
+      { label: '登记日期', key: 'registerDate', type: 'date', span: 6, props: dateProps },
+      { label: '发证日期', key: 'issueDate', type: 'date', span: 6, props: dateProps },
+      { label: '购入开票日期', key: 'invoiceDate', type: 'date', span: 6, props: dateProps },
+      { label: '启用日期', key: 'startUseDate', type: 'date', span: 6, props: dateProps },
       { label: '车辆识别与证照', key: 'documentsSection', type: 'divider', span: 24 },
       { label: '车架号（VIN）', key: 'vin', type: 'input' },
       { label: '车辆厂商', key: 'manufacturer', type: 'input' },
@@ -893,11 +995,6 @@
       { label: '底盘号', key: 'chassisNo', type: 'input', span: 12 },
       { label: '空调号码', key: 'acCode', type: 'input', span: 12 },
       { label: '波箱系列号', key: 'gearboxSerialNo', type: 'input', span: 12 },
-      { label: '登记与使用', key: 'registrationSection', type: 'divider', span: 24 },
-      { label: '登记日期', key: 'registerDate', type: 'date', span: 6, props: dateProps },
-      { label: '发证日期', key: 'issueDate', type: 'date', span: 6, props: dateProps },
-      { label: '购入开票日期', key: 'invoiceDate', type: 'date', span: 6, props: dateProps },
-      { label: '启用日期', key: 'startUseDate', type: 'date', span: 6, props: dateProps },
       { label: '营运配置', key: 'operationSection', type: 'divider', span: 24 },
       {
         label: '业务类型',
@@ -925,6 +1022,49 @@
         key: 'vehicleLevel',
         type: 'select',
         props: { options: options.vehicleLevel }
+      },
+      {
+        key: 'defaultTrailerId',
+        label: '默认挂车',
+        type: 'dataSelect',
+        span: 24,
+        props: {
+          mode: 'table',
+          multiple: false,
+          showSelectedPanel: false,
+          modelValue: defaultTrailerId.value,
+          'onUpdate:modelValue': (value: string | undefined) => {
+            defaultTrailerId.value = value
+          },
+          selectedData: defaultTrailerSelection.value,
+          'onUpdate:selectedData': (rows: TrailerOption[]) => {
+            defaultTrailerSelection.value = rows
+          },
+          apiFn: fetchDefaultTrailerOptions,
+          columns: defaultTrailerColumns,
+          rowKey: 'id',
+          labelKey: 'plateNo',
+          descriptionKey: 'trailerType',
+          title: '参选默认挂车',
+          searchPlaceholder: '输入挂车车牌号',
+          placeholder: '请选择默认挂车',
+          disabled:
+            !isEdit.value || page.saving || trailerSaving.value || !hasAuth('VehicleArchive:Edit'),
+          clearable: true,
+          showPagination: true,
+          onChange: handleDefaultTrailerChange
+        },
+        description: () => (
+          <div class="flex flex-wrap items-center gap-2">
+            <span>可从挂车档案参选；牵引车与挂车的默认关系会同步更新。</span>
+            {!isEdit.value ? <span>先保存车辆档案后参选</span> : null}
+            {defaultTrailerError.value ? (
+              <ElButton link type="primary" onClick={loadDefaultTrailer}>
+                加载失败，重试
+              </ElButton>
+            ) : null}
+          </div>
+        )
       },
       { label: '质保与备注', key: 'warrantySection', type: 'divider', span: 24 },
       {
@@ -971,48 +1111,20 @@
         span: 24,
         props: { type: 'textarea', rows: 3 }
       },
+      { label: '车辆影像', key: 'vehicleImageSection', type: 'divider', span: 24 },
       {
-        key: 'defaultTrailerId',
-        label: '默认挂车',
-        type: 'dataSelect',
+        key: 'vehiclePhotoUrl',
+        label: '车辆图片',
+        type: 'uploadImage',
         span: 24,
+        description: '上传车辆外观照片，便于调度和车管快速识别。',
         props: {
-          mode: 'table',
-          multiple: false,
-          showSelectedPanel: false,
-          modelValue: defaultTrailerId.value,
-          'onUpdate:modelValue': (value: string | undefined) => {
-            defaultTrailerId.value = value
-          },
-          selectedData: defaultTrailerSelection.value,
-          'onUpdate:selectedData': (rows: TrailerOption[]) => {
-            defaultTrailerSelection.value = rows
-          },
-          apiFn: fetchDefaultTrailerOptions,
-          columns: defaultTrailerColumns,
-          rowKey: 'id',
-          labelKey: 'plateNo',
-          descriptionKey: 'trailerType',
-          title: '参选默认挂车',
-          searchPlaceholder: '输入挂车车牌号',
-          placeholder: '请选择默认挂车',
-          disabled:
-            !isEdit.value || page.saving || trailerSaving.value || !hasAuth('VehicleArchive:Edit'),
-          clearable: true,
-          showPagination: true,
-          onChange: handleDefaultTrailerChange
-        },
-        description: () => (
-          <div class="flex flex-wrap items-center gap-2">
-            <span>可从挂车档案参选；牵引车与挂车的默认关系会同步更新。</span>
-            {!isEdit.value ? <span>先保存车辆档案后参选</span> : null}
-            {defaultTrailerError.value ? (
-              <ElButton link type="primary" onClick={loadDefaultTrailer}>
-                加载失败，重试
-              </ElButton>
-            ) : null}
-          </div>
-        )
+          resourceTenantId: form.value.tenantId,
+          title: '车辆图片',
+          size: 120,
+          limit: 1,
+          readonly: !form.value.tenantId || !hasAuth(savePermission.value)
+        }
       }
     ].map(applyVehicleFieldAccess)
   )
@@ -1632,12 +1744,9 @@
         })
         return
       }
-      form.value.companyName =
-        tenantScopeStore.selectedTenant?.tenantName ??
-        userStore.getUserInfo.tenant?.tenantName ??
-        ''
       form.value.tenantId =
         tenantScopeStore.effectiveTenantId ?? userStore.getUserInfo.tenantId ?? undefined
+      await loadDefaultCompany(form.value.tenantId)
       return
     }
     const id = String(route.params.id)

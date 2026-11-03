@@ -60,6 +60,8 @@
 
 AI 健康建议用于汇总现有档案、解释风险和辅助排查，不替代人工检查、法定检验或专业维修判断。
 
+车辆事故、维保、例检的编辑弹窗，以及事故、维保、例检、年检详情页，共用 `src/views/vehicle-manage/vehicle-attachment-table.vue` 展示附件。页面决定附件的字段权限和脱敏状态；组件统一文件链接、格式字典与查看/下载操作。编辑弹窗通过 `removable` 开启移除入口，空表最小高度为 160px；详情页保持只读，显式使用 180px 空表最小高度。操作列宽由 `ArtTable` 根据实际可见按钮、留白和滚动条统一测量。此附件表始终固定右侧操作列，窄屏时文件列仍可在表格内部横向滚动，查看、下载和获准的删除按钮无需先滚动表格即可看到。
+
 <details>
 <summary><strong>车型、证件与油卡：历史实现与验收记录</strong></summary>
 
@@ -74,6 +76,16 @@ AI 健康建议用于汇总现有档案、解释风险和辅助排查，不替�
 2026-09-28 将 `vehicle_type_profile.volume_m3`、`load_tons` 和保存 RPC 对应校验改为允许留空。先在事务内验证空值规格可保存并回滚，再确认两列均允许 `NULL`、保存函数只要求车型分类。车型参选仅展示已启用的现有规格；所选车长与同一规格记录中的容积、载重一起带入车辆档案。
 
 车型分类、规格参选和默认插画复用主仓库 `src/components/business/vehicle-type-profile-picker`；VMS 车辆/挂车与 TMS 司机提成使用同一套视觉组件，TMS 开单复用其中的车型插画。各模块继续通过自身的安全 API 加载租户内启用规格。上传的规格图片只覆盖该规格的默认展示。
+
+## 车辆与挂车资料联动（2026-11-02）
+
+车辆档案新增直接进入完整档案表单，和编辑、完善资料共用基础信息、车身参数、发动机参数及其他信息的配置、校验和保存路径；不再通过另一个简版建档表单。承运商、所属公司与归属位于基础信息前部，车辆档案和车辆查询均保留承运商查询。承运商参选 RPC 对平台全部、平台指定、普通本租户及伪造请求使用统一读取范围，回滚测试见主仓 `tests/integration/vms-carrier-search-scope.sql`。
+
+挂车使用 `vehicle_trailer_tractor` 关联多台牵引车，唯一默认值保存在 `vehicle_trailer.default_tractor_id`，并且必须属于已选牵引车；原有默认挂车入口继续同步关联。车辆档案的完善、编辑、查看以及车辆查询通过车辆 ID 展示关联挂车，修改和删除仍使用挂车按钮权限及引用检查。关联表保留平台管理员写入策略，同时通过限制性读取策略约束平台指定租户和普通用户范围；所属公司修改不会解除已选承运商。主仓 `tests/integration/vms-trailer-tractor-scope.sql` 覆盖多车关联、默认值切换、跨租户拒绝、公司修改保留承运商和四种读取范围，所有试写均回滚。
+
+车辆和挂车的所属公司允许编辑。新增默认取目标租户中启用的法人公司，优先匹配租户名称，再按顶层公司与排序确定唯一默认项；选择承运商时带入承运商名称并设为承运商归属。`vms_list_asset_company_options_secure`、`vms_list_asset_carrier_options_secure` 按已有车辆、挂车或明确创建目标解析租户，普通用户的伪造租户头不会改变所属租户。车辆写入通过触发器复核承运商租户、状态与联动。
+
+是否新能源车必选，新增默认否。新油卡仅可绑定燃油车，新电卡仅可绑定新能源车，服务端触发器复核；能源类型修改不删除既有卡片和流水。参选通过 `vms_list_energy_vehicle_options_secure` 在分页前筛选，车辆查询电卡档案/流水通过带车辆 ID 筛选的安全 RPC 获取，原电卡 RPC 签名保留为转调入口。对应回滚验证见主仓 `tests/integration/vms-asset-company-carrier-rules.sql`、`vms-vehicle-energy-card-association.sql`，覆盖公司编辑、承运商联动、能源关联和租户范围。
 
 ## 证件作废与换证门禁（2026-10-29）
 
@@ -92,6 +104,18 @@ AI 健康建议用于汇总现有档案、解释风险和辅助排查，不替�
 2026-10-30 获明确授权后，在内部浏览器分别为两笔合成 `TEST ONLY` 油卡流水 `QA-CONSUME-001/002` 补传并保存一张现场凭证；列表各显示 1 张，两张明细中的图片均完整显示为 720×840。补传窗口现显示业务凭证号以区分同卡流水，窗口与保存后的证据见主仓忽略目录 `.artifacts/vms-fuel-voucher-upload-target-qa001-1280.jpg`、`.artifacts/vms-fuel-voucher-two-saved-focus-1280.jpg`、`.artifacts/vms-fuel-voucher-001-detail-1024.jpg`、`.artifacts/vms-fuel-voucher-002-detail-1280.jpg`、`.artifacts/vms-fuel-voucher-001-saved-detail-crop.jpg`。1024 视口无页面横向溢出，图片区域可滚动；焦点模式可进入并通过退出按钮或 Esc 恢复。两笔保存前均完成正式 RPC 的事务回滚演练；保存后完整 JSON 对比仅两条流水的 `voucher_paths` 改变，新增审计 2 条、私有对象 2 个，金额、流水余额、两张卡完整记录及最新余额流水未变，卡余额仍为 1615 元与 1185 元。备份及 SHA-256 见主仓 `.artifacts/qa-fuel-card-voucher-20261030-before.json`（`9CCEF925494303A92B4EF2226333D9C85D0851801166E13019A3CA710A792805`）、`.artifacts/qa-fuel-card-voucher-20261030-before-002.json`（`002B92DD9423D4FAED20692E09B2CA09A644A3E968F9A1F41BFDAB7C9558BAFE`）、`.artifacts/qa-fuel-card-voucher-20261030-after.json`（`9BEA76927003375A4EA62C34ECDD11A4A507252EF2AC7AB8BB0A630BD5410481`）。现场图片新标签页标题为 720×840，但该非 HTML 标签页的 DOM 与截图读取超时，尚不能据此声称已完成独立大图视觉验收。
 
 </details>
+
+## 2026-11-02 车务档案与运营台账优化
+
+- 油卡、电卡档案及流水和里程记录共用车辆分类面板；归属与车型过滤在列表 RPC 中执行，分页、总数和导出使用同一筛选范围。原车辆档案与综合查询的分类构建也复用 `src/views/vehicle-manage/components/vehicle-classification.ts`，保留各自页面交互。
+- 车辆归属、所属公司、承运商、司机及电话从同租户绑定车辆关联读取；全部新增电话投影通过 `tms_driver_option_to_secure_json` 沿用既有隐藏、脱敏、可读权限。配件电话三级权限回归通过。里程运单号从原 `waybill_id` 读取，不新增人工录入或推测关联。能源车辆参选按车牌号或公司名称搜索，并同时执行能源类型、已审批和租户过滤。
+- 油卡、电卡、配件领用使用统一单据编号引擎：默认 `YK{YYYY}{SEQ:3}`、`DK{YYYY}{SEQ:3}`、`PJ{YYYY}{SEQ:3}`，按年计数；现有业务编号保留。编号场景分别为 `vms.fuel_card`、`vms.electric_card`、`vehicle.part_issue`，规则可在编号管理配置。
+- 配件库存分为“当前库存”和“配件流水”，流水展示领用车辆及关联信息，车辆配件记录补充丢失和损坏统计。出入库和归还继续以既有库存流水为准。
+- 维保表单保留维修类型、经办人、维修厂分组选择、发票号及附件。补齐历史记录编辑时维修日期和当前里程的必填校验；历史缺值不批量伪造。总费用仍由项目明细汇总，按时间提醒推进三个日历月，按里程提醒增加一万公里。完工记录作为成本来源，费用审批与已审核成本口径保持一致。
+- 数据库按项目规则直接执行，执行前保存受影响对象的完整定义和权限快照到主仓忽略目录 `.artifacts/vehicle-mileage-before.json`、`.artifacts/vms-energy-card-functions-before-20261102.json`、`.artifacts/vms-energy-vehicle-selector-before-20261102.json`、`.artifacts/parts-before.json`、`.artifacts/parts-seed-before.json`、`.artifacts/parts-phone-before.json`、`.artifacts/vehicle-maintenance-required-fields-before.json`；先事务回滚预演，再应用并验证。未增加迁移文件或 `supabase/runbooks`。
+- `tests/integration/vms-mileage-classification.sql` 覆盖平台全部、平台选定、普通本租户及伪造跨租户请求；维保继续由 `tests/integration/vms-maintenance-v2.sql` 验证。浏览器回归使用真实页面组件和脱敏模拟接口，证据存主仓 `.artifacts/vms-mileage-browser-verified`、`.artifacts/vms-query-classification-final`、`.artifacts/vms-maintenance-browser`、`.artifacts/vms-parts-playwright` 及油电卡验收目录；这不代表生产环境登录和真实业务录入已经执行。
+- 部署后顾问检查未发现本次里程变更新增的外键索引缺失；现有里程创建人索引被报告尚未使用，予以保留。全库既有顾问项按原有治理范围处理，不在此次车务优化中扩展修改。
+- 最终验证：全仓及 VMS 类型检查、UI/按钮权限/共享代码/模块边界审计通过；VMS 单测 62 项通过。主仓全量单测初跑 1275/1276，唯一失败为油卡新增关联字段对旧测试数据的兼容问题，修正后该文件 2/2 通过。12 项脱敏浏览器用例通过（里程 2、车辆档案与全景 3、维保 2、配件 1、油电卡 4）。油电卡还通过 `vms-energy-card-classification.sql`、`vms-electric-card-scope.sql`、`vms-electric-card-context.sql`、`vms-fuel-card-ledger.sql` 的事务回滚回归；最终截图位于 `.artifacts/vms-energy-browser`。费用单号只从明确关联的费用记录读取，不按同车或同运单猜测，无关联时显示占位。
 
 ## 开发与构建
 
