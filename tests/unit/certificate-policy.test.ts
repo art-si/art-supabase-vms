@@ -33,6 +33,18 @@ const base = {
   revokedReason: null
 } satisfies Omit<CertificateRecord, 'id' | 'certificateType' | 'status'>
 
+const certificateTypes = [
+  { value: 'compulsory_insurance', label: '交强险保单' },
+  { value: 'commercial_insurance', label: '商业险保单' },
+  { value: 'identity_card', label: '身份证' }
+]
+const certificateStatuses = [
+  { value: 'due_15', label: '15天内到期' },
+  { value: 'due_30', label: '30天内到期' },
+  { value: 'due_3_months', label: '3个月内到期' },
+  { value: 'revoked', label: '已作废' }
+]
+
 const compulsory: CertificateRecord = {
   ...base,
   id: 'certificate-compulsory',
@@ -58,9 +70,9 @@ test('交强险和商业险为同车独立证件，分别保留到期状态', ()
     handled: 0,
     revoked: 0
   })
-  assert.equal(certificateTypeLabel(compulsory.certificateType), '交强险保单')
-  assert.equal(certificateTypeLabel(commercial.certificateType), '商业险保单')
-  assert.equal(certificateStatusLabel(commercial.status), '待换证（15 天）')
+  assert.equal(certificateTypeLabel(compulsory.certificateType, certificateTypes), '交强险保单')
+  assert.equal(certificateTypeLabel(commercial.certificateType, certificateTypes), '商业险保单')
+  assert.equal(certificateStatusLabel(commercial.status, certificateStatuses), '15天内到期')
 })
 
 test('司机证件与车辆证件共用风险范围，已处理记录不再重复处置', () => {
@@ -84,7 +96,7 @@ test('司机证件与车辆证件共用风险范围，已处理记录不再重�
   assert.equal(canMarkCertificateHandled(driver), false)
   assert.equal(canMarkCertificateHandled(compulsory), true)
   assert.ok(CERTIFICATE_TYPE_OPTIONS.driver.some((option) => option.value === 'driver_license'))
-  assert.equal(certificateTypeLabel('identity_card'), '身份证')
+  assert.equal(certificateTypeLabel('identity_card', certificateTypes), '身份证')
 })
 
 test('司机三个月临期计入预警，车辆原有 30 天状态保持独立', () => {
@@ -98,15 +110,15 @@ test('司机三个月临期计入预警，车辆原有 30 天状态保持独立'
     expiresOn: '2027-01-27',
     status: 'due_3_months'
   }
-  assert.equal(certificateStatusLabel(driver.status), '待换证（3 个月）')
-  assert.equal(certificateStatusTableLabel(driver.status), '3 个月内')
+  assert.equal(certificateStatusLabel(driver.status, certificateStatuses), '3个月内到期')
+  assert.equal(certificateStatusTableLabel(driver.status, certificateStatuses), '3 个月内')
   assert.deepEqual(certificateRiskCounts([driver, commercial]), {
     expired: 0,
     dueSoon: 2,
     handled: 0,
     revoked: 0
   })
-  assert.equal(certificateStatusLabel('due_30'), '待换证（30 天）')
+  assert.equal(certificateStatusLabel('due_30', certificateStatuses), '30天内到期')
 })
 
 test('旧保险台账仅作回退风险，不允许直接标记已处理', () => {
@@ -131,7 +143,7 @@ test('作废证件保留独立状态，不再进入续证已处理操作', () =>
     revokedBy: 'user-a',
     revokedReason: '遗失作废'
   }
-  assert.equal(certificateStatusLabel(revoked.status), '已作废')
+  assert.equal(certificateStatusLabel(revoked.status, certificateStatuses), '已作废')
   assert.equal(canMarkCertificateHandled(revoked), false)
   assert.deepEqual(certificateRiskCounts([commercial, revoked]), {
     expired: 0,
@@ -175,7 +187,7 @@ test('关联有效新证后，历史旧证不再计入当前补证和临期风�
     ]),
     { expired: 0, dueSoon: 1, handled: 0, revoked: 0 }
   )
-  assert.equal(certificateStatusLabel(oldRevoked.status), '已作废')
+  assert.equal(certificateStatusLabel(oldRevoked.status, certificateStatuses), '已作废')
   assert.equal(canRenewCertificate(oldRevoked), false)
   assert.equal(canRenewCertificate(replacement), true)
   assert.equal(canRenewCertificate({ ...oldRevoked, isCurrent: true }), true)

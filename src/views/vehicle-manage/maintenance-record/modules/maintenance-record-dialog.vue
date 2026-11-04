@@ -240,10 +240,12 @@
     class: '!w-full'
   }
 
-  const reminderModeOptions = [
-    { label: '按时间（3 个月）', value: 'time' },
-    { label: '按里程（10,000 公里）', value: 'mileage' }
-  ]
+  const dictionaryReminderModeOptions = useDictionaryOptions('vmsMaintenanceReminderMode')
+  const reminderModeOptions = computed(() =>
+    dictionaryReminderModeOptions.filter(
+      (item) => item.value === 'time' || item.value === 'mileage'
+    )
+  )
 
   const form: UnwrapNestedRefs<FormGroup> = reactive<FormGroup>({
     data: createInitialForm(),
@@ -359,7 +361,7 @@
           label: '提醒方式',
           key: 'reminderMode',
           type: 'select',
-          props: { options: reminderModeOptions }
+          props: { options: reminderModeOptions.value }
         },
         ...(form.data.reminderMode === 'time'
           ? [

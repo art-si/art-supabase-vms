@@ -54,6 +54,8 @@
   import ArtButtonTable from '@/components/core/forms/art-button-table/index.vue'
   import ArtEmptyState from '@/components/core/feedback/art-empty-state/index.vue'
   import { useAuth } from '@/hooks/core/useAuth'
+  import { useDictionaryOptions } from '@/hooks/core/useDictionaryOptions'
+  import { useUserStore } from '@/store/modules/user'
   import ArtButtonMore, {
     type ButtonMoreItem
   } from '@/components/core/forms/art-button-more/index.vue'
@@ -89,6 +91,13 @@
 
   const { confirmAction, promptReason } = useArtFeedback()
   const { hasAuth } = useAuth()
+  const userStore = useUserStore()
+  const certificateTypeOptions = useDictionaryOptions('vehicleCertificateType')
+  const certificateStatusOptions = useDictionaryOptions('vehicleCertificateStatus')
+  const certificateTypeItems = computed(
+    () => userStore.getDictMap.vehicleCertificateType ?? certificateTypeOptions
+  )
+  const certificateStatusItems = computed(() => userStore.getDictMap.vehicleCertificateStatus ?? [])
   const canView = computed(() => hasAuth('CertificateCenter:View'))
   const route = useRoute()
   const tableRef = ref<ArtTableQueryExpose>()
@@ -126,7 +135,7 @@
     },
     { flush: 'post' }
   )
-  const searchItems: SearchFormItem[] = [
+  const searchItems = computed<SearchFormItem[]>(() => [
     {
       label: '关键字',
       key: 'keyword',
@@ -149,10 +158,12 @@
       type: 'select',
       options: [
         { label: '全部', value: '' },
-        ...CERTIFICATE_STATUS_OPTIONS.map((item) => ({ label: item.label, value: item.value }))
+        ...certificateStatusOptions.filter((item) =>
+          CERTIFICATE_STATUS_OPTIONS.some((status) => status.value === item.value)
+        )
       ]
     }
-  ]
+  ])
   const headerActions: ArtTableQueryHeaderAction[] = [
     { type: 'add', permission: 'CertificateCenter:Add', onClick: () => openDialog() }
   ]
@@ -215,7 +226,7 @@
         minWidth: 168,
         formatter: (row) => (
           <span class="grid min-w-0 gap-0.5">
-            <span>{certificateTypeLabel(row.certificateType)}</span>
+            <span>{certificateTypeLabel(row.certificateType, certificateTypeItems.value)}</span>
             {isLegacyCertificateRecord(row) ? (
               <small class="text-xs text-[var(--el-text-color-secondary)]">旧台账 · 待补录</small>
             ) : row.isCurrent === false ? (
@@ -236,11 +247,11 @@
             title={
               row.status === 'revoked' && row.revokedReason
                 ? `作废原因：${row.revokedReason}`
-                : certificateStatusLabel(row.status)
+                : certificateStatusLabel(row.status, certificateStatusItems.value)
             }
           >
             <ElTag type={certificateStatusTone(row.status)} effect="light">
-              {certificateStatusTableLabel(row.status)}
+              {certificateStatusTableLabel(row.status, certificateStatusItems.value)}
             </ElTag>
           </span>
         )
@@ -333,7 +344,7 @@
     if (key === 'revoke') {
       try {
         const reason = await promptReason(
-          `作废后保留“${row.subjectLabel} · ${certificateTypeLabel(row.certificateType)}”的历史记录，停止该证提醒，并阻止使用该证派车；登记有效新证后恢复资格。`,
+          `作废后保留“${row.subjectLabel} · ${certificateTypeLabel(row.certificateType, certificateTypeItems.value)}”的历史记录，停止该证提醒，并阻止使用该证派车；登记有效新证后恢复资格。`,
           '作废证件',
           {
             confirmButtonText: '确认作废',
@@ -353,7 +364,7 @@
     if (key !== 'handle') return
     try {
       await confirmAction(
-        `确认“${row.subjectLabel} · ${certificateTypeLabel(row.certificateType)}”已完成续证？系统会核对新证件后再闭环。`,
+        `确认“${row.subjectLabel} · ${certificateTypeLabel(row.certificateType, certificateTypeItems.value)}”已完成续证？系统会核对新证件后再闭环。`,
         '核对续证',
         {
           confirmButtonText: '核对并处理',

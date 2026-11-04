@@ -325,6 +325,7 @@
   import ArtEmptyState from '@/components/core/feedback/art-empty-state/index.vue'
   import ArtForm, {
     type FormItem,
+    type FormItemApiParams,
     type FormItemOption
   } from '@/components/core/forms/art-form/index.vue'
   import ArtTable from '@/components/core/tables/art-table/index.vue'
@@ -345,12 +346,14 @@
     setDefaultTrailer,
     fetchVmsAssetCompanyOptions,
     fetchVmsAssetCarrierReferences,
+    fetchVmsAssetDriverReferences,
     fetchDriverOptions,
     fetchVehicleArchiveDetail,
     submitVehicleArchiveForApproval,
     uploadVehiclePrivateDocument,
     type VmsCarrierReference,
     type VmsDriverReference,
+    type VmsAssetDriverOwnership,
     type VehicleDocumentOcrType,
     type VehicleDocumentOcrResult,
     type TrailerOption
@@ -592,15 +595,96 @@
     }
   })
   const carrierOptions = shallowRef<CarrierOption[]>([])
+  const driverOptionsRefreshing = ref(false)
+  let driverOptionsRequest = 0
+  const canFetchArchiveDrivers = computed(
+    () =>
+      Boolean(form.value.tenantId) &&
+      (form.value.vehicleOwnership === 'self_operated' ||
+        form.value.vehicleOwnership === 'individual_affiliation' ||
+        Boolean(form.value.carrierId))
+  )
+  const archiveDriverPlaceholder = (driverType: 'primary' | 'secondary'): string => {
+    if (!form.value.tenantId) return '请先选择所属租户'
+    if (!canFetchArchiveDrivers.value) return '请先选择所属承运商'
+    const ownershipLabel =
+      form.value.vehicleOwnership === 'self_operated'
+        ? '自营'
+        : form.value.vehicleOwnership === 'individual_affiliation'
+          ? '个人挂靠'
+          : form.value.vehicleOwnership === 'carrier'
+            ? '承运商'
+            : ''
+    return driverType === 'primary'
+      ? `请选择${ownershipLabel}主司机`
+      : `请选择一名或多名${ownershipLabel}备用司机`
+  }
+  const isScopedDriverOwnership = (ownership: unknown): ownership is VmsAssetDriverOwnership =>
+    ownership === 'self_operated' ||
+    ownership === 'carrier' ||
+    ownership === 'individual_affiliation'
+  const fetchArchiveDriverOptions = (params: FormItemApiParams) => {
+    if (!params || (params.driverType !== 'primary' && params.driverType !== 'secondary')) {
+      throw new Error('司机参选参数缺失')
+    }
+    const carrierId = typeof params.carrierId === 'string' ? params.carrierId : null
+    if (isScopedDriverOwnership(params.vehicleOwnership)) {
+      return fetchVmsAssetDriverReferences({
+        tenantId: typeof params.tenantId === 'string' ? params.tenantId : undefined,
+        vehicleId: typeof params.vehicleId === 'string' ? params.vehicleId : undefined,
+        vehicleOwnership: params.vehicleOwnership,
+        carrierId: params.vehicleOwnership === 'carrier' ? carrierId : null,
+        driverType: params.driverType
+      })
+    }
+    // 第三方物流及历史归属保持原有承运商司机参选规则。
+    return fetchDriverOptions({ carrierId, driverType: params.driverType })
+  }
+  const reloadArchiveDriverOptions = async (): Promise<void> => {
+    const request = ++driverOptionsRequest
+    driverOptionsRefreshing.value = true
+    try {
+      await nextTick()
+      await Promise.all([
+        otherFormRef.value?.reloadOptions('primaryDriverId'),
+        otherFormRef.value?.reloadOptions('backupDriverIds')
+      ])
+    } finally {
+      if (request === driverOptionsRequest) driverOptionsRefreshing.value = false
+    }
+  }
   let companyRequest = 0
-  const loadDefaultCompany = async (tenantId?: string): Promise<void> => {
+  const loadDefaultCompany = async (
+    tenantId?: string,
+    expectedOwnership?: VehicleArchiveForm['vehicleOwnership']
+  ): Promise<void> => {
     const request = ++companyRequest
     const result = await fetchVmsAssetCompanyOptions({ tenantId })
-    if (request !== companyRequest || form.value.tenantId !== tenantId) return
+    if (
+      request !== companyRequest ||
+      form.value.tenantId !== tenantId ||
+      (expectedOwnership && form.value.vehicleOwnership !== expectedOwnership)
+    )
+      return
     if (result.error) throw new Error('法人公司加载失败，请重试', { cause: result.error })
     if (!form.value.carrierId && !form.value.companyName) {
       form.value.companyName = result.data?.find((company) => company.isDefault)?.label ?? ''
     }
+  }
+  const clearSelectedDrivers = (): void => {
+    Object.assign(form.value, {
+      primaryDriverId: null,
+      primaryDriver: null,
+      primaryDriverName: '',
+      primaryDriverPhone: '',
+      secondaryDriverId: null,
+      secondaryDriver: null,
+      backupDriverIds: [],
+      backupDrivers: [],
+      secondaryDriverName: '',
+      secondaryDriverPhone: ''
+    })
+    driverCache.value = new Map()
   }
   const loadCarrierOptions = async () => {
     const tenantId = form.value.tenantId
@@ -780,14 +864,11 @@
                   )
                   form.value.carrierId = null
                   form.value.carrier = null
+                  clearSelectedDrivers()
                   carrierOptions.value = []
                   void nextTick(() => basicFormRef.value?.reloadOptions('carrierId'))
                   form.value.vehicleTypeProfileId = null
                   form.value.vehicleType = ''
-                  form.value.primaryDriverId = null
-                  form.value.secondaryDriverId = null
-                  form.value.backupDriverIds = []
-                  form.value.backupDrivers = []
                   form.value.vehiclePhotoUrl = ''
                   form.value.drivingLicenseFrontUrl = ''
                   form.value.drivingLicenseBackUrl = ''
@@ -796,6 +877,7 @@
                   form.value.personVehiclePhotoUrl = ''
                   form.value.vehicleHeadPhotoUrl = ''
                   form.value.attachments = []
+                  void reloadArchiveDriverOptions()
                 }
               }
             }
@@ -842,31 +924,8 @@
               form.value.companyName = carrier.companyName
               form.value.vehicleOwnership = 'carrier'
             }
-            if (!value) {
-              form.value.primaryDriverId = null
-              form.value.primaryDriver = null
-              form.value.primaryDriverName = ''
-              form.value.primaryDriverPhone = ''
-              form.value.secondaryDriverId = null
-              form.value.secondaryDriver = null
-              form.value.backupDriverIds = []
-              form.value.backupDrivers = []
-              form.value.secondaryDriverName = ''
-              form.value.secondaryDriverPhone = ''
-              driverCache.value = new Map()
-              return
-            }
-            form.value.primaryDriverId = null
-            form.value.primaryDriver = null
-            form.value.primaryDriverName = ''
-            form.value.primaryDriverPhone = ''
-            form.value.secondaryDriverId = null
-            form.value.secondaryDriver = null
-            form.value.backupDriverIds = []
-            form.value.backupDrivers = []
-            form.value.secondaryDriverName = ''
-            form.value.secondaryDriverPhone = ''
-            driverCache.value = new Map()
+            clearSelectedDrivers()
+            void reloadArchiveDriverOptions()
           }
         }
       },
@@ -891,7 +950,22 @@
         label: '车辆归属',
         key: 'vehicleOwnership',
         type: 'radioGroup',
-        props: { options: options.vehicleOwnership, optionType: 'button' }
+        props: {
+          options: options.vehicleOwnership,
+          optionType: 'button',
+          onChange: (ownership: string) => {
+            clearSelectedDrivers()
+            if (ownership === 'self_operated') {
+              Object.assign(form.value, { carrierId: null, carrier: null, companyName: '' })
+              void loadDefaultCompany(form.value.tenantId, 'self_operated').catch(() =>
+                ElMessage.error('法人公司加载失败，请手工填写所属公司或重新选择车辆归属重试')
+              )
+            } else if (ownership === 'individual_affiliation') {
+              Object.assign(form.value, { carrierId: null, carrier: null })
+            }
+            void reloadArchiveDriverOptions()
+          }
+        }
       },
       {
         label: '使用性质',
@@ -1308,17 +1382,20 @@
         key: 'primaryDriverId',
         type: 'select',
         span: 8,
-        api: fetchDriverOptions,
+        api: fetchArchiveDriverOptions,
         options: selectedPrimaryDriverOptions.value,
         resultField: 'data',
         labelField: 'driverName',
         valueField: 'id',
         immediate: false,
         beforeFetch: () => ({
+          tenantId: form.value.tenantId,
+          vehicleId: form.value.id,
+          vehicleOwnership: form.value.vehicleOwnership,
           carrierId: form.value.carrierId ?? undefined,
           driverType: 'primary'
         }),
-        shouldFetch: () => Boolean(form.value.carrierId),
+        shouldFetch: () => canFetchArchiveDrivers.value,
         afterFetch: syncPrimaryDriverOptions,
         labelFn: (option: unknown) => {
           const driver = option as DriverOption
@@ -1327,10 +1404,10 @@
         props: {
           filterable: true,
           clearable: true,
-          disabled: !form.value.carrierId,
-          placeholder: form.value.carrierId ? '请选择主司机' : '请先选择所属承运商',
+          disabled: !canFetchArchiveDrivers.value || driverOptionsRefreshing.value,
+          placeholder: archiveDriverPlaceholder('primary'),
           onVisibleChange: (visible: boolean) => {
-            if (visible && form.value.carrierId)
+            if (visible && canFetchArchiveDrivers.value)
               void otherFormRef.value?.reloadOptions('primaryDriverId')
           },
           onChange: (value?: string) => {
@@ -1355,17 +1432,20 @@
         type: 'select',
         span: 24,
         description: '可绑定多名轮班司机；列表首位同步为默认备用司机。',
-        api: fetchDriverOptions,
+        api: fetchArchiveDriverOptions,
         options: selectedSecondaryDriverOptions.value,
         resultField: 'data',
         labelField: 'driverName',
         valueField: 'id',
         immediate: false,
         beforeFetch: () => ({
+          tenantId: form.value.tenantId,
+          vehicleId: form.value.id,
+          vehicleOwnership: form.value.vehicleOwnership,
           carrierId: form.value.carrierId ?? undefined,
           driverType: 'secondary'
         }),
-        shouldFetch: () => Boolean(form.value.carrierId),
+        shouldFetch: () => canFetchArchiveDrivers.value,
         afterFetch: syncSecondaryDriverOptions,
         labelFn: (option: unknown) => {
           const driver = option as DriverOption
@@ -1377,10 +1457,10 @@
           multiple: true,
           collapseTags: true,
           collapseTagsTooltip: true,
-          disabled: !form.value.carrierId,
-          placeholder: form.value.carrierId ? '请选择一名或多名备用司机' : '请先选择所属承运商',
+          disabled: !canFetchArchiveDrivers.value || driverOptionsRefreshing.value,
+          placeholder: archiveDriverPlaceholder('secondary'),
           onVisibleChange: (visible: boolean) => {
-            if (visible && form.value.carrierId)
+            if (visible && canFetchArchiveDrivers.value)
               void otherFormRef.value?.reloadOptions('backupDriverIds')
           },
           onChange: (value?: string[]) => syncBackupDriverSelection(value ?? [])

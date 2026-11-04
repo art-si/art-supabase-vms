@@ -7,51 +7,64 @@ import type {
 
 export const CERTIFICATE_TYPE_OPTIONS: Record<
   CertificateSubjectType,
-  { value: CertificateType; label: string }[]
+  { value: CertificateType }[]
 > = {
   vehicle: [
-    { value: 'vehicle_registration', label: '行驶证' },
-    { value: 'road_transport', label: '道路运输证' },
-    { value: 'compulsory_insurance', label: '交强险保单' },
-    { value: 'commercial_insurance', label: '商业险保单' },
-    { value: 'vehicle_tax', label: '车船税' },
-    { value: 'annual_inspection', label: '审车检验' }
+    { value: 'vehicle_registration' },
+    { value: 'road_transport' },
+    { value: 'compulsory_insurance' },
+    { value: 'commercial_insurance' },
+    { value: 'vehicle_tax' },
+    { value: 'annual_inspection' }
   ],
   driver: [
-    { value: 'identity_card', label: '身份证' },
-    { value: 'driver_license', label: '驾驶证' },
-    { value: 'professional_qualification', label: '从业资格证' }
+    { value: 'identity_card' },
+    { value: 'driver_license' },
+    { value: 'professional_qualification' }
   ]
 }
 
-export const CERTIFICATE_STATUS_OPTIONS: { value: CertificateStatus; label: string }[] = [
-  { value: 'valid', label: '有效' },
-  { value: 'due_3_months', label: '待换证（3 个月）' },
-  { value: 'due_30', label: '待换证（30 天）' },
-  { value: 'due_15', label: '待换证（15 天）' },
-  { value: 'due_today', label: '待换证（今天）' },
-  { value: 'expired', label: '已过期' },
-  { value: 'handled', label: '已处理' },
-  { value: 'revoked', label: '已作废' }
+export const CERTIFICATE_STATUS_OPTIONS: { value: CertificateStatus }[] = [
+  { value: 'valid' },
+  { value: 'due_3_months' },
+  { value: 'due_30' },
+  { value: 'due_15' },
+  { value: 'due_today' },
+  { value: 'expired' },
+  { value: 'handled' },
+  { value: 'revoked' }
 ]
 
-export function certificateTypeLabel(type: CertificateType): string {
-  return (
-    [...CERTIFICATE_TYPE_OPTIONS.vehicle, ...CERTIFICATE_TYPE_OPTIONS.driver].find(
-      (item) => item.value === type
-    )?.label ?? type
-  )
+export interface CertificateDictionaryOption {
+  value: string
+  label?: string
+  name?: string
 }
 
-export function certificateStatusLabel(status: CertificateStatus): string {
-  return CERTIFICATE_STATUS_OPTIONS.find((item) => item.value === status)?.label ?? '未知状态'
+export function certificateTypeLabel(
+  type: CertificateType,
+  options: readonly CertificateDictionaryOption[]
+): string {
+  const option = options.find((item) => item.value === type)
+  return option?.label || option?.name || '其他证件'
 }
 
-export function certificateStatusTableLabel(status: CertificateStatus): string {
+export function certificateStatusLabel(
+  status: CertificateStatus,
+  options: readonly CertificateDictionaryOption[]
+): string {
+  const option = options.find((item) => item.value === status)
+  return option?.label || option?.name || '未知状态'
+}
+
+export function certificateStatusTableLabel(
+  status: CertificateStatus,
+  options: readonly CertificateDictionaryOption[]
+): string {
   if (status === 'due_3_months') return '3 个月内'
   if (status === 'due_30') return '30 天内'
   if (status === 'due_15') return '15 天内'
-  return certificateStatusLabel(status)
+  return certificateStatusLabel(status, options)
 }
 
 export function certificateStatusTone(

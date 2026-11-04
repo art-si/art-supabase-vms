@@ -142,11 +142,10 @@
         ]
   )
   const certificateOptions = computed(() => {
-    const allowed = CERTIFICATE_TYPE_OPTIONS[form.subjectType]
-    const labels = new Map(
-      certificateDictionaryOptions.map((option) => [option.value, option.label])
+    const allowed = new Set<string>(
+      CERTIFICATE_TYPE_OPTIONS[form.subjectType].map((option) => option.value)
     )
-    return allowed.map((option) => ({ ...option, label: labels.get(option.value) ?? option.label }))
+    return certificateDictionaryOptions.filter((option) => allowed.has(option.value))
   })
   const formItems = computed<FormItem[]>(() => [
     {

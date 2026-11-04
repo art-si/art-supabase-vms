@@ -5,13 +5,18 @@ import {
   vehicleCertificateRiskNeedsAttention
 } from '../../src/views/vehicle-archive-manage/modules/vehicle-certificate-risk'
 
+const certificateTypes = [{ value: 'compulsory_insurance', label: '交强险保单' }]
+
 test('vehicle certificate risk makes an expired document visible without treating it as a renewal reminder', () => {
   assert.deepEqual(
-    vehicleCertificateRiskDisplay({
-      certificateRisk: 'expired',
-      certificateRiskType: 'compulsory_insurance',
-      certificateRiskExpiresOn: '2026-10-01'
-    }),
+    vehicleCertificateRiskDisplay(
+      {
+        certificateRisk: 'expired',
+        certificateRiskType: 'compulsory_insurance',
+        certificateRiskExpiresOn: '2026-10-01'
+      },
+      certificateTypes
+    ),
     { label: '已过期', detail: '交强险保单 · 2026-10-01', tone: 'danger' }
   )
 })
@@ -19,10 +24,13 @@ test('vehicle certificate risk makes an expired document visible without treatin
 test('vehicle certificate risk distinguishes due renewal, valid, and no record', () => {
   assert.equal(vehicleCertificateRiskDisplay({ certificateRisk: 'renewal_due' }).label, '待换证')
   assert.deepEqual(
-    vehicleCertificateRiskDisplay({
-      certificateRisk: 'revoked',
-      certificateRiskType: 'compulsory_insurance'
-    }),
+    vehicleCertificateRiskDisplay(
+      {
+        certificateRisk: 'revoked',
+        certificateRiskType: 'compulsory_insurance'
+      },
+      certificateTypes
+    ),
     {
       label: '已作废',
       detail: '交强险保单',

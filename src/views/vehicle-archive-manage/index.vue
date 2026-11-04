@@ -739,9 +739,13 @@
   onMounted(async () => {
     await tenantScopeStore.loadTenantOptions()
     await Promise.all(
-      ['vehicleOwnership', 'vehicleType', 'vehicleOperationStatus', 'vehicleAuditStatus'].map(
-        (code) => userStore.ensureDictLoaded(code)
-      )
+      [
+        'vehicleOwnership',
+        'vehicleType',
+        'vehicleOperationStatus',
+        'vehicleAuditStatus',
+        'vehicleCertificateType'
+      ].map((code) => userStore.ensureDictLoaded(code))
     )
     await loadNavigation()
     if (!initialCarrierId && !initialRecordId) return
@@ -800,7 +804,7 @@
   }
 
   const renderVehicleIdentity = (row: VehicleArchive) => {
-    const riskDisplay = vehicleCertificateRiskDisplay(row)
+    const riskDisplay = vehicleCertificateRiskDisplay(row, getDictMap.value.vehicleCertificateType)
     return (
       <div class="vehicle-archive-manage__vehicle-cell">
         <div>
@@ -837,7 +841,7 @@
   }
 
   const renderCertificateRisk = (row: VehicleArchive) => {
-    const display = vehicleCertificateRiskDisplay(row)
+    const display = vehicleCertificateRiskDisplay(row, getDictMap.value.vehicleCertificateType)
     const content = (
       <span class="vehicle-archive-manage__certificate-content">
         <ElTag type={display.tone} effect="light" size="small">

@@ -86,7 +86,7 @@
                     >
                   </div>
                   <ElTag :type="statusTone[line.status]" effect="plain" size="small">{{
-                    statusLabels[line.status]
+                    statusLabel(line.status)
                   }}</ElTag>
                 </div>
                 <div
@@ -178,6 +178,7 @@
   import { buildSupabasePageRange } from '@/utils/supabase/pagination'
   import { formatWithDayjs } from '@/utils/time'
   import { useAuth } from '@/hooks/core/useAuth'
+  import { useDictionaryOptions } from '@/hooks/core/useDictionaryOptions'
   import { signPrivateAttachmentPaths } from '@/utils/supabase/private-attachment'
   import ArtButtonTable from '@/components/core/forms/art-button-table/index.vue'
   import ArtDrawer from '@/components/core/drawers/art-drawer/index.vue'
@@ -256,12 +257,9 @@
       onClick: () => void issueRef.value?.handleOpen()
     }
   ])
-  const statusLabels: Record<VehiclePartIssueStatus, string> = {
-    in_use: '在用',
-    returned: '已归还',
-    lost: '丢失',
-    damaged: '损坏'
-  }
+  const dictionaryStatusOptions = useDictionaryOptions('vehiclePartIssueStatus')
+  const statusLabel = (status: VehiclePartIssueStatus): string =>
+    dictionaryStatusOptions.find((item) => item.value === status)?.label || status
   const statusTone: Record<VehiclePartIssueStatus, 'primary' | 'success' | 'danger' | 'warning'> = {
     in_use: 'primary',
     returned: 'success',

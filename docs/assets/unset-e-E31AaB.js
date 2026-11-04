@@ -1,0 +1,1 @@
+import{fo as e}from"./sys-DS1CrKyN.js";function t(t,n){return t==null||e(t,n)}export{t};

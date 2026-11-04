@@ -14,6 +14,7 @@ export type { PartMaterialOption, PartUnitOption } from '@/api/mdm-material-sele
 export {
   fetchVmsAssetCompanyOptions,
   fetchVmsAssetCarrierReferences,
+  fetchVmsAssetDriverReferences,
   fetchVmsCarrierReferences as fetchCarrierOptions,
   fetchVmsDriverReferences as fetchDriverOptions,
   fetchVmsVehicleDriverReferences as fetchVehicleDriverOptions,
@@ -22,6 +23,8 @@ export {
 export type {
   VmsAssetReferenceParams,
   VmsAssetCompanyOption,
+  VmsAssetDriverOwnership,
+  VmsAssetDriverReferenceParams,
   VmsCarrierReference,
   VmsDriverReference,
   VmsHrEmployeeReference

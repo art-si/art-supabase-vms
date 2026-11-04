@@ -1,5 +1,8 @@
 import type { CertificateType } from '../../../types/certificate'
-import { certificateTypeLabel } from '../../certificate-center/modules/certificate-policy'
+import {
+  certificateTypeLabel,
+  type CertificateDictionaryOption
+} from '../../certificate-center/modules/certificate-policy'
 
 export type VehicleCertificateRisk = 'revoked' | 'expired' | 'renewal_due' | 'valid' | 'none'
 
@@ -13,14 +16,17 @@ export function vehicleCertificateRiskNeedsAttention(risk?: VehicleCertificateRi
   return risk === 'revoked' || risk === 'expired' || risk === 'renewal_due'
 }
 
-export function vehicleCertificateRiskDisplay(summary: VehicleCertificateRiskSummary): {
+export function vehicleCertificateRiskDisplay(
+  summary: VehicleCertificateRiskSummary,
+  certificateTypes: readonly CertificateDictionaryOption[] = []
+): {
   label: string
   detail: string
   tone: 'danger' | 'warning' | 'success' | 'info'
 } {
   const risk = summary.certificateRisk ?? 'none'
   const detail = summary.certificateRiskType
-    ? `${certificateTypeLabel(summary.certificateRiskType)}${summary.certificateRiskExpiresOn ? ` · ${summary.certificateRiskExpiresOn}` : ''}`
+    ? `${certificateTypeLabel(summary.certificateRiskType, certificateTypes)}${summary.certificateRiskExpiresOn ? ` · ${summary.certificateRiskExpiresOn}` : ''}`
     : '尚未登记车辆证件'
 
   if (risk === 'revoked') return { label: '已作废', detail, tone: 'danger' }

@@ -88,6 +88,7 @@
   import { buildSupabasePageRange } from '@/utils/supabase/pagination'
   import { formatWithDayjs } from '@/utils/time'
   import { useAuth } from '@/hooks/core/useAuth'
+  import { useDictionaryOptions } from '@/hooks/core/useDictionaryOptions'
   import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
   import ArtTable from '@/components/core/tables/art-table/index.vue'
   import ArtSvgIcon from '@/components/core/base/art-svg-icon/index.vue'
@@ -224,13 +225,9 @@
     const { from, to } = buildSupabasePageRange(params)
     return await fetchVehiclePartStockMovements({ from, to, partId: params.partId })
   }
-  const movementLabels: Record<VehiclePartStockMovement['movementType'], string> = {
-    receipt: '入库',
-    issue: '领用出库',
-    return: '归还入库',
-    lost: '丢失',
-    damaged: '损坏'
-  }
+  const movementTypeOptions = useDictionaryOptions('vehiclePartStockMovementType')
+  const movementLabel = (type: VehiclePartStockMovement['movementType']): string =>
+    movementTypeOptions.find((item) => item.value === type)?.label || type
   const columnsFactory = (): ColumnOption<VehiclePartStockMovement>[] => [
     { type: 'globalIndex', label: '序号', width: 70 },
     {
@@ -259,7 +256,7 @@
       prop: 'movementType',
       label: '变动类型',
       width: 118,
-      formatter: (row) => movementLabels[row.movementType]
+      formatter: (row) => movementLabel(row.movementType)
     },
     {
       prop: 'stockDelta',

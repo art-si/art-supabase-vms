@@ -47,6 +47,18 @@ interface DriverReferenceParams {
   maxRows?: number
 }
 
+export type VmsAssetDriverOwnership = 'self_operated' | 'carrier' | 'individual_affiliation'
+
+export interface VmsAssetDriverReferenceParams {
+  tenantId?: string | null
+  vehicleId?: string | null
+  vehicleOwnership: VmsAssetDriverOwnership
+  carrierId?: string | null
+  driverType: 'primary' | 'secondary'
+  driverName?: string
+  maxRows?: number
+}
+
 const { supabase, responseHandle } = useSupabase()
 
 function assetReferenceParams(params: VmsAssetReferenceParams) {
@@ -134,6 +146,29 @@ export async function fetchVmsDriverReferences(
         options
       ),
     { showErrorMessage: true }
+  )
+}
+
+/** Tenant- and ownership-scoped driver choices for vehicle archive editing. */
+export async function fetchVmsAssetDriverReferences(
+  params: VmsAssetDriverReferenceParams,
+  options?: ApiRequestOptions
+) {
+  return await responseHandle<VmsDriverReference[]>(
+    () =>
+      withRequestOptions(
+        supabase.rpc('vms_list_asset_driver_options_secure', {
+          p_tenant_id: params.tenantId || null,
+          p_vehicle_id: params.vehicleId || null,
+          p_vehicle_ownership: params.vehicleOwnership,
+          p_carrier_id: params.carrierId || null,
+          p_driver_type: params.driverType,
+          p_driver_name: normalizeNullableText(String(params.driverName ?? '')),
+          p_max_rows: params.maxRows ?? 200
+        }),
+        options
+      ),
+    { showErrorMessage: false }
   )
 }
 
