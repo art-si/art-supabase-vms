@@ -802,6 +802,10 @@
     ],
     plateColor: [{ required: true, message: '请选择车牌颜色', trigger: 'change' }],
     vehicleOwnership: [{ required: true, message: '请选择车辆归属', trigger: 'change' }],
+    carrierId:
+      form.value.vehicleOwnership === 'carrier'
+        ? [{ required: true, message: '请选择所属承运商', trigger: 'change' }]
+        : [],
     isNewEnergy: [
       { required: true, type: 'boolean', message: '请选择是否新能源车', trigger: 'change' }
     ],
@@ -916,12 +920,14 @@
         props: {
           filterable: true,
           clearable: true,
-          placeholder: '请选择所属承运商（选填）',
+          placeholder:
+            form.value.vehicleOwnership === 'carrier' ? '请选择所属承运商' : '仅承运商车辆需要选择',
+          disabled: form.value.vehicleOwnership !== 'carrier',
           onChange: (value?: string) => {
             const carrier = carrierOptions.value.find((item) => item.id === value)
             form.value.carrier = carrier ?? null
             if (carrier) {
-              form.value.companyName = carrier.companyName
+              form.value.companyName = ''
               form.value.vehicleOwnership = 'carrier'
             }
             clearSelectedDrivers()
@@ -933,8 +939,12 @@
         label: '所属公司',
         key: 'companyName',
         type: 'input',
-        props: { maxlength: 200, clearable: true },
-        description: '新增默认法人公司；选择承运商后带入承运商名称，可继续修改。'
+        props: {
+          maxlength: 200,
+          clearable: true,
+          disabled: form.value.vehicleOwnership !== 'self_operated'
+        },
+        description: '仅自有车辆填写所属公司；承运商和个人挂靠车辆自动清空。'
       },
       {
         label: '自编号',
@@ -960,8 +970,14 @@
               void loadDefaultCompany(form.value.tenantId, 'self_operated').catch(() =>
                 ElMessage.error('法人公司加载失败，请手工填写所属公司或重新选择车辆归属重试')
               )
-            } else if (ownership === 'individual_affiliation') {
-              Object.assign(form.value, { carrierId: null, carrier: null })
+            } else if (ownership === 'carrier') {
+              form.value.companyName = ''
+            } else {
+              Object.assign(form.value, {
+                carrierId: null,
+                carrier: null,
+                companyName: ''
+              })
             }
             void reloadArchiveDriverOptions()
           }

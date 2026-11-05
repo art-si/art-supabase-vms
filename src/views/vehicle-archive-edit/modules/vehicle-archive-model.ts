@@ -209,6 +209,8 @@ export function sanitizeVehicleArchivePayload(
   ])
   const payload: Record<string, unknown> = {
     ...formPayload,
+    carrierId: formPayload.vehicleOwnership === 'carrier' ? formPayload.carrierId : null,
+    companyName: formPayload.vehicleOwnership === 'self_operated' ? formPayload.companyName : null,
     attachments: formPayload.attachments ?? [],
     isAirConditioned: formPayload.isAirConditioned ?? false,
     isNewEnergy: formPayload.isNewEnergy ?? false,

@@ -54,6 +54,26 @@ test('vehicle archive payload preserves ordered backup driver IDs without displa
   assert.equal('backupDrivers' in payload, false)
 })
 
+test('vehicle archive ownership keeps carrier and company fields mutually exclusive', () => {
+  const form = createInitialVehicleArchiveForm()
+  form.companyName = '自有公司'
+  form.carrierId = 'carrier-1'
+  form.vehicleOwnership = 'carrier'
+  let payload = sanitizeVehicleArchivePayload(form)
+  assert.equal(payload.carrierId, 'carrier-1')
+  assert.equal(payload.companyName, null)
+
+  form.vehicleOwnership = 'individual_affiliation'
+  payload = sanitizeVehicleArchivePayload(form)
+  assert.equal(payload.carrierId, null)
+  assert.equal(payload.companyName, null)
+
+  form.vehicleOwnership = 'self_operated'
+  payload = sanitizeVehicleArchivePayload(form)
+  assert.equal(payload.carrierId, null)
+  assert.equal(payload.companyName, '自有公司')
+})
+
 test('new vehicle defaults usage nature to freight without changing business type', () => {
   const form = createInitialVehicleArchiveForm()
   const payload = sanitizeVehicleArchivePayload(form)

@@ -340,7 +340,7 @@
       overview.rows.filter(
         (row) =>
           row.auditStatus === 'draft' ||
-          !row.companyName?.trim() ||
+          (row.vehicleOwnership === 'self_operated' && !row.companyName?.trim()) ||
           !row.manufacturer?.trim() ||
           (canViewField(row.fieldAccess, 'vehicleIdentifiers') && !row.vin?.trim())
       ).length
@@ -363,8 +363,8 @@
       label: '本页资料待完善',
       value: incompleteCount.value,
       description: canViewField(effectiveFieldAccess.value, 'vehicleIdentifiers')
-        ? '草稿或公司、厂商、VIN 信息缺失'
-        : '草稿或公司、厂商信息缺失',
+        ? '草稿或自有车辆公司、厂商、VIN 信息缺失'
+        : '草稿或自有车辆公司、厂商信息缺失',
       icon: 'ri:file-warning-line',
       tone: 'warning'
     }
@@ -681,6 +681,13 @@
         dict: { code: 'vehicleOperationStatus', display: 'auto' }
       },
       {
+        prop: 'vin',
+        label: '车架号（VIN）',
+        minWidth: 180,
+        formatter: (row) =>
+          canViewField(row.fieldAccess, 'vehicleIdentifiers') ? row.vin || '--' : '无权查看'
+      },
+      {
         prop: 'certificateRisk',
         label: '证件状态',
         width: 162,
@@ -869,7 +876,9 @@
 
   const renderOwnership = (row: VehicleArchive) => (
     <div class="vehicle-archive-manage__ownership">
-      <strong title={row.companyName}>{row.companyName || '所属公司待补充'}</strong>
+      <strong title={row.companyName}>
+        {row.vehicleOwnership === 'self_operated' ? row.companyName || '所属公司待补充' : '不适用'}
+      </strong>
       <small>
         {row.carrier?.carrierCode
           ? `承运商编码 ${row.carrier.carrierCode}`
