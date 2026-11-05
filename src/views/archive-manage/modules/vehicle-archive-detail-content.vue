@@ -44,7 +44,7 @@
                 />
               </div>
             </div>
-            <p>{{ archive?.companyName || '--' }}</p>
+            <p :title="headerOwnerName">{{ headerOwnerName }}</p>
             <dl
               v-if="archive"
               class="vehicle-archive-detail__header-specs"
@@ -305,6 +305,12 @@
     { immediate: true }
   )
   const archive = ref<VehicleArchive>()
+  const headerOwnerName = computed(() => {
+    if (archive.value?.vehicleOwnership === 'carrier') {
+      return archive.value.carrier?.companyName?.trim() || '未设置所属承运商'
+    }
+    return archive.value?.companyName?.trim() || '--'
+  })
   const runningMileage = ref<number | null>(null)
   const runningMileageLoading = ref(false)
   const runningMileageError = ref(false)

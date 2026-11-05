@@ -5,6 +5,7 @@ import { fetchAllRangePages } from '@/utils/supabase/pagination'
 import { fetchPartUnitOptions } from '@/api/mdm-material-select'
 import { useTenantScopeStore } from '@/store/modules/tenant-scope'
 import { useUserStore } from '@/store/modules/user'
+import { resolveTenantWriteTargetId } from '@/utils/tenant-scope-context'
 import { resolvePartImportUnit, type PartImportMaterial } from './parts-import'
 import { useSupabase } from '@/hooks/core/useSupabase'
 import { withRequestOptions } from '@/api/providers/supabase/query'
@@ -351,9 +352,33 @@ export async function deletePartsCategoryBatch(ids: string[]) {
 }
 
 export async function importPartsCategories(rows: PartsCategory[]) {
+  const selectedTenantId = useTenantScopeStore().effectiveTenantId
+  const userStore = useUserStore()
+  const resolvedRows = rows.map((row, index) => {
+    let tenantId: string
+    try {
+      tenantId = resolveTenantWriteTargetId({
+        explicitTenantId: row.tenantId,
+        effectiveTenantId: selectedTenantId,
+        actorTenantId: userStore.getUserInfo.tenantId,
+        canWriteToOtherTenant: userStore.isPlatformSuper
+      })
+    } catch (error) {
+      throw new Error(
+        `第 ${index + 1} 行${error instanceof Error ? error.message : '目标租户无效'}`,
+        {
+          cause: error
+        }
+      )
+    }
+    return { ...row, tenantId }
+  })
+  if (uniq(resolvedRows.map((row) => row.tenantId)).length > 1) {
+    throw new Error('一次只能导入同一租户的零部件类别，请按租户拆分文件后重试')
+  }
   return await responseHandle(
     () =>
-      supabase.from('mdm_part_category').upsert(keysToSnakeDeep(rows), {
+      supabase.from('mdm_part_category').upsert(keysToSnakeDeep(resolvedRows), {
         onConflict: 'category_code'
       }),
     { showMessage: true, breakReturn: true }
@@ -495,12 +520,23 @@ export async function deletePartsBatch(ids: string[]) {
 
 export async function importParts(rows: Parts[]) {
   const selectedTenantId = useTenantScopeStore().effectiveTenantId
-  const homeTenantId = useUserStore().getUserInfo.tenantId
-  if (!homeTenantId) throw new Error('无法确定当前账号所属租户，请刷新后重试')
+  const userStore = useUserStore()
   const indexedRows = rows.map((row, index) => {
-    const tenantId = row.tenantId || selectedTenantId || homeTenantId
-    if (selectedTenantId && tenantId !== selectedTenantId) {
-      throw new Error(`第 ${index + 1} 行租户与当前选择不一致，请调整后重试`)
+    let tenantId: string
+    try {
+      tenantId = resolveTenantWriteTargetId({
+        explicitTenantId: row.tenantId,
+        effectiveTenantId: selectedTenantId,
+        actorTenantId: userStore.getUserInfo.tenantId,
+        canWriteToOtherTenant: userStore.isPlatformSuper
+      })
+    } catch (error) {
+      throw new Error(
+        `第 ${index + 1} 行${error instanceof Error ? error.message : '目标租户无效'}`,
+        {
+          cause: error
+        }
+      )
     }
     return { row, index, tenantId }
   })
