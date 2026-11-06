@@ -61,7 +61,7 @@ function getNextMaintenanceDate(
   const start = new Date(record.startTime)
   if (Number.isNaN(start.getTime())) return null
   start.setMonth(start.getMonth() + 6)
-  return start.toISOString().slice(0, 10)
+  return dayjs(start).format('YYYY-MM-DD')
 }
 
 function getNextMaintenanceMileage(

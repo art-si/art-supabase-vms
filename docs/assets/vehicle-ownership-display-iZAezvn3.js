@@ -1,0 +1,1 @@
+function e(e){return!e||e.vehicleOwnership===`individual_affiliation`?null:e.vehicleOwnership===`carrier`||e.vehicleOwnership===`third_party`?{label:`所属承运商`,name:e.carrier?.companyName?.trim()||``}:{label:`所属公司`,name:e.companyName?.trim()||``}}export{e as t};

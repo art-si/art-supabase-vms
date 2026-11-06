@@ -76,3 +76,20 @@ test('vehicle query summary uses the configured next maintenance reminder', () =
   assert.equal(result.summary.nextMaintenanceMileage, 130000)
   assert.equal(result.coverage.maintenanceReady, true)
 })
+
+test('vehicle query summary keeps the local calendar date for legacy maintenance reminders', () => {
+  const originalTimezone = process.env.TZ
+  process.env.TZ = 'Asia/Shanghai'
+  try {
+    const result = buildVehicleQuerySummary({
+      insurance: [],
+      inspection: [],
+      maintenance: [{ startTime: '2026-01-15 00:30:00' }],
+      mileage: []
+    })
+    assert.equal(result.summary.nextMaintenanceDate, '2026-07-15')
+  } finally {
+    if (originalTimezone === undefined) delete process.env.TZ
+    else process.env.TZ = originalTimezone
+  }
+})
