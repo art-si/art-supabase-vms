@@ -60,9 +60,12 @@
               unknown-text="未识别"
             />
           </div>
-          <small class="truncate text-[var(--el-text-color-secondary)]">{{
-            vehicle.companyName || '未设置所属公司'
-          }}</small>
+          <small
+            v-if="organization"
+            class="truncate text-[var(--el-text-color-secondary)]"
+            :title="`${organization.label}：${organization.name || '未设置'}`"
+            >{{ organization.label }}：{{ organization.name || '未设置' }}</small
+          >
         </div>
         <ElButton v-auth="'VehicleQuery:AiAnalyze'" type="primary" plain @click="emit('analyze')">
           <ArtSvgIcon icon="ri:sparkling-2-line" />AI 车辆健康研判
@@ -123,6 +126,7 @@
   import { formatMileage, formatValue } from './query-format'
   import { canViewField } from '@/utils/field-permission'
   import { getVehicleTypeFallbackLabel } from '@/utils/business/vehicle-type-display'
+  import { getVehicleOwnershipOrganization } from '@/utils/business/vehicle-ownership-display'
 
   defineOptions({ name: 'VehicleQuerySummary' })
 
@@ -132,6 +136,7 @@
     showBack?: boolean
   }>()
   const emit = defineEmits<{ analyze: []; back: [] }>()
+  const organization = computed(() => getVehicleOwnershipOrganization(props.vehicle))
   const driverContact = computed(() => {
     const name = props.vehicle.primaryDriver?.driverName || '未设置'
     const phone = canViewField(props.vehicle.primaryDriver?.fieldAccess, 'contactPhone')

@@ -60,6 +60,7 @@
   import { ElTabPane, ElTabs } from 'element-plus'
   import ArtDictDisplay from '@/components/core/base/art-dict-display/index.vue'
   import { getVehicleTypeFallbackLabel } from '@/utils/business/vehicle-type-display'
+  import { getVehicleOwnershipOrganization } from '@/utils/business/vehicle-ownership-display'
   import ArtEmptyState from '@/components/core/feedback/art-empty-state/index.vue'
   import { useAuth } from '@/hooks/core/useAuth'
   import ArtDescriptions from '@/components/core/base/art-descriptions/index.vue'
@@ -101,13 +102,17 @@
     { immediate: true }
   )
   const descriptionData = Object.freeze({})
+  const organizationItems = computed<InfoItem[]>(() => {
+    const organization = getVehicleOwnershipOrganization(props.vehicle)
+    return organization ? [{ label: organization.label, value: organization.name }] : []
+  })
 
   const overviewDescriptionItems = computed(() => {
     const years = getVehicleUsageYears(props.vehicle.startUseDate)
     return createDescriptionItems([
       { label: '车牌号', value: props.vehicle.plateNo },
       { label: '车辆归属', value: props.vehicle.vehicleOwnership, dictCode: 'vehicleOwnership' },
-      { label: '所属公司', value: props.vehicle.companyName },
+      ...organizationItems.value,
       {
         label: '车型',
         value: props.vehicle.vehicleType,
@@ -148,7 +153,7 @@
   const basicDescriptionItems = computed(() =>
     createDescriptionItems([
       { label: '车牌号', value: props.vehicle.plateNo },
-      { label: '所属公司', value: props.vehicle.companyName },
+      ...organizationItems.value,
       { label: '自编号', value: props.vehicle.selfNo },
       {
         label: '车型',

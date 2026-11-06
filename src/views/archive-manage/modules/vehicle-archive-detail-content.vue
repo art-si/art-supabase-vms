@@ -225,6 +225,7 @@
   import { attachmentTableLink } from '@/components/core/media/art-file-viewer/table-link'
   import { canViewField } from '@/utils/field-permission'
   import { formatVehicleAge } from '@vms/views/vehicle-archive-edit/modules/vehicle-age'
+  import { getVehicleOwnershipOrganization } from '@/utils/business/vehicle-ownership-display'
   import { formatMileage } from '@vms/views/vehicle-query/modules/query-format'
   import { loadVehicleQuerySummary } from '@vms/views/vehicle-query/modules/load-vehicle-query-summary'
   import VehicleTrailersPanel from '@vms/views/trailer-manage/modules/vehicle-trailers-panel.vue'
@@ -336,11 +337,14 @@
     ])
   })
 
+  const organization = computed(() => getVehicleOwnershipOrganization(archive.value))
   const basicInfoItems = computed<InfoItem[]>(() => [
     { label: '车牌号', value: archive.value?.plateNo },
     { label: '购置时间', value: archive.value?.purchaseDate },
     { label: '车辆年限', value: formatVehicleAge(archive.value?.purchaseDate) },
-    { label: '所属公司', value: archive.value?.companyName },
+    ...(organization.value
+      ? [{ label: organization.value.label, value: organization.value.name }]
+      : []),
     { label: '自编号', value: archive.value?.selfNo },
     {
       label: '车辆归属',

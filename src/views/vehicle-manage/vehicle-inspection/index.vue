@@ -301,7 +301,8 @@
     {
       key: 'detail',
       label: '详情',
-      icon: 'ri:eye-line'
+      icon: 'ri:eye-line',
+      auth: 'VehicleInspection:View'
     },
     {
       key: 'delete',
