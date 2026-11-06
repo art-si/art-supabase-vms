@@ -30,7 +30,9 @@ test('local vehicle OCR maps only labeled, valid document fields', () => {
 
 test('the saved synthetic watermark image yields raw text without fabricated vehicle fields', async () => {
   const worker = await createWorker('chi_sim', 1, {
-    langPath: fileURLToPath(new URL('../../../../public/ocr/driver/langs/', import.meta.url)),
+    langPath: fileURLToPath(
+      new URL('public/ocr/driver/langs/', import.meta.resolve('art-supabase-pro/package.json'))
+    ),
     cacheMethod: 'none'
   })
   try {
