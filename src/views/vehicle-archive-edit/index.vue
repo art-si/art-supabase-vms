@@ -21,6 +21,7 @@
           <ArtForm
             ref="basicFormRef"
             v-model="form"
+            v-model:active-tab="certificateTab"
             :items="basicItems"
             :rules="rules"
             :span="8"
@@ -46,95 +47,117 @@
                 <ArtSvgIcon icon="ri:arrow-right-s-line" aria-hidden="true" />
               </ElButton>
             </template>
-          </ArtForm>
-
-          <section
-            v-if="canViewArchiveField('documents')"
-            class="vehicle-archive-edit__section vehicle-archive-edit__certificate-panel"
-          >
-            <header class="vehicle-archive-edit__certificate-heading">
-              <div>
-                <ArtSectionTitle :show-line="false">车辆证件影像</ArtSectionTitle>
-                <p>证照影像私有存储，仅授权人员可预览、替换和删除</p>
-              </div>
-              <span>{{ certificateFilledCount }}/{{ visibleCertificateItems.length }} 已完成</span>
-            </header>
-            <div
-              class="vehicle-archive-edit__image-switch"
-              role="tablist"
-              aria-label="车辆证件影像"
-            >
-              <button
-                v-for="item in visibleCertificateItems"
-                :key="item.key"
-                type="button"
-                role="tab"
-                :aria-selected="activeImageKey === item.key"
-                :class="{ 'is-current': activeImageKey === item.key }"
-                @click="activeImageKey = item.key"
+            <template #layout="{ fields: Fields }">
+              <component :is="Fields" :items="basicGeneralItems" :actions="false" />
+              <ArtSectionCard
+                v-if="canViewArchiveField('documents')"
+                class="vehicle-archive-edit__section"
+                title="车辆证件影像"
+                subtitle="选择影像，右侧同步展示对应字段；影像私有存储，仅授权人员可预览、替换。"
               >
-                {{ item.label }}<span v-if="form[item.key]" aria-label="已上传">✓</span>
-              </button>
-            </div>
-            <div class="vehicle-archive-edit__images">
-              <div
-                v-for="item in visibleCertificateItems.filter(
-                  (candidate) => candidate.key === activeImageKey
-                )"
-                :key="item.key"
-                class="vehicle-archive-edit__certificate-item"
-              >
-                <ArtUploadImage
-                  v-model="form[item.key]"
-                  :resource-tenant-id="documentTenantId"
-                  :upload-request="uploadVehicleDocument"
-                  :show-resource-picker="false"
-                  :file-size="15 * 1024 * 1024"
-                  file-type=".jpg,.jpeg,.png,.webp"
-                  :title="item.label"
-                  :size="120"
-                  :limit="1"
-                  :readonly="
-                    !documentTenantId ||
-                    (item.key !== 'vehiclePhotoUrl' && !canEditArchiveField('documents'))
-                  "
-                />
-                <div
-                  v-if="item.key === 'drivingLicenseFrontUrl' || item.key === 'operationLicenseUrl'"
-                  class="flex flex-wrap gap-2"
-                >
-                  <ElButton
-                    v-auth="'VehicleArchive:Ocr'"
-                    size="small"
-                    plain
-                    :loading="ocrBusyKey === item.key && ocrMode === 'ai'"
-                    :disabled="!form[item.key] || ocrBusyKey !== null"
-                    @click="recognizeCertificate(item.key)"
-                  >
-                    智能识别
-                  </ElButton>
-                  <ElButton
-                    v-auth="'VehicleArchive:Ocr'"
-                    size="small"
-                    plain
-                    :loading="ocrBusyKey === item.key && ocrMode === 'local'"
-                    :disabled="!form[item.key] || ocrBusyKey !== null"
-                    @click="recognizeCertificateLocally(item.key)"
-                  >
-                    本地识别
-                  </ElButton>
+                <template #actions>
+                  <ElTag type="primary" effect="light" round>
+                    {{ certificateFilledCount }}/{{ visibleCertificateItems.length }} 已完成
+                  </ElTag>
+                </template>
+                <div class="grid min-w-0 gap-6 lg:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.4fr)]">
+                  <section class="min-w-0" aria-label="车辆证件影像选择与上传">
+                    <div
+                      class="vehicle-archive-edit__image-switch"
+                      role="tablist"
+                      aria-label="车辆证件影像"
+                    >
+                      <button
+                        v-for="item in visibleCertificateItems"
+                        :key="item.key"
+                        type="button"
+                        role="tab"
+                        :aria-selected="activeImageKey === item.key"
+                        :class="{ 'is-current': activeImageKey === item.key }"
+                        @click="selectCertificateImage(item.key)"
+                      >
+                        <ArtSvgIcon
+                          :icon="form[item.key] ? 'ri:image-2-line' : 'ri:upload-2-line'"
+                          aria-hidden="true"
+                        />
+                        <span>{{ item.label }}</span>
+                        <ArtSvgIcon
+                          v-if="form[item.key]"
+                          icon="ri:checkbox-circle-fill"
+                          class="text-[var(--el-color-success)]"
+                          aria-label="已上传"
+                        />
+                      </button>
+                    </div>
+                    <div class="vehicle-archive-edit__certificate-preview">
+                      <div
+                        v-for="item in certificateUploadItems"
+                        v-show="activeImageKey === item.key"
+                        :key="item.key"
+                      >
+                        <component :is="Fields" :items="[item]" :actions="false" />
+                      </div>
+                    </div>
+                    <div
+                      v-if="
+                        activeImageKey === 'drivingLicenseFrontUrl' ||
+                        activeImageKey === 'operationLicenseUrl'
+                      "
+                      class="mt-3 flex flex-wrap gap-2"
+                    >
+                      <ElButton
+                        v-auth="'VehicleArchive:Ocr'"
+                        size="small"
+                        plain
+                        :loading="ocrBusyKey === activeImageKey && ocrMode === 'ai'"
+                        :disabled="!form[activeImageKey] || ocrBusyKey !== null"
+                        @click="recognizeCertificate(activeImageKey)"
+                      >
+                        智能识别
+                      </ElButton>
+                      <ElButton
+                        v-auth="'VehicleArchive:Ocr'"
+                        size="small"
+                        plain
+                        :loading="ocrBusyKey === activeImageKey && ocrMode === 'local'"
+                        :disabled="!form[activeImageKey] || ocrBusyKey !== null"
+                        @click="recognizeCertificateLocally(activeImageKey)"
+                      >
+                        本地识别
+                      </ElButton>
+                    </div>
+                  </section>
+                  <section class="min-w-0" aria-label="车辆证件字段核对">
+                    <div class="mb-3 flex items-center justify-between gap-3 text-sm">
+                      <strong>车辆证件核对</strong>
+                      <span class="text-xs text-[var(--el-text-color-secondary)]">{{
+                        activeCertificateLabel
+                      }}</span>
+                    </div>
+                    <ElTabs v-model="certificateTab">
+                      <ElTabPane
+                        v-for="group in certificateFieldGroups"
+                        :key="group.key"
+                        :name="group.key"
+                        :label="group.label"
+                      >
+                        <component :is="Fields" :items="group.items" :actions="false" />
+                      </ElTabPane>
+                    </ElTabs>
+                  </section>
                 </div>
-              </div>
-            </div>
-            <ElAlert
-              v-if="ocrError"
-              class="mt-3"
-              type="error"
-              :title="ocrError"
-              show-icon
-              @close="ocrError = ''"
-            />
-          </section>
+                <ElAlert
+                  v-if="ocrError"
+                  class="mt-3"
+                  type="error"
+                  :title="ocrError"
+                  show-icon
+                  @close="ocrError = ''"
+                />
+              </ArtSectionCard>
+              <component v-else :is="Fields" :items="certificateReviewFields" :actions="false" />
+            </template>
+          </ArtForm>
         </ElTabPane>
 
         <ElTabPane v-if="hasAuth('VehicleArchive:TabBody')" label="车身参数" name="body">
@@ -319,7 +342,7 @@
   import { useDraftAttachmentRemoval } from '@/hooks/core/useDraftAttachmentRemoval'
   import type { ComputedRef, Ref, UnwrapNestedRefs } from 'vue'
   import type { FormRules } from 'element-plus'
-  import { ElAlert, ElButton, ElCheckbox, ElMessage, ElTabPane, ElTabs } from 'element-plus'
+  import { ElAlert, ElButton, ElCheckbox, ElMessage, ElTabPane, ElTabs, ElTag } from 'element-plus'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtEmptyState from '@/components/core/feedback/art-empty-state/index.vue'
@@ -331,7 +354,7 @@
   import ArtTable from '@/components/core/tables/art-table/index.vue'
   import ArtUploadFile from '@/components/core/forms/art-upload-file/index.vue'
   import ArtSectionTitle from '@/components/core/surfaces/art-section-title/index.vue'
-  import ArtUploadImage from '@/components/core/forms/art-upload-image/index.vue'
+  import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
   import ArtSvgIcon from '@/components/core/base/art-svg-icon/index.vue'
   import ArtTooltip from '@/components/core/feedback/art-tooltip/index.vue'
   import OcrOriginalText from '@/components/business/ocr-original-text/index.vue'
@@ -502,6 +525,7 @@
   const ocrBusyKey = ref<ImageKey | null>(null)
   const ocrMode = ref<'ai' | 'local' | null>(null)
   const activeImageKey = ref<ImageKey>('drivingLicenseFrontUrl')
+  const certificateTab = ref('certificateFront')
   const submitIntent = ref(false)
   const ocrReplaceExisting = ref(false)
   const formTabs: FormTab[] = [
@@ -595,24 +619,34 @@
     }
   })
   const carrierOptions = shallowRef<CarrierOption[]>([])
-  const driverOptionsRefreshing = ref(false)
-  let driverOptionsRequest = 0
+  // Secure details omit tenant_id for ordinary users. Driver choices and
+  // uploads share the same resolved record tenant instead of a hidden input.
+  const documentTenantId = computed(
+    () =>
+      form.value.tenantId ??
+      tenantScopeStore.effectiveTenantId ??
+      userStore.getUserInfo.tenantId ??
+      ''
+  )
   const canFetchArchiveDrivers = computed(
     () =>
-      Boolean(form.value.tenantId) &&
+      Boolean(documentTenantId.value) &&
       (form.value.vehicleOwnership === 'self_operated' ||
         form.value.vehicleOwnership === 'individual_affiliation' ||
         Boolean(form.value.carrierId))
   )
+  const usesCarrierDrivers = (ownership: unknown): boolean =>
+    ownership === 'carrier' || ownership === 'third_party'
   const archiveDriverPlaceholder = (driverType: 'primary' | 'secondary'): string => {
-    if (!form.value.tenantId) return '请先选择所属租户'
+    if (!documentTenantId.value) return '当前租户信息不可用，请刷新后重试'
     if (!canFetchArchiveDrivers.value) return '请先选择所属承运商'
     const ownershipLabel =
       form.value.vehicleOwnership === 'self_operated'
         ? '自营'
         : form.value.vehicleOwnership === 'individual_affiliation'
           ? '个人挂靠'
-          : form.value.vehicleOwnership === 'carrier'
+          : form.value.vehicleOwnership === 'carrier' ||
+              form.value.vehicleOwnership === 'third_party'
             ? '承运商'
             : ''
     return driverType === 'primary'
@@ -628,30 +662,28 @@
       throw new Error('司机参选参数缺失')
     }
     const carrierId = typeof params.carrierId === 'string' ? params.carrierId : null
-    if (isScopedDriverOwnership(params.vehicleOwnership)) {
+    if (
+      isScopedDriverOwnership(params.vehicleOwnership) ||
+      params.vehicleOwnership === 'third_party'
+    ) {
       return fetchVmsAssetDriverReferences({
-        tenantId: typeof params.tenantId === 'string' ? params.tenantId : undefined,
+        tenantId: documentTenantId.value || undefined,
         vehicleId: typeof params.vehicleId === 'string' ? params.vehicleId : undefined,
-        vehicleOwnership: params.vehicleOwnership,
-        carrierId: params.vehicleOwnership === 'carrier' ? carrierId : null,
+        vehicleOwnership:
+          params.vehicleOwnership === 'third_party' ? 'carrier' : params.vehicleOwnership,
+        carrierId: usesCarrierDrivers(params.vehicleOwnership) ? carrierId : null,
         driverType: params.driverType
       })
     }
-    // 第三方物流及历史归属保持原有承运商司机参选规则。
+    // 历史归属保持原有参选规则。
     return fetchDriverOptions({ carrierId, driverType: params.driverType })
   }
   const reloadArchiveDriverOptions = async (): Promise<void> => {
-    const request = ++driverOptionsRequest
-    driverOptionsRefreshing.value = true
-    try {
-      await nextTick()
-      await Promise.all([
-        otherFormRef.value?.reloadOptions('primaryDriverId'),
-        otherFormRef.value?.reloadOptions('backupDriverIds')
-      ])
-    } finally {
-      if (request === driverOptionsRequest) driverOptionsRefreshing.value = false
-    }
+    await nextTick()
+    await Promise.all([
+      otherFormRef.value?.reloadOptions('primaryDriverId'),
+      otherFormRef.value?.reloadOptions('backupDriverIds')
+    ])
   }
   let companyRequest = 0
   const loadDefaultCompany = async (
@@ -717,13 +749,6 @@
       ElMessage.error(getFriendlySupabaseErrorMessage(error, '复制失败，请手动复制承运商名称'))
     }
   }
-  const documentTenantId = computed(
-    () =>
-      form.value.tenantId ??
-      tenantScopeStore.effectiveTenantId ??
-      userStore.getUserInfo.tenantId ??
-      ''
-  )
   const vehicleTypeContextKey = computed(
     () =>
       `${documentTenantId.value}:${tenantScopeStore.effectiveTenantId}:${tenantScopeStore.isAllTenants}:${tenantScopeStore.revision}:${userStore.getUserInfo.userId}:${userStore.getUserInfo.tenantId}`
@@ -802,10 +827,9 @@
     ],
     plateColor: [{ required: true, message: '请选择车牌颜色', trigger: 'change' }],
     vehicleOwnership: [{ required: true, message: '请选择车辆归属', trigger: 'change' }],
-    carrierId:
-      form.value.vehicleOwnership === 'carrier'
-        ? [{ required: true, message: '请选择所属承运商', trigger: 'change' }]
-        : [],
+    carrierId: usesCarrierDrivers(form.value.vehicleOwnership)
+      ? [{ required: true, message: '请选择所属承运商', trigger: 'change' }]
+      : [],
     isNewEnergy: [
       { required: true, type: 'boolean', message: '请选择是否新能源车', trigger: 'change' }
     ],
@@ -830,7 +854,7 @@
     class: 'vehicle-archive-edit__derived-input'
   }
 
-  const basicItems = computed<FormItem[]>(() =>
+  const basicFieldItems = computed<FormItem[]>(() =>
     [
       { label: '车辆基础信息', key: 'identitySection', type: 'divider', span: 24 },
       { label: '车牌号', key: 'plateNo', type: 'input' },
@@ -920,15 +944,15 @@
         props: {
           filterable: true,
           clearable: true,
-          placeholder:
-            form.value.vehicleOwnership === 'carrier' ? '请选择所属承运商' : '仅承运商车辆需要选择',
-          disabled: form.value.vehicleOwnership !== 'carrier',
+          placeholder: usesCarrierDrivers(form.value.vehicleOwnership)
+            ? '请选择所属承运商'
+            : '仅承运商与第三方物流车辆需要选择',
+          disabled: !usesCarrierDrivers(form.value.vehicleOwnership),
           onChange: (value?: string) => {
             const carrier = carrierOptions.value.find((item) => item.id === value)
             form.value.carrier = carrier ?? null
             if (carrier) {
               form.value.companyName = ''
-              form.value.vehicleOwnership = 'carrier'
             }
             clearSelectedDrivers()
             void reloadArchiveDriverOptions()
@@ -970,7 +994,7 @@
               void loadDefaultCompany(form.value.tenantId, 'self_operated').catch(() =>
                 ElMessage.error('法人公司加载失败，请手工填写所属公司或重新选择车辆归属重试')
               )
-            } else if (ownership === 'carrier') {
+            } else if (usesCarrierDrivers(ownership)) {
               form.value.companyName = ''
             } else {
               Object.assign(form.value, {
@@ -1209,11 +1233,11 @@
         span: 24,
         description: '上传车辆外观照片，便于调度和车管快速识别。',
         props: {
-          resourceTenantId: form.value.tenantId,
+          resourceTenantId: documentTenantId.value,
           title: '车辆图片',
           size: 120,
           limit: 1,
-          readonly: !form.value.tenantId || !hasAuth(savePermission.value)
+          readonly: !documentTenantId.value || !hasAuth(savePermission.value)
         }
       }
     ].map(applyVehicleFieldAccess)
@@ -1405,7 +1429,7 @@
         valueField: 'id',
         immediate: false,
         beforeFetch: () => ({
-          tenantId: form.value.tenantId,
+          tenantId: documentTenantId.value,
           vehicleId: form.value.id,
           vehicleOwnership: form.value.vehicleOwnership,
           carrierId: form.value.carrierId ?? undefined,
@@ -1420,8 +1444,11 @@
         props: {
           filterable: true,
           clearable: true,
-          disabled: !canFetchArchiveDrivers.value || driverOptionsRefreshing.value,
+          disabled: !canFetchArchiveDrivers.value,
           placeholder: archiveDriverPlaceholder('primary'),
+          noDataText: usesCarrierDrivers(form.value.vehicleOwnership)
+            ? '该承运商暂无可选主司机，请核对司机归属、类型及启用状态'
+            : '暂无符合当前车辆归属的司机，请先完善司机归属',
           onVisibleChange: (visible: boolean) => {
             if (visible && canFetchArchiveDrivers.value)
               void otherFormRef.value?.reloadOptions('primaryDriverId')
@@ -1455,7 +1482,7 @@
         valueField: 'id',
         immediate: false,
         beforeFetch: () => ({
-          tenantId: form.value.tenantId,
+          tenantId: documentTenantId.value,
           vehicleId: form.value.id,
           vehicleOwnership: form.value.vehicleOwnership,
           carrierId: form.value.carrierId ?? undefined,
@@ -1473,8 +1500,11 @@
           multiple: true,
           collapseTags: true,
           collapseTagsTooltip: true,
-          disabled: !canFetchArchiveDrivers.value || driverOptionsRefreshing.value,
+          disabled: !canFetchArchiveDrivers.value,
           placeholder: archiveDriverPlaceholder('secondary'),
+          noDataText: usesCarrierDrivers(form.value.vehicleOwnership)
+            ? '该承运商暂无可选备用司机，请核对司机归属、类型及启用状态'
+            : '暂无符合当前车辆归属的司机，请先完善司机归属',
           onVisibleChange: (visible: boolean) => {
             if (visible && canFetchArchiveDrivers.value)
               void otherFormRef.value?.reloadOptions('backupDriverIds')
@@ -1583,6 +1613,80 @@
   const certificateFilledCount = computed(
     () => visibleCertificateItems.value.filter((item) => Boolean(form.value[item.key])).length
   )
+  const activeCertificateLabel = computed(
+    () => certificateItems.find((item) => item.key === activeImageKey.value)?.label ?? ''
+  )
+  const certificateFieldKeys = {
+    certificateFront: ['vin', 'manufacturer', 'brandModel', 'registerDate', 'issueDate'],
+    certificateBack: ['chassisNo', 'registrationCertNo', 'purchaseCertNo'],
+    certificateOperation: ['operationCertNo', 'businessType', 'startUseDate']
+  } satisfies Record<string, Array<keyof VehicleArchiveForm>>
+  const certificateReviewFields = computed(() =>
+    basicFieldItems.value.filter((item) =>
+      Object.values(certificateFieldKeys).some((keys) => keys.some((key) => key === item.key))
+    )
+  )
+  const basicGeneralItems = computed(() =>
+    basicFieldItems.value.filter(
+      (item) => item.key !== 'documentsSection' && !certificateReviewFields.value.includes(item)
+    )
+  )
+  const certificateFieldGroups = computed(() =>
+    [
+      { key: 'certificateFront', label: '行驶证主页' },
+      { key: 'certificateBack', label: '副页与登记' },
+      { key: 'certificateOperation', label: '营运证信息' }
+    ].map((group) => ({
+      ...group,
+      items: certificateReviewFields.value
+        .filter((item) =>
+          certificateFieldKeys[group.key as keyof typeof certificateFieldKeys].some(
+            (key) => key === item.key
+          )
+        )
+        .map((item) => ({ ...item, span: 12 }))
+    }))
+  )
+  const certificateUploadItems = computed<FormItem[]>(() =>
+    certificateItems.map((item) => ({
+      key: item.key,
+      label: '',
+      type: 'uploadImage',
+      span: 24,
+      hidden: !canViewArchiveField('documents'),
+      props: {
+        title: item.label,
+        width: '100%',
+        height: 240,
+        previewFit: 'contain',
+        limit: 1,
+        resourceTenantId: documentTenantId.value,
+        uploadRequest: uploadVehicleDocument,
+        showResourcePicker: false,
+        fileSize: 15 * 1024 * 1024,
+        fileType: '.jpg,.jpeg,.png,.webp',
+        readonly: !documentTenantId.value || !canManageArchiveAttachments.value
+      }
+    }))
+  )
+  const basicItems = computed<FormItem[]>(() => [
+    ...basicGeneralItems.value,
+    ...certificateUploadItems.value,
+    ...certificateFieldGroups.value.flatMap((group): FormItem[] => [
+      { key: group.key, label: group.label, type: 'tab' },
+      ...group.items
+    ])
+  ])
+  function selectCertificateImage(key: ImageKey): void {
+    activeImageKey.value = key
+    certificateTab.value =
+      key === 'operationLicenseUrl'
+        ? 'certificateOperation'
+        : key === 'drivingLicenseBackUrl' || key === 'drivingLicenseBackReverseUrl'
+          ? 'certificateBack'
+          : 'certificateFront'
+    ocrError.value = ''
+  }
 
   type OcrField = keyof VehicleDocumentOcrResult['document']
   interface OcrReviewRow {
@@ -2163,62 +2267,24 @@
       }
     }
 
-    &__certificate-panel {
-      padding: 18px;
-      background: var(--el-fill-color-extra-light);
-      border: 1px solid var(--el-border-color-lighter);
-      border-radius: var(--el-border-radius-base);
-    }
-
-    &__certificate-heading {
-      display: flex;
-      gap: 16px;
-      align-items: flex-start;
-      justify-content: space-between;
-      margin-bottom: 18px;
-
-      > div {
-        min-width: 0;
-
-        p {
-          margin: 4px 0 0;
-          font-size: 12px;
-          color: var(--el-text-color-secondary);
-        }
-      }
-
-      > span {
-        flex: none;
-        padding: 5px 10px;
-        font-size: 12px;
-        color: var(--theme-color);
-        background: color-mix(in srgb, var(--theme-color) 9%, var(--el-bg-color));
-        border-radius: 999px;
-      }
-    }
-
-    &__images {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr);
-      gap: 16px;
-      justify-items: start;
-    }
-
     &__image-switch {
-      display: flex;
-      flex-wrap: wrap;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 8px;
       margin-bottom: 16px;
 
       button {
-        display: inline-flex;
-        gap: 6px;
+        display: flex;
+        gap: var(--art-control-icon-gap);
         align-items: center;
-        min-height: 36px;
-        padding: 6px 12px;
+        min-width: 0;
+        min-height: 40px;
+        padding: 8px 10px;
+        font-size: 13px;
         color: var(--el-text-color-regular);
+        text-align: left;
         cursor: pointer;
-        background: var(--el-bg-color);
+        background: var(--default-box-color);
         border: 1px solid var(--el-border-color-light);
         border-radius: var(--art-control-radius);
 
@@ -2226,7 +2292,7 @@
           font-weight: 600;
           color: var(--el-color-primary);
           background: var(--el-color-primary-light-9);
-          border-color: var(--el-color-primary-light-5);
+          border-color: var(--theme-color);
         }
 
         &:focus-visible {
@@ -2235,17 +2301,27 @@
         }
 
         span {
-          color: var(--el-color-success);
+          flex: 1;
+          min-width: 0;
+          overflow-wrap: anywhere;
+        }
+
+        .art-svg-icon {
+          flex: none;
+          font-size: 16px;
         }
       }
     }
 
-    &__certificate-item {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      align-items: flex-start;
+    &__certificate-preview {
       min-width: 0;
+      padding: var(--art-space-4);
+      background: var(--art-gray-100);
+      border-radius: var(--art-surface-radius);
+
+      :deep(.el-form-item) {
+        margin-bottom: 0;
+      }
     }
 
     &__ocr-review {

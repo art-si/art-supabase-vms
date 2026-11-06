@@ -63,6 +63,11 @@ test('vehicle archive ownership keeps carrier and company fields mutually exclus
   assert.equal(payload.carrierId, 'carrier-1')
   assert.equal(payload.companyName, null)
 
+  form.vehicleOwnership = 'third_party'
+  payload = sanitizeVehicleArchivePayload(form)
+  assert.equal(payload.carrierId, 'carrier-1')
+  assert.equal(payload.companyName, null)
+
   form.vehicleOwnership = 'individual_affiliation'
   payload = sanitizeVehicleArchivePayload(form)
   assert.equal(payload.carrierId, null)
