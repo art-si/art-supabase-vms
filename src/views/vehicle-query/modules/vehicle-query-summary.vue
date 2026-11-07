@@ -10,7 +10,7 @@
     <ElButton
       v-if="showBack"
       text
-      circle
+      class="size-8 shrink-0 p-0"
       aria-label="返回车辆查询"
       title="返回车辆查询"
       @click="emit('back')"

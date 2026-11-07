@@ -1,16 +1,38 @@
 <template>
-  <ArtDialog ref="dialogRef" size="xl">
+  <ArtDialog
+    ref="dialogRef"
+    size="xl"
+    :confirm-disabled="stockError || !availableParts.length || formDisabled"
+    @close="invalidateSession"
+  >
     <template #subtitle>选择车辆和领用配件；提交后自动生成单号并扣减库存。</template>
     <ElAlert
-      v-if="stockError"
+      v-if="!activeOperation()"
+      class="mb-4"
+      type="warning"
+      :closable="false"
+      show-icon
+      title="操作权限或租户范围已变化，请关闭后重新打开领用单"
+    />
+    <ElAlert
+      v-else-if="stockError"
       class="mb-4"
       type="warning"
       :closable="false"
       show-icon
       title="配件库存加载失败，请关闭后重试"
     />
+    <ElAlert
+      v-else-if="!availableParts.length"
+      class="mb-4"
+      type="info"
+      :closable="false"
+      show-icon
+      title="暂无可领用库存，请先登记配件入库后重新打开"
+    />
     <ArtForm
       ref="formRef"
+      :disabled="formDisabled"
       v-model="form.data"
       :items="form.items"
       :rules="form.rules"
@@ -21,6 +43,7 @@
         <VmsDriverSelect
           :model-value="form.data.driverId || null"
           :vehicle-id="form.data.vehicleId"
+          :disabled="formDisabled"
           :driver-name="form.data.driverName"
           @change="handleDriverChange"
         />
@@ -31,7 +54,12 @@
             <p class="text-xs text-[var(--el-text-color-secondary)]"
               >从库存中选择配件；物料编码、规格和品牌自动带入。</p
             >
-            <ElButton type="primary" plain :disabled="!availableParts.length" @click="addLine">
+            <ElButton
+              type="primary"
+              plain
+              :disabled="formDisabled || !availableParts.length"
+              @click="addLine"
+            >
               <span class="art-icon-label"><ArtSvgIcon icon="ri:add-line" />添加明细</span>
             </ElButton>
           </div>
@@ -85,6 +113,7 @@
             /></template>
             <template #imageUrl="{ row }"
               ><ArtUploadImage
+                :key="`${form.data.vehicleId}:${row.key}`"
                 v-model="row.imageUrl"
                 :resource-tenant-id="selectedVehicleTenantId"
                 title="配件照片"
@@ -94,13 +123,14 @@
                 file-type="image/png,image/jpeg,image/webp"
                 :upload-request="uploadPartImage"
                 :show-resource-picker="false"
-                :readonly="!selectedVehicleTenantId"
+                :readonly="formDisabled || !selectedVehicleTenantId"
             /></template>
             <template #operation="{ row }"
               ><ElButton
                 v-if="form.data.lines.length > 1"
                 type="danger"
                 text
+                :disabled="formDisabled"
                 aria-label="移除领用明细"
                 @click="removeLine(row.key)"
                 >移除</ElButton
@@ -114,7 +144,8 @@
 </template>
 
 <script setup lang="ts">
-  import type { ComputedRef } from 'vue'
+  import { unref, type ComputedRef } from 'vue'
+  import { cloneDeep, isEqual, omit } from 'lodash-es'
   import dayjs from 'dayjs'
   import type { FormRules } from 'element-plus'
   import {
@@ -129,6 +160,9 @@
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import { useDocumentNumberRule } from '@/hooks/core/useDocumentNumberRule'
+  import { useAuth } from '@/hooks/core/useAuth'
+  import { useTenantOperationGuard } from '@/hooks/core/useTenantOperationGuard'
+  import { useArtOverlaySession } from '@/hooks/core/useArtOverlay'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
@@ -209,6 +243,18 @@
   ]
   const availableParts = ref<VehiclePartStock[]>([])
   const stockError = ref(false)
+  const { hasAuth } = useAuth()
+  const captureOperation = useTenantOperationGuard('VmsPartIssue:Add')
+  const activeOperation = shallowRef<() => boolean>(() => true)
+  const session = useArtOverlaySession(() => Boolean(unref(dialogRef.value?.visible)))
+  const stockRequests = useArtOverlaySession(() => Boolean(unref(dialogRef.value?.visible)))
+  const saving = ref(false)
+  const formDisabled = computed(() => saving.value || !activeOperation.value())
+  const invalidateSession = (): void => {
+    session.invalidate()
+    stockRequests.invalidate()
+    saving.value = false
+  }
   const selectedVehicleTenantId = ref('')
   const issueNumber = useDocumentNumberRule(
     'vehicle.part_issue',
@@ -243,7 +289,9 @@
           disabled: true,
           placeholder: issueNumber.rule.value?.preview || '选择车辆后，提交时自动生成'
         },
-        description: issueNumber.description.value
+        description: selectedVehicleTenantId.value
+          ? issueNumber.description.value
+          : '选择车辆后，按所属租户匹配编号规则。'
       },
       {
         label: '领用车辆',
@@ -299,11 +347,6 @@
   ]
   const handleVehicleChange = (_value: unknown, rows: DataSelectRecord[]): void => {
     const vehicle = rows[0] as Api.Vms.ArchiveManage.VehicleArchive | undefined
-    if (form.data.vehicleId !== (vehicle?.id || '')) {
-      form.data.lines.forEach((line) => {
-        line.imageUrl = ''
-      })
-    }
     Object.assign(form.data, {
       vehicleId: vehicle?.id || '',
       driverId: vehicle?.primaryDriverId || '',
@@ -337,12 +380,23 @@
   const removeLine = (key: string): void => {
     form.data.lines = form.data.lines.filter((line) => line.key !== key)
   }
-  const validateLines = async (): Promise<boolean> => {
+  watch(
+    [() => form.data.vehicleId, selectedVehicleTenantId],
+    () => {
+      idempotencyKey = crypto.randomUUID()
+      form.data.lines.forEach((line) => {
+        line.imageUrl = ''
+      })
+    },
+    { flush: 'sync' }
+  )
+  const validateLines = async (isCurrent: () => boolean): Promise<boolean> => {
     if (!form.data.lines.length) {
       ElMessage.warning('请至少添加一条领用明细')
       return false
     }
     const validation = await lineTableRef.value?.validate()
+    if (!isCurrent()) return false
     if (!validation?.valid) {
       if (validation?.firstError) ElMessage.warning(validation.firstError.message)
       return false
@@ -360,14 +414,31 @@
     return true
   }
   const handleConfirm = async (): Promise<boolean> => {
-    if (!(await validateArtFormForSubmit(formRef.value)) || !(await validateLines())) return false
+    const version = session.version.value
+    const key = idempotencyKey
+    const draft = cloneDeep(omit(form.data, ['documentNo', 'driverName']))
+    const isCurrentContext = () =>
+      session.isCurrent(version) && activeOperation.value() && idempotencyKey === key
+    const isCurrent = () =>
+      isCurrentContext() && isEqual(draft, omit(form.data, ['documentNo', 'driverName']))
+    const ensureCurrent = () => {
+      if (!isCurrentContext()) return false
+      if (isCurrent()) return true
+      ElMessage.warning('领用内容已变化，请重新确认后提交')
+      return false
+    }
+    if (!ensureCurrent() || stockError.value || !availableParts.value.length) return false
     try {
-      await createVehiclePartIssue({
-        vehicleId: form.data.vehicleId,
-        driverId: form.data.driverId || undefined,
-        remark: form.data.remark,
-        idempotencyKey,
-        lines: form.data.lines.map((line) => ({
+      const formValid = await validateArtFormForSubmit(formRef.value)
+      if (!ensureCurrent() || !formValid) return false
+      const linesValid = await validateLines(isCurrent)
+      if (!ensureCurrent() || !linesValid) return false
+      const payload: Parameters<typeof createVehiclePartIssue>[0] = {
+        vehicleId: draft.vehicleId,
+        driverId: draft.driverId || undefined,
+        remark: draft.remark,
+        idempotencyKey: key,
+        lines: draft.lines.map((line) => ({
           partId: line.partId,
           issuedQty: line.issuedQty,
           issuedAt: line.issuedAt,
@@ -375,33 +446,66 @@
             ? privateAttachmentPathFromSignedUrl(line.imageUrl, 'vms-part-private')
             : undefined
         }))
-      })
+      }
+      saving.value = true
+      await createVehiclePartIssue(payload, { showMessage: false, showErrorMessage: false })
       emit('success')
-      return true
+      if (isCurrent()) ElMessage.success('配件领用单已创建')
+      return isCurrent()
     } catch (error) {
-      notifyFriendlyError(error, '配件领用失败，请核对车辆和库存后重试')
+      if (isCurrent()) notifyFriendlyError(error, '配件领用失败，请核对车辆和库存后重试')
       return false
+    } finally {
+      if (session.version.value === version) saving.value = false
+    }
+  }
+  const loadStock = async (): Promise<void> => {
+    if (!activeOperation.value()) {
+      dialogRef.value?.setLoading(false)
+      return
+    }
+    const version = session.version.value
+    const request = stockRequests.invalidate()
+    const ownsRequest = () => session.isCurrent(version) && stockRequests.isCurrent(request)
+    const isCurrent = () => ownsRequest() && activeOperation.value()
+    stockError.value = false
+    dialogRef.value?.setLoading(true)
+    try {
+      const result = await fetchVehiclePartStock(undefined, { showErrorMessage: false })
+      if (!isCurrent()) return
+      if (result.error) throw result.error
+      availableParts.value = result.data
+    } catch {
+      if (isCurrent()) {
+        stockError.value = true
+        availableParts.value = []
+      }
+    } finally {
+      if (ownsRequest()) dialogRef.value?.setLoading(false)
     }
   }
   const handleOpen = async (): Promise<void> => {
+    if (!hasAuth('VmsPartIssue:Add')) {
+      ElMessage.warning('当前账号没有配件领用权限，请联系管理员')
+      return
+    }
+    invalidateSession()
+    activeOperation.value = captureOperation()
     Object.assign(form.data, initialForm())
     form.vehicleSelection = []
     selectedVehicleTenantId.value = ''
     stockError.value = false
+    availableParts.value = []
     idempotencyKey = crypto.randomUUID()
-    try {
-      const result = await fetchVehiclePartStock()
-      if (result.error) throw result.error
-      availableParts.value = result.data
-    } catch {
-      stockError.value = true
-      availableParts.value = []
-    }
-    await nextTick()
-    formRef.value?.clearValidate()
     await dialogRef.value?.handleOpen(undefined, {
       title: '新建领用单',
       confirmText: '确认领用',
+      loading: true,
+      loadingText: '正在加载配件库存…',
+      onOpen: async () => {
+        formRef.value?.clearValidate()
+        await loadStock()
+      },
       onConfirm: handleConfirm
     })
   }

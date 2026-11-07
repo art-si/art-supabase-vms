@@ -378,6 +378,8 @@
           <img
             src={imagePreviews.value[row.imagePath || '']}
             alt={`${row.cardNo} 卡面照片`}
+            width={36}
+            height={36}
             class="size-9 rounded-[var(--el-border-radius-base)] object-cover"
           />
         ) : (

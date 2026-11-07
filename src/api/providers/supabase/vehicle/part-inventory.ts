@@ -1,5 +1,6 @@
 import { useSupabase } from '@/hooks/core/useSupabase'
 import { normalizeNullableText } from '@/utils/form/normalize'
+import type { ApiFeedbackOptions } from '@/types/api/request'
 
 const { supabase, responseHandle } = useSupabase()
 
@@ -119,10 +120,13 @@ export interface VehiclePartStockMovement {
   remark: string | null
 }
 
-export async function fetchVehiclePartStock(partId?: string) {
+export async function fetchVehiclePartStock(
+  partId?: string,
+  options: Pick<ApiFeedbackOptions, 'showErrorMessage'> = {}
+) {
   const result = await responseHandle<{ records: VehiclePartStock[]; total: number }>(
     () => supabase.rpc('vms_list_part_stock_secure', { p_part_id: partId || null }),
-    { showErrorMessage: true }
+    { showErrorMessage: options.showErrorMessage ?? true }
   )
   return {
     data: result.data?.records ?? [],
@@ -204,18 +208,21 @@ export async function postVehiclePartStockReceipt(payload: {
   )
 }
 
-export async function createVehiclePartIssue(payload: {
-  vehicleId: string
-  driverId?: string
-  remark?: string
-  idempotencyKey: string
-  lines: Array<{
-    partId: string
-    issuedQty: number
-    issuedAt: string
-    imagePath?: string
-  }>
-}) {
+export async function createVehiclePartIssue(
+  payload: {
+    vehicleId: string
+    driverId?: string
+    remark?: string
+    idempotencyKey: string
+    lines: Array<{
+      partId: string
+      issuedQty: number
+      issuedAt: string
+      imagePath?: string
+    }>
+  },
+  options: ApiFeedbackOptions = {}
+) {
   return await responseHandle<string>(
     () =>
       supabase.rpc('vms_create_part_issue_secure', {
@@ -232,7 +239,11 @@ export async function createVehiclePartIssue(payload: {
           }))
         }
       }),
-    { showMessage: true, breakReturn: true }
+    {
+      showMessage: options.showMessage ?? true,
+      showErrorMessage: options.showErrorMessage ?? options.showMessage ?? true,
+      breakReturn: true
+    }
   )
 }
 
