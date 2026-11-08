@@ -337,6 +337,8 @@
 </template>
 
 <script setup lang="tsx">
+  import { vehicleDriverSelectProps } from '@/components/business/vehicle-driver-select/columns'
+  import { fetchVehicleDriverChoices } from '@/api/vehicle-driver-select'
   import BusinessAttachmentRowActions from '@/components/business/business-attachment-row-actions/index.vue'
   import { focusFirstInvalidFormField } from '@/utils/form/validation'
   import { useDraftAttachmentRemoval } from '@/hooks/core/useDraftAttachmentRemoval'
@@ -346,11 +348,7 @@
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtEmptyState from '@/components/core/feedback/art-empty-state/index.vue'
-  import ArtForm, {
-    type FormItem,
-    type FormItemApiParams,
-    type FormItemOption
-  } from '@/components/core/forms/art-form/index.vue'
+  import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
   import ArtTable from '@/components/core/tables/art-table/index.vue'
   import ArtUploadFile from '@/components/core/forms/art-upload-file/index.vue'
   import ArtSectionTitle from '@/components/core/surfaces/art-section-title/index.vue'
@@ -369,14 +367,11 @@
     setDefaultTrailer,
     fetchVmsAssetCompanyOptions,
     fetchVmsAssetCarrierReferences,
-    fetchVmsAssetDriverReferences,
-    fetchDriverOptions,
     fetchVehicleArchiveDetail,
     submitVehicleArchiveForApproval,
     uploadVehiclePrivateDocument,
     type VmsCarrierReference,
     type VmsDriverReference,
-    type VmsAssetDriverOwnership,
     type VehicleDocumentOcrType,
     type VehicleDocumentOcrResult,
     type TrailerOption
@@ -573,14 +568,6 @@
       ? '当前账号可查看识别结果；用识别结果修改已有车辆档案需平台超级管理员。'
       : `当前账号可查看识别结果；填入表单需车辆档案${isEdit.value ? '编辑' : '新增'}权限。`
   )
-  const selectedPrimaryDriverOptions = computed<FormItemOption[]>(() => {
-    const driver = getSelectedPrimaryDriver()
-    return driver ? [createDriverOption(driver)] : []
-  })
-  const selectedSecondaryDriverOptions = computed<FormItemOption[]>(() =>
-    getSelectedBackupDrivers().map(createDriverOption)
-  )
-
   const options: UnwrapNestedRefs<OptionGroup> = reactive<OptionGroup>({
     vehicleOwnership: computed(() =>
       (getDictMap.value.vehicleOwnership ?? []).map((item) => ({
@@ -653,30 +640,23 @@
       ? `请选择${ownershipLabel}主司机`
       : `请选择一名或多名${ownershipLabel}备用司机`
   }
-  const isScopedDriverOwnership = (ownership: unknown): ownership is VmsAssetDriverOwnership =>
-    ownership === 'self_operated' ||
-    ownership === 'carrier' ||
-    ownership === 'individual_affiliation'
-  const fetchArchiveDriverOptions = (params: FormItemApiParams) => {
-    if (!params || (params.driverType !== 'primary' && params.driverType !== 'secondary')) {
-      throw new Error('司机参选参数缺失')
-    }
-    const carrierId = typeof params.carrierId === 'string' ? params.carrierId : null
-    if (
-      isScopedDriverOwnership(params.vehicleOwnership) ||
-      params.vehicleOwnership === 'third_party'
-    ) {
-      return fetchVmsAssetDriverReferences({
-        tenantId: documentTenantId.value || undefined,
-        vehicleId: typeof params.vehicleId === 'string' ? params.vehicleId : undefined,
-        vehicleOwnership:
-          params.vehicleOwnership === 'third_party' ? 'carrier' : params.vehicleOwnership,
-        carrierId: usesCarrierDrivers(params.vehicleOwnership) ? carrierId : null,
-        driverType: params.driverType
-      })
-    }
-    // 历史归属保持原有参选规则。
-    return fetchDriverOptions({ carrierId, driverType: params.driverType })
+  const fetchArchiveDriverOptions = async (
+    params: DataSelectFetchParams,
+    driverType: 'primary' | 'secondary'
+  ) => {
+    if (!canFetchArchiveDrivers.value) return { data: [], total: 0 }
+    return fetchVehicleDriverChoices<DriverOption>('archive_driver', params, {
+      tenantId: documentTenantId.value,
+      vehicleId: form.value.id,
+      vehicleOwnership:
+        form.value.vehicleOwnership === 'third_party' ? 'carrier' : form.value.vehicleOwnership,
+      carrierId:
+        form.value.vehicleOwnership === 'self_operated' ||
+        form.value.vehicleOwnership === 'individual_affiliation'
+          ? null
+          : form.value.carrierId,
+      driverType
+    })
   }
   const reloadArchiveDriverOptions = async (): Promise<void> => {
     await nextTick()
@@ -1420,47 +1400,17 @@
       {
         label: '主司机',
         key: 'primaryDriverId',
-        type: 'select',
+        type: 'dataSelect',
         span: 8,
-        api: fetchArchiveDriverOptions,
-        options: selectedPrimaryDriverOptions.value,
-        resultField: 'data',
-        labelField: 'driverName',
-        valueField: 'id',
-        immediate: false,
-        beforeFetch: () => ({
-          tenantId: documentTenantId.value,
-          vehicleId: form.value.id,
-          vehicleOwnership: form.value.vehicleOwnership,
-          carrierId: form.value.carrierId ?? undefined,
-          driverType: 'primary'
-        }),
-        shouldFetch: () => canFetchArchiveDrivers.value,
-        afterFetch: syncPrimaryDriverOptions,
-        labelFn: (option: unknown) => {
-          const driver = option as DriverOption
-          return driver.phone ? `${driver.driverName}（${driver.phone}）` : driver.driverName
-        },
         props: {
-          filterable: true,
-          clearable: true,
+          ...vehicleDriverSelectProps('driver'),
+          apiFn: (params: DataSelectFetchParams) => fetchArchiveDriverOptions(params, 'primary'),
+          selectedData: getSelectedPrimaryDriver() ? [getSelectedPrimaryDriver()] : [],
           disabled: !canFetchArchiveDrivers.value,
           placeholder: archiveDriverPlaceholder('primary'),
-          noDataText: usesCarrierDrivers(form.value.vehicleOwnership)
-            ? '该承运商暂无可选主司机，请核对司机归属、类型及启用状态'
-            : '暂无符合当前车辆归属的司机，请先完善司机归属',
-          onVisibleChange: (visible: boolean) => {
-            if (visible && canFetchArchiveDrivers.value)
-              void otherFormRef.value?.reloadOptions('primaryDriverId')
-          },
-          onChange: (value?: string) => {
-            if (!value) {
-              form.value.primaryDriver = null
-              form.value.primaryDriverName = ''
-              form.value.primaryDriverPhone = ''
-              return
-            }
-            const driver = driverCache.value.get(value)
+          onChange: (_value: unknown, rows: DriverOption[]) => {
+            const driver = rows[0]
+            if (driver) driverCache.value.set(driver.id, driver)
             form.value.primaryDriver = driver ?? null
             form.value.primaryDriverName = driver?.driverName ?? ''
             form.value.primaryDriverPhone = driver?.phone ?? ''
@@ -1472,44 +1422,20 @@
       {
         label: '备用司机',
         key: 'backupDriverIds',
-        type: 'select',
+        type: 'dataSelect',
         span: 24,
         description: '可绑定多名轮班司机；列表首位同步为默认备用司机。',
-        api: fetchArchiveDriverOptions,
-        options: selectedSecondaryDriverOptions.value,
-        resultField: 'data',
-        labelField: 'driverName',
-        valueField: 'id',
-        immediate: false,
-        beforeFetch: () => ({
-          tenantId: documentTenantId.value,
-          vehicleId: form.value.id,
-          vehicleOwnership: form.value.vehicleOwnership,
-          carrierId: form.value.carrierId ?? undefined,
-          driverType: 'secondary'
-        }),
-        shouldFetch: () => canFetchArchiveDrivers.value,
-        afterFetch: syncSecondaryDriverOptions,
-        labelFn: (option: unknown) => {
-          const driver = option as DriverOption
-          return driver.phone ? `${driver.driverName}（${driver.phone}）` : driver.driverName
-        },
         props: {
-          filterable: true,
-          clearable: true,
+          ...vehicleDriverSelectProps('driver'),
           multiple: true,
-          collapseTags: true,
-          collapseTagsTooltip: true,
+          apiFn: (params: DataSelectFetchParams) => fetchArchiveDriverOptions(params, 'secondary'),
+          selectedData: getSelectedBackupDrivers(),
           disabled: !canFetchArchiveDrivers.value,
           placeholder: archiveDriverPlaceholder('secondary'),
-          noDataText: usesCarrierDrivers(form.value.vehicleOwnership)
-            ? '该承运商暂无可选备用司机，请核对司机归属、类型及启用状态'
-            : '暂无符合当前车辆归属的司机，请先完善司机归属',
-          onVisibleChange: (visible: boolean) => {
-            if (visible && canFetchArchiveDrivers.value)
-              void otherFormRef.value?.reloadOptions('backupDriverIds')
-          },
-          onChange: (value?: string[]) => syncBackupDriverSelection(value ?? [])
+          onChange: (_value: unknown, rows: DriverOption[]) => {
+            rows.forEach((driver) => driverCache.value.set(driver.id, driver))
+            syncBackupDriverSelection(rows.map((driver) => driver.id))
+          }
         }
       },
       { label: '运营与设备', key: 'otherOperationsSection', type: 'divider', span: 24 },
@@ -1525,37 +1451,6 @@
       { label: '服务结束时间', key: 'serviceEndTime', type: 'date', span: 12, props: dateProps }
     ].map(applyVehicleFieldAccess)
   )
-
-  function syncPrimaryDriverOptions(result: unknown): unknown {
-    const selected = getSelectedPrimaryDriver()
-    return syncDriverOptions(result, selected ? [selected] : [])
-  }
-
-  function syncSecondaryDriverOptions(result: unknown): unknown {
-    return syncDriverOptions(result, getSelectedBackupDrivers())
-  }
-
-  function syncDriverOptions(result: unknown, selectedDrivers: DriverOption[]): unknown {
-    if (!result || typeof result !== 'object') return result
-
-    const data = (result as { data?: DriverOption[] }).data
-    if (Array.isArray(data)) {
-      const nextData = [
-        ...selectedDrivers.filter((driver) => !data.some((item) => item.id === driver.id)),
-        ...data
-      ]
-      driverCache.value = new Map([
-        ...driverCache.value,
-        ...nextData.map((item): [string, DriverOption] => [item.id, item])
-      ])
-      return {
-        ...(result as Record<string, unknown>),
-        data: nextData
-      }
-    }
-
-    return result
-  }
 
   function getSelectedPrimaryDriver(): DriverOption | undefined {
     if (!form.value.primaryDriverId) return undefined
@@ -1589,14 +1484,6 @@
     form.value.secondaryDriver = form.value.backupDrivers[0] ?? null
     form.value.secondaryDriverName = form.value.secondaryDriver?.driverName ?? ''
     form.value.secondaryDriverPhone = form.value.secondaryDriver?.phone ?? ''
-  }
-
-  function createDriverOption(driver: DriverOption): FormItemOption {
-    return {
-      ...driver,
-      label: driver.phone ? `${driver.driverName}（${driver.phone}）` : driver.driverName,
-      value: driver.id
-    }
   }
 
   const certificateItems: Array<{ key: ImageKey; label: string }> = [

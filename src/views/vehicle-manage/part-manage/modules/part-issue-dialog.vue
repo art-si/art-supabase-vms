@@ -39,15 +39,6 @@
       :span="12"
       label-width="102px"
     >
-      <template #driverId>
-        <VmsDriverSelect
-          :model-value="form.data.driverId || null"
-          :vehicle-id="form.data.vehicleId"
-          :disabled="formDisabled"
-          :driver-name="form.data.driverName"
-          @change="handleDriverChange"
-        />
-      </template>
       <template #lines>
         <div class="space-y-3">
           <div class="flex items-center justify-between gap-3">
@@ -144,6 +135,12 @@
 </template>
 
 <script setup lang="ts">
+  import { fetchVehicleDriverChoices } from '@/api/vehicle-driver-select'
+  import type { DataSelectFetchParams } from '@/components/core/forms/art-data-select/types'
+  import {
+    vehicleDriverColumns,
+    vehicleDriverSelectProps
+  } from '@/components/business/vehicle-driver-select/columns'
   import { unref, type ComputedRef } from 'vue'
   import { cloneDeep, isEqual, omit } from 'lodash-es'
   import dayjs from 'dayjs'
@@ -170,7 +167,6 @@
   import type { ColumnOption } from '@/types'
   import ArtUploadImage from '@/components/core/forms/art-upload-image/index.vue'
   import type {
-    DataSelectColumn,
     DataSelectKey,
     DataSelectRecord
   } from '@/components/core/forms/art-data-select/types'
@@ -181,7 +177,6 @@
     type VehiclePartStock,
     type VmsDriverReference
   } from '@vms/api'
-  import VmsDriverSelect from '../../../components/vms-driver-select.vue'
   import {
     privateAttachmentPathFromSignedUrl,
     uploadPrivateAttachment
@@ -315,6 +310,8 @@
           labelKey: 'plateNo',
           descriptionKey: 'companyName',
           title: '选择领用车辆',
+          dialogWidth: 'xl',
+          showTableHeader: true,
           searchPlaceholder: '输入车牌号或所属公司',
           emptyText: '暂无可选车辆',
           emptyDescription: '请先维护并审批车辆档案。',
@@ -323,7 +320,27 @@
           showSelectedPanel: false
         }
       },
-      { label: '领用司机', key: 'driverId', span: 12 },
+      {
+        label: '领用司机',
+        key: 'driverId',
+        span: 12,
+        type: 'dataSelect',
+        props: {
+          ...vehicleDriverSelectProps('driver'),
+          title: '选择驾驶员',
+          apiFn: (params: DataSelectFetchParams) =>
+            fetchVehicleDriverChoices<VmsDriverReference>('vehicle_driver', params, {
+              vehicleId: form.data.vehicleId
+            }),
+          selectedData: form.data.driverId
+            ? [{ id: form.data.driverId, driverName: form.data.driverName }]
+            : [],
+          disabled: !form.data.vehicleId || formDisabled.value,
+          placeholder: form.data.vehicleId ? '请选择驾驶员（选填）' : '请先选择车辆',
+          onChange: (_value: unknown, rows: VmsDriverReference[]) =>
+            handleDriverChange(rows[0] ?? null)
+        }
+      },
       { label: '领用明细', key: 'lines', span: 24 },
       {
         label: '备注',
@@ -341,10 +358,7 @@
       form.data.vehicleId = value ? String(value) : ''
     }
   })
-  const vehicleColumns: DataSelectColumn[] = [
-    { prop: 'plateNo', label: '车牌号', minWidth: 150 },
-    { prop: 'companyName', label: '所属公司', minWidth: 180 }
-  ]
+  const vehicleColumns = vehicleDriverColumns('vehicle')
   const handleVehicleChange = (_value: unknown, rows: DataSelectRecord[]): void => {
     const vehicle = rows[0] as Api.Vms.ArchiveManage.VehicleArchive | undefined
     Object.assign(form.data, {

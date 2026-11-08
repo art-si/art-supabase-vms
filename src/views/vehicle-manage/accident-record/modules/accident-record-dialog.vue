@@ -15,16 +15,6 @@
         :gutter="20"
         label-width="120px"
       >
-        <template #driverId>
-          <VmsDriverSelect
-            :model-value="form.data.driverId"
-            :vehicle-id="form.data.vehicleId"
-            :driver-name="form.data.driverName"
-            :driver-phone="form.data.driverPhone"
-            :disabled="!canEditAccidentField('driverContact')"
-            @change="handleDriverChange"
-          />
-        </template>
         <template #accidentLocation>
           <ArtAddressPicker
             v-model:address-detail="form.data.accidentLocation"
@@ -84,6 +74,12 @@
 </template>
 
 <script setup lang="tsx">
+  import { fetchVehicleDriverChoices } from '@/api/vehicle-driver-select'
+  import type { DataSelectFetchParams } from '@/components/core/forms/art-data-select/types'
+  import {
+    vehicleDriverColumns,
+    vehicleDriverSelectProps
+  } from '@/components/business/vehicle-driver-select/columns'
   import ArtSvgIcon from '@/components/core/base/art-svg-icon/index.vue'
   import { h } from 'vue'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
@@ -103,11 +99,7 @@
   import type { AddressLocationPayload } from '@/components/core/forms/art-address-picker/types'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
   import VehicleDataSourceEmptyActions from '../../../components/vehicle-data-source-empty-actions.vue'
-  import VmsDriverSelect from '../../../components/vms-driver-select.vue'
-  import type {
-    DataSelectColumn,
-    DataSelectRecord
-  } from '@/components/core/forms/art-data-select/types'
+  import type { DataSelectRecord } from '@/components/core/forms/art-data-select/types'
   import ArtSectionTitle from '@/components/core/surfaces/art-section-title/index.vue'
   import {
     addVehicleAccident,
@@ -255,6 +247,8 @@
             labelKey: 'plateNo',
             descriptionKey: 'companyName',
             title: '选择车辆',
+            dialogWidth: 'xl',
+            showTableHeader: true,
             searchPlaceholder: '输入车牌号或所属公司',
             emptyText: '暂无可选车辆',
             emptyDescription: '请先维护车辆档案并确保车辆已启用。',
@@ -267,7 +261,23 @@
         { label: '所属公司', key: 'companyName', type: 'input', props: { disabled: true } },
         {
           label: '驾驶员',
-          key: 'driverId'
+          key: 'driverId',
+          type: 'dataSelect',
+          props: {
+            ...vehicleDriverSelectProps('driver'),
+            title: '选择驾驶员',
+            apiFn: (params: DataSelectFetchParams) =>
+              fetchVehicleDriverChoices<VmsDriverReference>('vehicle_driver', params, {
+                vehicleId: form.data.vehicleId
+              }),
+            selectedData: form.data.driverId
+              ? [{ id: form.data.driverId, driverName: form.data.driverName }]
+              : [],
+            disabled: !form.data.vehicleId || !canEditAccidentField('driverContact'),
+            placeholder: form.data.vehicleId ? '请选择驾驶员（选填）' : '请先选择车辆',
+            onChange: (_value: unknown, rows: VmsDriverReference[]) =>
+              handleDriverChange(rows[0] ?? null)
+          }
         },
         {
           label: '联系方式',
@@ -415,27 +425,7 @@
     }
   })
 
-  const vehicleColumns: DataSelectColumn[] = [
-    { prop: 'companyName', label: '所属公司', minWidth: 180 },
-    { prop: 'plateNo', label: '车牌号', width: 140 },
-    {
-      prop: 'primaryDriver',
-      label: '主司机',
-      minWidth: 180,
-      formatter: (row) => {
-        const vehicle = row as VehicleArchive
-        const driverName = vehicle.primaryDriver?.driverName || vehicle.driverOneName
-        const driverPhone = vehicle.primaryDriver?.phone || vehicle.driverOnePhone
-        return [driverName, driverPhone].filter(Boolean).join(' / ') || '--'
-      }
-    },
-    {
-      prop: 'operationStatus',
-      label: '营运状态',
-      width: 120,
-      dict: { code: 'vehicleOperationStatus', display: 'auto' }
-    }
-  ]
+  const vehicleColumns = vehicleDriverColumns('vehicle')
 
   const getBooleanDictOptions = () => booleanOptions
 

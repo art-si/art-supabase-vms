@@ -39,6 +39,7 @@
 </template>
 
 <script setup lang="tsx">
+  import { vehicleDriverColumns } from '@/components/business/vehicle-driver-select/columns'
   import { h } from 'vue'
   import BusinessAttachmentRowActions from '@/components/business/business-attachment-row-actions/index.vue'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
@@ -51,10 +52,7 @@
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import VehicleDataSourceEmptyActions from '../../../components/vehicle-data-source-empty-actions.vue'
-  import type {
-    DataSelectColumn,
-    DataSelectRecord
-  } from '@/components/core/forms/art-data-select/types'
+  import type { DataSelectRecord } from '@/components/core/forms/art-data-select/types'
   import ArtUploadFile from '@/components/core/forms/art-upload-file/index.vue'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
   import { useDocumentNumberRule } from '@/hooks/core/useDocumentNumberRule'
@@ -168,6 +166,8 @@
             labelKey: 'plateNo',
             descriptionKey: 'companyName',
             title: '选择车辆',
+            dialogWidth: 'xl',
+            showTableHeader: true,
             searchPlaceholder: '输入车牌号或所属公司',
             emptyText: '暂无可选车辆',
             emptyDescription: '请先维护车辆档案并确保车辆已启用。',
@@ -240,16 +240,7 @@
     }
   })
 
-  const vehicleColumns: DataSelectColumn[] = [
-    { prop: 'companyName', label: '所属公司', minWidth: 180 },
-    { prop: 'plateNo', label: '车牌号', width: 140 },
-    {
-      prop: 'operationStatus',
-      label: '运营状态',
-      width: 120,
-      dict: { code: 'vehicleOperationStatus', display: 'auto' }
-    }
-  ]
+  const vehicleColumns = vehicleDriverColumns('vehicle')
 
   const attachmentColumns = computed<ColumnOption<Attachment>[]>(() => [
     { type: 'globalIndex', label: '序号', width: 56 },

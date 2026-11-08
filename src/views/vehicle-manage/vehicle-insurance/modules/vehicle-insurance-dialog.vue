@@ -47,6 +47,9 @@
 </template>
 
 <script setup lang="tsx">
+  import { vehicleDriverSelectProps } from '@/components/business/vehicle-driver-select/columns'
+  import { fetchVehicleDriverChoices } from '@/api/vehicle-driver-select'
+  import type { DataSelectFetchParams } from '@/components/core/forms/art-data-select/types'
   import BusinessAttachmentRowActions from '@/components/business/business-attachment-row-actions/index.vue'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
@@ -62,12 +65,7 @@
   import ArtSectionTitle from '@/components/core/surfaces/art-section-title/index.vue'
   import ArtTable from '@/components/core/tables/art-table/index.vue'
   import type { ColumnOption } from '@/types'
-  import {
-    addVehicleInsurance,
-    editVehicleInsurance,
-    fetchInsuranceCompanyOptions,
-    fetchVehicleArchiveOptions
-  } from '@vms/api'
+  import { addVehicleInsurance, editVehicleInsurance, fetchInsuranceCompanyOptions } from '@vms/api'
   import { getFileExtension } from '@/utils/file'
   import { attachmentTableLink } from '@/components/core/media/art-file-viewer/table-link'
   import { canEditField, canViewField } from '@/utils/field-permission'
@@ -94,7 +92,6 @@
     data: VehicleInsurance
     items: ComputedRef<FormItem[]>
     rules: ComputedRef<FormRules<VehicleInsurance>>
-    vehicleOptions: VehicleOption[]
     companyOptions: InsuranceCompanyOption[]
   }
 
@@ -167,22 +164,27 @@
 
   const form: UnwrapNestedRefs<FormGroup> = reactive<FormGroup>({
     data: createInitialForm(),
-    vehicleOptions: [],
     companyOptions: [],
     items: computed<FormItem[]>(() => {
       const items: FormItem[] = [
         {
           label: '车牌号',
           key: 'vehicleId',
-          type: 'select',
-          api: fetchVehicleArchiveOptions,
-          immediate: false,
-          resultField: 'data',
-          labelField: 'plateNo',
-          valueField: 'id',
-          afterFetch: syncVehicleOptions,
+          type: 'dataSelect',
           props: {
-            onChange: handleVehicleChange
+            ...vehicleDriverSelectProps('vehicle'),
+            apiFn: (params: DataSelectFetchParams) =>
+              fetchVehicleDriverChoices<VehicleOption>('insurance_vehicle', params),
+            selectedData: form.data.vehicleId
+              ? [
+                  {
+                    id: form.data.vehicleId,
+                    plateNo: form.data.plateNo,
+                    companyName: form.data.companyName
+                  }
+                ]
+              : [],
+            onChange: (_value: unknown, rows: VehicleOption[]) => handleVehicleChange(rows[0])
           }
         },
         {
@@ -333,18 +335,12 @@
     return Array.isArray(data) ? data : []
   }
 
-  const syncVehicleOptions = (result: unknown): unknown => {
-    form.vehicleOptions = getResponseData<VehicleOption>(result)
-    return result
-  }
-
   const syncCompanyOptions = (result: unknown): unknown => {
     form.companyOptions = getResponseData<InsuranceCompanyOption>(result)
     return result
   }
 
-  const handleVehicleChange = (vehicleId?: string): void => {
-    const vehicle = form.vehicleOptions.find((item) => item.id === vehicleId)
+  const handleVehicleChange = (vehicle?: VehicleOption): void => {
     form.data.vehicleId = vehicle?.id ?? null
     form.data.plateNo = vehicle?.plateNo ?? ''
     form.data.companyName = vehicle?.companyName ?? ''

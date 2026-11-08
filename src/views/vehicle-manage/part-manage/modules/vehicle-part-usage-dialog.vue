@@ -29,6 +29,7 @@
 </template>
 
 <script setup lang="ts">
+  import { vehicleDriverColumns } from '@/components/business/vehicle-driver-select/columns'
   import { h } from 'vue'
   import { buildSupabasePageRange } from '@/utils/supabase/pagination'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
@@ -176,6 +177,8 @@
         labelKey: 'plateNo',
         descriptionKey: 'companyName',
         title: '选择车辆',
+        dialogWidth: 'xl',
+        showTableHeader: true,
         searchPlaceholder: '输入车牌号或所属公司',
         emptyText: '暂无可选车辆',
         emptyDescription: '请先维护车辆档案并确保车辆已启用。',
@@ -499,16 +502,7 @@
     }
   })
 
-  const vehicleColumns: DataSelectColumn[] = [
-    { prop: 'companyName', label: '所属公司', minWidth: 180 },
-    { prop: 'plateNo', label: '车牌号', width: 140 },
-    {
-      prop: 'operationStatus',
-      label: '营运状态',
-      width: 120,
-      dict: { code: 'vehicleOperationStatus', display: 'auto' }
-    }
-  ]
+  const vehicleColumns = vehicleDriverColumns('vehicle')
 
   const partColumns: DataSelectColumn[] = [
     { prop: 'partName', label: '零部件名称', minWidth: 180 },

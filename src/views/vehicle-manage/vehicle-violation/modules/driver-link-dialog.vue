@@ -1,18 +1,12 @@
 <template>
   <ArtDialog ref="dialogRef" size="sm">
-    <ArtForm v-model="form" :items="items" :span="24" label-width="100px">
-      <template #driverId>
-        <VmsDriverSelect
-          :model-value="form.driverId"
-          :vehicle-id="record?.vehicleId"
-          :driver-name="selectedName"
-          @change="selectDriver"
-        />
-      </template>
-    </ArtForm>
+    <ArtForm v-model="form" :items="items" :span="24" label-width="100px"> </ArtForm>
   </ArtDialog>
 </template>
 <script setup lang="ts">
+  import { vehicleDriverSelectProps } from '@/components/business/vehicle-driver-select/columns'
+  import { fetchVehicleDriverChoices } from '@/api/vehicle-driver-select'
+  import type { DataSelectFetchParams } from '@/components/core/forms/art-data-select/types'
   import { ref } from 'vue'
   import { ElMessage } from 'element-plus'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
@@ -20,7 +14,6 @@
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
   import { linkVehicleViolationDriver, type VmsDriverReference } from '@vms/api'
-  import VmsDriverSelect from '../../../components/vms-driver-select.vue'
 
   type ViolationRecord = Api.Vms.VehicleManage.VehicleViolationRecord
   const emit = defineEmits<{ success: [] }>()
@@ -28,14 +21,27 @@
   const record = ref<ViolationRecord>()
   const form = ref<{ driverId: string | null }>({ driverId: null })
   const selectedName = ref('')
-  const items: FormItem[] = [
+  const items = computed<FormItem[]>(() => [
     {
       key: 'driverId',
       label: '关联司机',
-      type: 'slot',
+      type: 'dataSelect',
+      props: {
+        ...vehicleDriverSelectProps('driver'),
+        title: '选择驾驶员',
+        apiFn: (params: DataSelectFetchParams) =>
+          fetchVehicleDriverChoices<VmsDriverReference>('vehicle_driver', params, {
+            vehicleId: record.value?.vehicleId
+          }),
+        selectedData: form.value.driverId
+          ? [{ id: form.value.driverId, driverName: selectedName.value }]
+          : [],
+        disabled: !record.value?.vehicleId,
+        onChange: (_value: unknown, rows: VmsDriverReference[]) => selectDriver(rows[0] ?? null)
+      },
       description: '按违章发生时的实际驾驶员关联。清空可撤销关联，原登记姓名仍保留。'
     }
-  ]
+  ])
 
   function selectDriver(driver: VmsDriverReference | null): void {
     form.value.driverId = driver?.id ?? null

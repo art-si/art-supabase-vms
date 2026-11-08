@@ -20,16 +20,14 @@
 </template>
 
 <script setup lang="tsx">
+  import { vehicleDriverColumns } from '@/components/business/vehicle-driver-select/columns'
   import { toRef, toRefs } from 'vue'
   import { h } from 'vue'
   import type { FormRules } from 'element-plus'
   import ArtDialog from '@/components/core/dialogs/art-dialog/index.vue'
   import type { ArtDialogExpose } from '@/components/core/dialogs/art-dialog/types'
   import ArtForm, { type FormItem } from '@/components/core/forms/art-form/index.vue'
-  import type {
-    DataSelectColumn,
-    DataSelectRecord
-  } from '@/components/core/forms/art-data-select/types'
+  import type { DataSelectRecord } from '@/components/core/forms/art-data-select/types'
   import { validateArtFormForSubmit } from '@/utils/form/validate-art-form'
   import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
   import { useDocumentNumberRule } from '@/hooks/core/useDocumentNumberRule'
@@ -107,40 +105,7 @@
     cardImageUrl.value = Array.isArray(value) ? value[0] || '' : value
     imageChanged.value = true
   }
-  const vehicleColumns: DataSelectColumn[] = [
-    { prop: 'plateNo', label: '车牌号', minWidth: 140 },
-    {
-      prop: 'isNewEnergy',
-      label: '新能源车',
-      width: 100,
-      dict: { code: 'commonBoolean', display: 'text' }
-    },
-    {
-      prop: 'vehicleOwnership',
-      label: '车辆归属',
-      minWidth: 120,
-      dict: { code: 'vehicleOwnership', display: 'text' }
-    },
-    {
-      prop: 'carrier',
-      label: '所属承运商',
-      minWidth: 180,
-      formatter: (row) => row.carrier?.companyName || '—'
-    },
-    {
-      prop: 'primaryDriver',
-      label: '司机',
-      minWidth: 120,
-      formatter: (row) => row.primaryDriver?.driverName || '—'
-    },
-    {
-      prop: 'primaryDriverPhone',
-      label: '电话',
-      minWidth: 140,
-      formatter: (row) => row.primaryDriver?.phone || '—'
-    },
-    { prop: 'companyName', label: '所属公司', minWidth: 220 }
-  ]
+  const vehicleColumns = vehicleDriverColumns('vehicle')
   const formItems = computed<FormItem[]>(() => [
     {
       key: 'cardImageUrl',

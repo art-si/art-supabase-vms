@@ -56,6 +56,7 @@
 </template>
 
 <script setup lang="tsx">
+  import { vehicleDriverColumns } from '@/components/business/vehicle-driver-select/columns'
   import { toRefs } from 'vue'
   import dayjs from 'dayjs'
   import type { FormRules } from 'element-plus'
@@ -195,10 +196,7 @@
       )
     }
   ]
-  const driverColumns: DataSelectColumn[] = [
-    { prop: 'driverName', label: '司机', minWidth: 140 },
-    { prop: 'phone', label: '手机号', minWidth: 150 }
-  ]
+  const driverColumns = vehicleDriverColumns('driver')
   const cardColumns: DataSelectColumn[] = [
     { prop: 'cardNo', label: '油卡号', minWidth: 150 },
     { prop: 'plateNo', label: '绑定车牌', minWidth: 120 },
@@ -354,6 +352,8 @@
               rowKey: 'id',
               labelKey: 'driverName',
               title: '选择本笔消费司机',
+              dialogWidth: 'xl',
+              showTableHeader: true,
               searchPlaceholder: '输入司机姓名或手机号',
               emptyText: '该租户暂无可选司机',
               disabled: !selectedCard.value,
