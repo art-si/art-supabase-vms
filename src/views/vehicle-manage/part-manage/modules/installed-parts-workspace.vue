@@ -1,5 +1,5 @@
 <template>
-  <div class="vehicle-part-usage-page art-full-height min-w-0 gap-3">
+  <div class="vehicle-part-usage-page flex min-h-0 min-w-0 flex-col gap-3">
     <BusinessWorkspaceHeader
       eyebrow="PARTS LIFECYCLE"
       title="车辆零部件"

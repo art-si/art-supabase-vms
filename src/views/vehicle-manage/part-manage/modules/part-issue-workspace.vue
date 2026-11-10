@@ -1,5 +1,5 @@
 <template>
-  <div class="business-workspace-page art-full-height min-w-0 gap-3">
+  <div class="business-workspace-page min-h-0 min-w-0 gap-3">
     <BusinessWorkspaceHeader
       eyebrow="PARTS ISSUE & RETURN"
       title="车辆配件领用"

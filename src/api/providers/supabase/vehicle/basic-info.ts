@@ -402,7 +402,7 @@ const PARTS_SELECT = `
   *,
   material:mdm_material!mdm_part_material_tenant_fkey(id,material_code,material_name),
   unitRef:mdm_unit_of_measure!mdm_part_unit_tenant_fkey(id,unit_code,unit_name),
-  category:mdm_part_category!vehicle_parts_category_id_fkey(
+  category:mdm_part_category!vehicle_parts_category_tenant_fkey(
     id,
     category_name
   )

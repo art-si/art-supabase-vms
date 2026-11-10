@@ -1,5 +1,5 @@
 <template>
-  <div class="flex h-full min-h-0 min-w-0 flex-col gap-3">
+  <div class="art-full-height min-w-0 gap-3">
     <ElAlert
       v-if="navigationError"
       :title="navigationError"

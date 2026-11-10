@@ -1,5 +1,5 @@
 <template>
-  <div class="part-inventory-workspace business-workspace-page art-full-height min-w-0">
+  <div class="part-inventory-workspace business-workspace-page min-h-0 min-w-0">
     <BusinessWorkspaceHeader
       eyebrow="PARTS INVENTORY"
       title="配件库存台账"
@@ -12,8 +12,15 @@
       ]"
       :metrics="metrics"
     >
-      <template v-if="activeTab === 'movements'" #actions>
-        <BusinessTableWorkspaceActions :table="tableRef" />
+      <template #actions>
+        <ElButton
+          v-if="activeTab === 'stock' && hasAuth('VmsPartInventory:Receipt')"
+          type="primary"
+          @click="openReceipt"
+        >
+          <span class="art-icon-label"><ArtSvgIcon icon="ri:add-line" />登记入库</span>
+        </ElButton>
+        <BusinessTableWorkspaceActions v-else-if="activeTab === 'movements'" :table="tableRef" />
       </template>
     </BusinessWorkspaceHeader>
 
@@ -27,18 +34,11 @@
           <ElTabPane label="当前库存" name="stock" />
           <ElTabPane label="配件流水" name="movements" />
         </ElTabs>
-        <ElButton
-          v-if="activeTab === 'stock' && hasAuth('VmsPartInventory:Receipt')"
-          type="primary"
-          @click="openReceipt"
-        >
-          <span class="art-icon-label"><ArtSvgIcon icon="ri:add-line" />登记入库</span>
-        </ElButton>
       </div>
 
       <ArtSectionCard
         v-if="activeTab === 'stock'"
-        class="part-inventory-workspace__stock"
+        class="part-inventory-workspace__stock min-h-0 flex-1"
         aria-label="当前库存明细"
         :loading="stock.loading"
         :error="stock.error"
