@@ -23,16 +23,31 @@
       class="vehicle-query-detail__current"
       title="当前承运"
       subtitle="从运输执行关系查看这辆车正在承运的订单和司机"
-      :loading="execution.loading"
-      :error="execution.error"
+      :preserve-content-structure="!execution.expanded"
+      :loading="execution.expanded && execution.loading"
+      :error="execution.expanded ? execution.error : null"
       error-title="当前承运信息加载失败"
-      :empty="!execution.current.length"
+      :empty="execution.expanded && !execution.current.length"
       empty-title="当前暂无在运订单"
       empty-description="车辆有新的运输执行记录后，将在这里显示关联订单与司机。"
       :min-height="152"
       @retry="loadCurrentExecution"
     >
-      <div class="grid gap-3 lg:grid-cols-2">
+      <template #actions>
+        <ElButton
+          type="primary"
+          link
+          :aria-expanded="execution.expanded"
+          @click="execution.expanded = !execution.expanded"
+        >
+          <ArtSvgIcon
+            :icon="execution.expanded ? 'ri:arrow-up-s-line' : 'ri:arrow-down-s-line'"
+            aria-hidden="true"
+          />
+          {{ execution.expanded ? '收起' : '展开' }}
+        </ElButton>
+      </template>
+      <div v-if="execution.expanded" class="grid gap-3 lg:grid-cols-2">
         <div
           v-for="relation in execution.current"
           :key="relation.waybillId || relation.orderId"
@@ -194,10 +209,11 @@
   const canViewOrder = computed(() => hasAuth('TmsOrderQuery:View'))
   const canViewDriver = computed(() => hasAuth('TmsDriverQuery:View'))
   const execution = reactive<{
+    expanded: boolean
     loading: boolean
     error: string | null
     current: TransportMainlineRelation[]
-  }>({ loading: false, error: null, current: [] })
+  }>({ expanded: false, loading: false, error: null, current: [] })
 
   const allTabs: VehicleQueryTab[] = [
     { key: 'view', label: '车辆视图' },
@@ -305,6 +321,7 @@
     const vehicleId = page.vehicle?.id
     if (!vehicleId) return
     execution.loading = true
+    execution.expanded = true
     execution.error = null
     try {
       const result = await fetchTransportMainlineRelations({ vehicleId, from: 0, to: 49 })
@@ -317,9 +334,11 @@
             )
         )
         .slice(0, 4)
+      execution.expanded = execution.current.length > 0
     } catch {
       execution.current = []
       execution.error = '暂时无法读取当前承运关系，请重试。'
+      execution.expanded = true
     } finally {
       execution.loading = false
     }
