@@ -38,16 +38,16 @@
         >查看完整台账</RouterLink
       >
     </template>
-    <VehicleQueryTable :data="records" :columns="columns" />
-    <div v-if="total > pageSize" class="mt-4 flex justify-end">
-      <ElPagination
-        v-model:current-page="page"
-        :page-size="pageSize"
-        :total="total"
-        layout="total, prev, pager, next"
-        @current-change="loadRecords"
-      />
-    </div>
+    <ArtTable
+      :data="records"
+      :columns="columns"
+      :show-table-header="false"
+      table-layout="fixed"
+      empty-height="180px"
+      :pagination="pagination"
+      :pagination-options="{ layout: 'prev, pager, next, total', align: 'right' }"
+      @pagination:current-change="changePage"
+    />
   </ArtSectionCard>
 </template>
 
@@ -55,6 +55,7 @@
   import type { ColumnOption } from '@/types'
   import { RouterLink } from 'vue-router'
   import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
+  import ArtTable from '@/components/core/tables/art-table/index.vue'
   import ArtDictDisplay from '@/components/core/base/art-dict-display/index.vue'
   import { useAuth } from '@/hooks/core/useAuth'
   import { formatCurrencyValue } from '@/utils/ui/format'
@@ -70,7 +71,6 @@
     type ElectricCard,
     type ElectricCardEntry
   } from '@/api/electric-card'
-  import VehicleQueryTable from './vehicle-query-table.vue'
 
   defineOptions({ name: 'VehicleFuelCardSourcePanel' })
   const props = defineProps<{
@@ -88,6 +88,9 @@
   const page = ref(1)
   const pageSize = 20
   const total = ref(0)
+  const pagination = computed(
+    () => total.value > pageSize && { current: page.value, size: pageSize, total: total.value }
+  )
   const loading = ref(false)
   const error = ref<string | null>(null)
   const records = ref<Array<FuelCard | FuelCardEntry | ElectricCard | ElectricCardEntry>>([])
@@ -206,6 +209,12 @@
     } finally {
       if (currentRequest === requestId) loading.value = false
     }
+  }
+
+  function changePage(nextPage: number): void {
+    if (page.value === nextPage) return
+    page.value = nextPage
+    void loadRecords()
   }
 
   watch(

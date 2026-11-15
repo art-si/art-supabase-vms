@@ -15,17 +15,15 @@
       净耗油＝出车余油＋途中加油－回场余油；百公里油耗按单次执行里程计算。缺油量、未完成、
       里程非正或同车表数区间重叠的记录显示“待核算”，不计入油耗率。
     </p>
-    <ArtTable :data="state.rows" :columns="columns" :pagination="false" />
-    <div v-if="state.total > pageSize" class="mt-4 flex justify-end">
-      <ElPagination
-        v-model:current-page="state.page"
-        background
-        layout="prev, pager, next, total"
-        :page-size="pageSize"
-        :total="state.total"
-        @current-change="loadRows"
-      />
-    </div>
+    <ArtTable
+      :data="state.rows"
+      :columns="columns"
+      :loading="state.loading"
+      :loading-overlay="false"
+      :pagination="pagination"
+      :pagination-options="{ layout: 'prev, pager, next, total', align: 'right' }"
+      @pagination:current-change="changePage"
+    />
   </ArtSectionCard>
 </template>
 
@@ -50,6 +48,9 @@
     loading: boolean
     error: string | null
   }>({ rows: [], total: 0, page: 1, loading: false, error: null })
+  const pagination = computed(
+    () => state.total > pageSize && { current: state.page, size: pageSize, total: state.total }
+  )
 
   const formatVolume = (value: number | null): string =>
     value == null ? '--' : formatNumberValue(value, 'zh-CN', { maximumFractionDigits: 2 })
@@ -141,6 +142,12 @@
     } finally {
       if (currentRequest === requestId) state.loading = false
     }
+  }
+
+  function changePage(page: number): void {
+    if (state.page === page) return
+    state.page = page
+    void loadRows()
   }
 
   watch(

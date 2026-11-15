@@ -11,17 +11,15 @@
     :min-height="280"
     @retry="loadRows"
   >
-    <ArtTable :data="state.rows" :columns="columns" :pagination="false" />
-    <div v-if="state.total > pageSize" class="mt-4 flex justify-end">
-      <ElPagination
-        v-model:current-page="state.page"
-        background
-        layout="prev, pager, next, total"
-        :page-size="pageSize"
-        :total="state.total"
-        @current-change="loadRows"
-      />
-    </div>
+    <ArtTable
+      :data="state.rows"
+      :columns="columns"
+      :loading="state.loading"
+      :loading-overlay="false"
+      :pagination="pagination"
+      :pagination-options="{ layout: 'prev, pager, next, total', align: 'right' }"
+      @pagination:current-change="changePage"
+    />
   </ArtSectionCard>
 </template>
 
@@ -50,6 +48,9 @@
     loading: boolean
     error: string | null
   }>({ rows: [], total: 0, page: 1, loading: false, error: null })
+  const pagination = computed(
+    () => state.total > pageSize && { current: state.page, size: pageSize, total: state.total }
+  )
 
   const canViewOrder = computed(() => hasAuth('TmsOrderQuery:View'))
   const canViewDriver = computed(() => hasAuth('TmsDriverQuery:View'))
@@ -138,6 +139,12 @@
     } finally {
       if (currentRequest === requestId) state.loading = false
     }
+  }
+
+  function changePage(page: number): void {
+    if (state.page === page) return
+    state.page = page
+    void loadRows()
   }
 
   watch(

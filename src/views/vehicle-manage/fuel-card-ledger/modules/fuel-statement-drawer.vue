@@ -11,7 +11,7 @@
       <div
         class="flex flex-wrap items-end justify-between gap-3 rounded-[var(--el-border-radius-base)] border border-[var(--el-border-color-light)] p-4"
       >
-        <div class="min-w-0 flex-1 space-y-1">
+        <div class="min-w-0 basis-full grow space-y-1 sm:basis-56">
           <label
             class="text-xs font-medium text-[var(--el-text-color-secondary)]"
             for="statement-batch"
@@ -39,6 +39,7 @@
             <ArtExcelImport
               accept=".xlsx,.xls,.csv"
               icon="ri:upload-2-line"
+              keep-csv-text
               :button-props="{ plain: true, loading: importing }"
               :disabled="importing"
               @import-success="prepareImport"
@@ -101,30 +102,32 @@
             <ElButton type="primary" :loading="importing" @click="submitImport">确认导入</ElButton>
           </div>
         </div>
-        <div class="overflow-x-auto">
+        <ElScrollbar always class="pb-3">
           <table class="w-full min-w-[620px] text-left text-xs">
             <thead class="text-[var(--el-text-color-secondary)]">
               <tr>
                 <th class="px-2 py-2">行号</th>
                 <th class="px-2 py-2">油卡号</th>
+                <th class="px-2 py-2 text-right">金额</th>
+                <th class="px-2 py-2 text-right">加油升数</th>
                 <th class="px-2 py-2">消费时间</th>
                 <th class="px-2 py-2">加油站</th>
-                <th class="px-2 py-2 text-right">金额</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="row in preparedRows.slice(0, 5)" :key="row.sourceRow">
                 <td class="px-2 py-2 tabular-nums">{{ row.sourceRow }}</td>
                 <td class="px-2 py-2">{{ row.cardNo }}</td>
-                <td class="px-2 py-2">{{ formatWithDayjs(row.occurredAt) }}</td>
-                <td class="px-2 py-2">{{ row.stationName }}</td>
                 <td class="px-2 py-2 text-right tabular-nums">{{
                   formatCurrencyValue(row.amount)
                 }}</td>
+                <td class="px-2 py-2 text-right tabular-nums">{{ row.liters ?? '—' }}</td>
+                <td class="px-2 py-2">{{ formatWithDayjs(row.occurredAt) }}</td>
+                <td class="px-2 py-2">{{ row.stationName }}</td>
               </tr>
             </tbody>
           </table>
-        </div>
+        </ElScrollbar>
         <p v-if="preparedRows.length > 5" class="text-xs text-[var(--el-text-color-secondary)]">
           仅预览前 5 行；提交时导入全部 {{ preparedRows.length }} 行。
         </p>
@@ -194,9 +197,10 @@
     type FuelStatementImportRow,
     type FuelStatementRow
   } from '@/api/fuel-card-statement'
+  import { calcFileHash } from '@/utils/file'
   import { formatCurrencyValue } from '@/utils/ui/format'
   import { formatWithDayjs } from '@/utils/time'
-  import { parseFuelStatementRows, sha256File } from './fuel-statement-import'
+  import { parseFuelStatementRows } from './fuel-statement-import'
 
   defineOptions({ name: 'VmsFuelStatementDrawer' })
 
@@ -363,7 +367,7 @@
     try {
       const result = await importFuelStatement({
         fileName: preparedFile.value.name,
-        fileSha256: await sha256File(preparedFile.value),
+        fileSha256: await calcFileHash(preparedFile.value),
         rows: preparedRows.value
       })
       clearPrepared()

@@ -1,4 +1,5 @@
 import type { FuelStatementImportRow } from '@/api/fuel-card-statement'
+import { normalizeNullableNumber } from '@/utils/form/normalize'
 
 const HEADERS = {
   cardNo: ['油卡号', '卡号', 'cardNo', 'card_no'],
@@ -20,8 +21,12 @@ function requiredText(value: unknown, label: string, row: number): string {
 }
 
 function numberValue(value: unknown, label: string, row: number): number {
-  const parsed = Number(typeof value === 'string' ? value.replaceAll(',', '').trim() : value)
-  if (!Number.isFinite(parsed) || parsed <= 0) throw new Error(`第 ${row} 行${label}无效。`)
+  const text = typeof value === 'string' ? value.trim() : null
+  const validText = text?.includes(',')
+    ? /^\+?\d{1,3}(?:,\d{3})+(?:\.\d+)?$/.test(text)
+    : text === null || /^\+?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(text)
+  const parsed = validText ? normalizeNullableNumber(text?.replaceAll(',', '') ?? value) : null
+  if (parsed === null || parsed <= 0) throw new Error(`第 ${row} 行${label}无效。`)
   return parsed
 }
 
@@ -50,7 +55,7 @@ export function parseFuelStatementRows(
     const sourceRow = index + 2
     const litersValue = findCell(rawRow, HEADERS.liters)
     const liters =
-      litersValue === null || litersValue === undefined || String(litersValue).trim() === ''
+      litersValue == null || (typeof litersValue === 'string' && !litersValue.trim())
         ? null
         : numberValue(litersValue, '加油升数', sourceRow)
     const amount = numberValue(findCell(rawRow, HEADERS.amount), '金额', sourceRow)
@@ -64,9 +69,4 @@ export function parseFuelStatementRows(
       rawRow
     }
   })
-}
-
-export async function sha256File(file: File): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer())
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')
 }

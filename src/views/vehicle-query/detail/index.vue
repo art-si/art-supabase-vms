@@ -31,14 +31,14 @@
       empty-title="当前暂无在运订单"
       empty-description="车辆有新的运输执行记录后，将在这里显示关联订单与司机。"
       :min-height="152"
-      @retry="loadCurrentExecution"
+      @retry="retryCurrentExecution"
     >
       <template #actions>
         <ElButton
           type="primary"
           link
           :aria-expanded="execution.expanded"
-          @click="execution.expanded = !execution.expanded"
+          @click="execution.expansion = !execution.expanded"
         >
           <ArtSvgIcon
             :icon="execution.expanded ? 'ri:arrow-up-s-line' : 'ri:arrow-down-s-line'"
@@ -197,6 +197,10 @@
 
   const route = useRoute()
   const router = useRouter()
+  const detailRoute = route.matched.at(-1)
+  const routeVehicleId = computed(() =>
+    route.matched.at(-1) === detailRoute ? String(route.params.id ?? '') : undefined
+  )
   const { hasAuth } = useAuth()
   const healthAdvisorRef = ref<HealthAdvisorExpose>()
 
@@ -209,11 +213,20 @@
   const canViewOrder = computed(() => hasAuth('TmsOrderQuery:View'))
   const canViewDriver = computed(() => hasAuth('TmsDriverQuery:View'))
   const execution = reactive<{
-    expanded: boolean
+    expansion: boolean | null
+    readonly expanded: boolean
     loading: boolean
     error: string | null
     current: TransportMainlineRelation[]
-  }>({ expanded: false, loading: false, error: null, current: [] })
+  }>({
+    expansion: null,
+    loading: false,
+    error: null,
+    current: [],
+    get expanded() {
+      return this.expansion ?? (this.loading || this.error !== null || this.current.length > 0)
+    }
+  })
 
   const allTabs: VehicleQueryTab[] = [
     { key: 'view', label: '车辆视图' },
@@ -279,37 +292,41 @@
     void healthAdvisorRef.value?.handleOpen({ vehicleId, plateNo })
   }
 
-  onMounted(() => {
-    void loadVehicle()
-  })
+  let vehicleRequest = 0
+  let executionRequest = 0
 
   const loadVehicle = async (): Promise<void> => {
-    const id = String(route.params.id || '')
+    const id = routeVehicleId.value
+    if (id === undefined) return
+    const request = ++vehicleRequest
+    executionRequest++
+    const isCurrent = () => request === vehicleRequest && routeVehicleId.value === id
+    Object.assign(page, {
+      loading: Boolean(id),
+      error: null,
+      activeTab: 'view',
+      vehicle: undefined,
+      summary: {}
+    } satisfies PageState)
+    Object.assign(execution, { expansion: null, loading: false, error: null, current: [] })
     if (!id) {
       page.error = new Error('缺少车辆档案标识')
       return
     }
 
-    page.loading = true
-    page.error = null
     try {
       const { data } = await fetchVehicleArchiveDetail(id)
-      if (!data) {
-        page.vehicle = undefined
-        page.summary = {}
-        return
-      }
+      if (!isCurrent() || !data) return
 
       const { summary } = await loadVehicleQuerySummary(id)
-      page.vehicle = data
-      page.summary = summary
+      if (!isCurrent()) return
+      Object.assign(page, { vehicle: data, summary })
       void loadCurrentExecution()
     } catch (error) {
-      page.vehicle = undefined
-      page.summary = {}
-      page.error = error instanceof Error ? error : new Error('车辆综合信息加载失败')
+      if (isCurrent())
+        page.error = error instanceof Error ? error : new Error('车辆综合信息加载失败')
     } finally {
-      page.loading = false
+      if (isCurrent()) page.loading = false
     }
   }
 
@@ -318,13 +335,15 @@
   }
 
   const loadCurrentExecution = async (): Promise<void> => {
+    const id = routeVehicleId.value
     const vehicleId = page.vehicle?.id
-    if (!vehicleId) return
-    execution.loading = true
-    execution.expanded = true
-    execution.error = null
+    if (!id || !vehicleId) return
+    const request = ++executionRequest
+    const isCurrent = () => request === executionRequest && routeVehicleId.value === id
+    Object.assign(execution, { loading: true, error: null })
     try {
       const result = await fetchTransportMainlineRelations({ vehicleId, from: 0, to: 49 })
+      if (!isCurrent()) return
       execution.current = result.data
         .filter(
           (relation) =>
@@ -334,15 +353,20 @@
             )
         )
         .slice(0, 4)
-      execution.expanded = execution.current.length > 0
     } catch {
-      execution.current = []
-      execution.error = '暂时无法读取当前承运关系，请重试。'
-      execution.expanded = true
+      if (isCurrent())
+        Object.assign(execution, { current: [], error: '暂时无法读取当前承运关系，请重试。' })
     } finally {
-      execution.loading = false
+      if (isCurrent()) execution.loading = false
     }
   }
+
+  const retryCurrentExecution = (): void => {
+    execution.expansion = execution.expanded
+    void loadCurrentExecution()
+  }
+
+  watch(routeVehicleId, loadVehicle, { immediate: true })
 </script>
 
 <style scoped lang="scss">
