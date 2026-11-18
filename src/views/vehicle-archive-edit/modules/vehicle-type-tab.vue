@@ -43,7 +43,11 @@
                 @click="toggleAllExpanded"
               />
             </template>
-            <div class="vehicle-type-tab__tree-viewport" :style="{ height: stackedTreeHeight }">
+            <div
+              ref="treeViewportRef"
+              class="vehicle-type-tab__tree-viewport"
+              :style="{ height: stackedTreeHeight }"
+            >
               <ElAutoResizer>
                 <template #default="{ height }">
                   <ElTreeV2
@@ -59,7 +63,16 @@
                     @node-collapse="handleTreeNodeCollapse"
                   >
                     <template #default="{ data }">
-                      <span class="vehicle-type-tab__node">
+                      <button
+                        :ref="(element) => registerTreeNode(data.key, element)"
+                        type="button"
+                        class="vehicle-type-tab__node"
+                        :data-virtual-tree-key="data.key"
+                        :aria-current="selectedTreeNodeKey === data.key ? 'true' : undefined"
+                        :tabindex="tabStopTreeNodeKey === data.key ? 0 : -1"
+                        @focus="setFocusedTreeNodeKey(data.key)"
+                        @keydown="handleTreeNavigation($event, data.key)"
+                      >
                         <VehicleTypeArt v-if="!data.profile" :category="data.category" />
                         <span class="vehicle-type-tab__node-label" :title="data.label">{{
                           data.label
@@ -73,7 +86,7 @@
                               : (data.children?.length ?? 0)
                           }}
                         </small>
-                      </span>
+                      </button>
                     </template>
                     <template #empty>
                       <ArtEmptyState
@@ -237,6 +250,8 @@
   import { useTenantOperationGuard } from '@/hooks/core/useTenantOperationGuard'
   import { useDictionaryOptions } from '@/hooks/core/useDictionaryOptions'
   import { useAuth } from '@/hooks/core/useAuth'
+  import { useVirtualTreeTabStop } from '@/hooks/core/useVirtualTreeTabStop'
+  import { focusVirtualTreeNode } from '@/utils/ui/virtual-tree-focus'
   import { useTenantScopeStore } from '@/store/modules/tenant-scope'
   import { useUserStore } from '@/store/modules/user'
   import { storeToRefs } from 'pinia'
@@ -249,10 +264,10 @@
   import {
     LOAD_CAPACITY_PRESETS,
     SEMI_TRAILER_LENGTHS,
-    vehicleTypeProfileLabel,
     type VehicleTypeCategory,
     type VehicleTypeProfile
   } from './vehicle-type-catalog'
+  import { vehicleTypeProfileLabel } from '@/utils/business/vehicle-type-display'
 
   interface ProfileForm {
     category: VehicleTypeCategory
@@ -310,6 +325,7 @@
   const formRef = ref<InstanceType<typeof ArtForm>>()
   const formControlsReady = computed(() => Boolean(formRef.value?.controlsReady))
   const treeRef = ref<TreeV2Instance>()
+  const treeViewportRef = ref<HTMLElement>()
   const rightWorkspaceRef = ref<HTMLElement>()
   let contextRevision = 0
   let loadSequence = 0
@@ -347,6 +363,9 @@
 
   const categoryNodeKey = (category: VehicleTypeCategory): string => `category:${category}`
   const profileNodeKey = (id: string): string => `profile:${id}`
+  const selectedTreeNodeKey = computed(() =>
+    selectedId.value ? profileNodeKey(selectedId.value) : categoryNodeKey(selectedCategory.value)
+  )
   const treeNodes = computed<VehicleTypeTreeNode[]>(() =>
     categories.value.map((category) => ({
       key: categoryNodeKey(category),
@@ -368,16 +387,18 @@
       expandableKeys.value.length > 0 &&
       expandableKeys.value.every((key) => expandedKeys.value.includes(key))
   )
-  const visibleNodeCount = computed(
-    () =>
-      treeNodes.value.length +
-      treeNodes.value.reduce(
-        (count, node) =>
-          count + (expandedKeys.value.includes(node.key) ? (node.children?.length ?? 0) : 0),
-        0
-      )
+  const visibleTreeNodes = computed(() =>
+    treeNodes.value.flatMap((node) =>
+      expandedKeys.value.includes(node.key) ? [node, ...(node.children ?? [])] : [node]
+    )
   )
-  const treeContentHeight = computed(() => Math.max(40, visibleNodeCount.value * 40) + 8)
+  const visibleTreeKeys = computed(() => visibleTreeNodes.value.map(({ key }) => key))
+  const {
+    tabStopKey: tabStopTreeNodeKey,
+    registerNode: registerTreeNode,
+    setFocusedKey: setFocusedTreeNodeKey
+  } = useVirtualTreeTabStop(() => visibleTreeKeys.value)
+  const treeContentHeight = computed(() => Math.max(40, visibleTreeNodes.value.length * 40) + 8)
   const treeScrollMaxHeight = computed(() =>
     Math.min(600, Math.max(280, viewportHeight.value - 390))
   )
@@ -412,6 +433,66 @@
   const handleTreeNodeCollapse = (data: Record<string, unknown>): void => {
     if (typeof data.key === 'string')
       expandedKeys.value = expandedKeys.value.filter((key) => key !== data.key)
+  }
+
+  const handleTreeNavigation = async (event: KeyboardEvent, key: string): Promise<void> => {
+    if (event.repeat && event.key === 'Enter') {
+      event.preventDefault()
+      return
+    }
+    if (
+      event.defaultPrevented ||
+      event.isComposing ||
+      event.altKey ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.shiftKey ||
+      !['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)
+    )
+      return
+
+    const nodes = visibleTreeNodes.value
+    const index = nodes.findIndex((item) => item.key === key)
+    const current = nodes[index]
+    if (!current) return
+    event.preventDefault()
+    event.stopPropagation()
+
+    let targetKey: string | undefined
+    const expanded = expandedKeys.value.includes(key)
+    switch (event.key) {
+      case 'ArrowDown':
+        targetKey = nodes[index + 1]?.key
+        break
+      case 'ArrowUp':
+        targetKey = nodes[index - 1]?.key
+        break
+      case 'Home':
+        targetKey = nodes[0]?.key
+        break
+      case 'End':
+        targetKey = nodes.at(-1)?.key
+        break
+      case 'ArrowLeft':
+        if (!current.profile && expanded) {
+          const branch = treeRef.value?.getNode(key)
+          if (branch) treeRef.value?.collapseNode(branch)
+        } else if (current.profile) targetKey = categoryNodeKey(current.category)
+        break
+      case 'ArrowRight':
+        if (!current.children?.length) return
+        if (expanded) targetKey = current.children[0].key
+        else expandCategory(current.category)
+        break
+    }
+    if (!targetKey || targetKey === key) return
+    const revision = contextRevision
+    await focusVirtualTreeNode({
+      tree: treeRef.value,
+      viewport: treeViewportRef.value,
+      key: targetKey,
+      isCurrent: () => revision === contextRevision
+    })
   }
 
   const rules = computed<FormRules<ProfileForm>>(() => ({
@@ -857,6 +938,7 @@
       selectedId.value = undefined
       selectedCategory.value = '半挂车'
       expandedKeys.value = []
+      setFocusedTreeNodeKey(undefined)
       Object.assign(form.value, initialForm())
       formRef.value?.clearValidate()
       treeRef.value?.setExpandedKeys([])
@@ -955,6 +1037,11 @@
         max-width: calc(100% - var(--art-space-4));
         margin-inline: var(--art-space-2);
       }
+
+      :deep(.el-tree-node__content:has(.vehicle-type-tab__node:focus-visible)) {
+        outline: 2px solid var(--el-color-primary);
+        outline-offset: -2px;
+      }
     }
 
     &__tree-viewport {
@@ -969,7 +1056,19 @@
       align-items: center;
       width: 100%;
       min-width: 0;
-      padding-right: 8px;
+      height: 100%;
+      padding: 0 8px 0 0;
+      font: inherit;
+      color: inherit;
+      text-align: start;
+      cursor: pointer;
+      background: transparent;
+      border: 0;
+      border-radius: var(--el-border-radius-small);
+
+      &:focus-visible {
+        outline: none;
+      }
 
       :deep(.vehicle-type-art) {
         flex: none;

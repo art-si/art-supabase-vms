@@ -147,11 +147,8 @@ export async function fetchVehicleReminderViewList(
   })
   const filteredQuery = applyReminderRiskBand(query, params.sourceKey ? undefined : params.riskBand)
 
-  const result = await responseHandle<VehicleReminderRow[]>(
-    () => withRequestOptions(filteredQuery, options),
-    {
-      showErrorMessage: true
-    }
+  const result = await responseHandle<VehicleReminderRow[]>(() =>
+    withRequestOptions(filteredQuery, options)
   )
 
   const rows = (result.data ?? []).map((row) => ({

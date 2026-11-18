@@ -24,7 +24,7 @@
       :columns-factory="table.columnsFactory"
       :header-actions="table.headerActions"
       header-actions-placement="workspace"
-      :search-bar-props="{ span: 6, labelWidth: 110 }"
+      :search-bar-props="{ span: 6, labelWidth: 86 }"
       :table-props="{
         rowKey: 'id',
         tableLayout: 'fixed',
@@ -141,13 +141,23 @@
     createTimeRange: []
   })
 
-  const dateRangeProps = {
+  const dateSearchItems = (
+    [
+      ['商业险到期', 'commercialExpireDateRange'],
+      ['交强险到期', 'compulsoryExpireDateRange'],
+      ['创建时间', 'createTimeRange']
+    ] as const satisfies ReadonlyArray<readonly [string, keyof SearchParams]>
+  ).map<SearchFormItem>(([label, key]) => ({
+    label,
+    key,
     type: 'daterange',
-    valueFormat: 'YYYY-MM-DD',
-    startPlaceholder: '开始日期',
-    endPlaceholder: '结束日期',
-    class: '!w-full'
-  }
+    span: 12,
+    props: {
+      valueFormat: 'YYYY-MM-DD',
+      startPlaceholder: '开始日期',
+      endPlaceholder: '结束日期'
+    }
+  }))
 
   const table: UnwrapNestedRefs<TableGroup> = reactive<TableGroup>({
     searchQuery: createInitialSearch(),
@@ -156,23 +166,11 @@
       { label: '车牌号', key: 'plateNo', type: 'input' },
       ...(canViewField(effectiveFieldAccess.value, 'policyNumbers')
         ? [
-            { label: '商业险保单号', key: 'commercialPolicyNo', type: 'input' },
-            { label: '交强险保单号', key: 'compulsoryPolicyNo', type: 'input' }
+            { label: '商业险单号', key: 'commercialPolicyNo', type: 'input' },
+            { label: '交强险单号', key: 'compulsoryPolicyNo', type: 'input' }
           ]
         : []),
-      {
-        label: '商业险到期',
-        key: 'commercialExpireDateRange',
-        type: 'date',
-        props: dateRangeProps
-      },
-      {
-        label: '交强险到期',
-        key: 'compulsoryExpireDateRange',
-        type: 'date',
-        props: dateRangeProps
-      },
-      { label: '创建时间', key: 'createTimeRange', type: 'date', props: dateRangeProps }
+      ...dateSearchItems
     ]),
     headerActions: computed<ArtTableQueryHeaderAction[]>(() => [
       {

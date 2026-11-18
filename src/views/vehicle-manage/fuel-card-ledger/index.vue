@@ -88,7 +88,11 @@
             ></div
           >
         </div>
-        <ElTabs v-if="selectedEntry.entryType === 'consume'" v-model="activeDetailTab">
+        <ElTabs
+          class="art-card-xs art-overlay-tab-card"
+          v-if="selectedEntry.entryType === 'consume'"
+          v-model="activeDetailTab"
+        >
           <ElTabPane name="transaction" label="流水信息">
             <ArtDescriptions :data="selectedEntry" :items="transactionDetailItems" :columns="2" />
           </ElTabPane>

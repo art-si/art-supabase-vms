@@ -1,0 +1,1 @@
+import{It as e,Rt as t}from"./sys-C5z2kAY2.js";var n=(n,r)=>(r?.readTenantId!==void 0&&(r.readTenantId!==null&&e(r.readTenantId),n=n.setHeader(t(),r.readTenantId??``)),r?.signal?n.abortSignal(r.signal):n),r=e=>{if(e===!0||e===`true`)return!0;if(e===!1||e===`false`)return!1};export{n,r as t};

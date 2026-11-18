@@ -102,6 +102,7 @@
   import type { EmployeeIntegrationItem } from '@/api/integration/employees'
   import type {
     DataSelectColumn,
+    DataSelectFetchParams,
     DataSelectRecord
   } from '@/components/core/forms/art-data-select/types'
   import ArtSectionTitle from '@/components/core/surfaces/art-section-title/index.vue'
@@ -559,9 +560,10 @@
       : []
   )
 
-  const fetchWorkshopSelectData = async (params: { keyword?: string }) => {
-    const rows = await fetchMaintenanceWorkshopOptions(params.keyword, form.data.tenantId)
-    return { data: rows, total: rows.length }
+  const fetchWorkshopSelectData = async ({ keyword, page, pageSize }: DataSelectFetchParams) => {
+    const rows = await fetchMaintenanceWorkshopOptions(keyword, form.data.tenantId)
+    const start = (page - 1) * pageSize
+    return { data: rows.slice(start, start + pageSize), total: rows.length }
   }
 
   const handleWorkshopChange = (_value: unknown, rows: DataSelectRecord[]): void => {

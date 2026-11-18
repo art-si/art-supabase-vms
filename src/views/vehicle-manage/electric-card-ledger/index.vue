@@ -87,7 +87,11 @@
             </strong>
           </div>
         </div>
-        <ElTabs v-if="selectedEntry.entryType === 'consume'" v-model="activeDetailTab">
+        <ElTabs
+          class="art-card-xs art-overlay-tab-card"
+          v-if="selectedEntry.entryType === 'consume'"
+          v-model="activeDetailTab"
+        >
           <ElTabPane name="transaction" label="流水信息">
             <ArtDescriptions :data="selectedEntry" :items="transactionDetailItems" :columns="2" />
           </ElTabPane>
@@ -222,21 +226,13 @@
         [row.vehicleDriverName, row.vehicleDriverPhone].filter(Boolean).join(' · ') || '--'
     },
     { key: 'sourceCostNo', label: '费用单号', field: 'sourceCostNo' },
-    {
-      key: 'occurredAt',
-      label: '流水时间',
-      value: (row: ElectricCardEntry) => formatWithDayjs(row.occurredAt) || '--'
-    },
+    { key: 'occurredAt', label: '流水时间', field: 'occurredAt', format: 'datetime' },
     {
       key: 'postingSeq',
       label: '记账序号',
       value: (row: ElectricCardEntry) => '#' + row.postingSeq
     },
-    {
-      key: 'createTime',
-      label: '记账时间',
-      value: (row: ElectricCardEntry) => formatWithDayjs(row.createTime) || '--'
-    },
+    { key: 'createTime', label: '记账时间', field: 'createTime', format: 'datetime' },
     { key: 'rechargeChannel', label: '充值渠道', field: 'rechargeChannel' },
     { key: 'invoiceNo', label: '发票号', field: 'invoiceNo' },
     { key: 'referenceNo', label: '业务凭证号', field: 'referenceNo' },

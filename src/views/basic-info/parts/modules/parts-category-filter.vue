@@ -57,6 +57,7 @@
       highlight-current
       :expand-on-click-node="false"
       @node-click="handleNodeClick"
+      @keydown.capture="handleSelectableTreeKeydown"
     >
       <template #default="{ data }">
         <span class="flex min-w-0 flex-1 items-center gap-2" :title="data.categoryName">
@@ -80,6 +81,7 @@
 <script setup lang="ts">
   import type { ElTree } from 'element-plus'
   import TreeUtils from '@/utils/tree'
+  import { handleSelectableTreeKeydown } from '@/utils/ui/selection-tree-keyboard'
   import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
   import ArtTreeExpandToggle from '@/components/core/widget/art-tree-expand-toggle/index.vue'
   import ArtIconButton from '@/components/core/widget/art-icon-button/index.vue'

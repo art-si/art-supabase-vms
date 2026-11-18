@@ -10,7 +10,6 @@
       :table="tableQueryRef"
       title="保养到期"
       description="结合日期与里程风险安排进场，优先消化已逾期和本周临期车辆。"
-      :filters="tableState.searchQuery"
       :fetch-fn="fetchVehicleReminderMaintenanceRiskOverview"
       @select="handleRiskBandChange"
     />

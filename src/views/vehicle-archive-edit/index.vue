@@ -24,6 +24,7 @@
             v-model:active-tab="certificateTab"
             :items="basicItems"
             :rules="rules"
+            :disabled="page.saving"
             :span="8"
             :gutter="20"
             label-width="130px"
@@ -166,6 +167,7 @@
             v-model="form"
             :items="bodyItems"
             :rules="rules"
+            :disabled="page.saving"
             :span="8"
             :gutter="20"
             label-width="130px"
@@ -178,6 +180,7 @@
             v-model="form"
             :items="engineItems"
             :rules="rules"
+            :disabled="page.saving"
             :span="8"
             :gutter="20"
             label-width="130px"
@@ -190,6 +193,7 @@
             v-model="form"
             :items="otherItems"
             :rules="rules"
+            :disabled="page.saving"
             :span="8"
             :gutter="20"
             label-width="130px"
@@ -268,8 +272,9 @@
       <ElButton
         v-auth="savePermission"
         :type="canSubmitForApproval ? undefined : 'primary'"
-        :loading="page.saving"
-        @click="handleSave(false)"
+        :loading="page.saving && !submitIntent"
+        :disabled="page.saving && submitIntent"
+        @click="handleSave(false, $event)"
       >
         {{ isEdit ? '保存资料' : '保存草稿' }}
       </ElButton>
@@ -277,8 +282,9 @@
         v-if="canSubmitForApproval"
         v-auth="'VehicleArchive:Submit'"
         type="primary"
-        :loading="page.saving"
-        @click="handleSave(true)"
+        :loading="page.saving && submitIntent"
+        :disabled="page.saving && !submitIntent"
+        @click="handleSave(true, $event)"
       >
         {{ originalAuditStatus === 'rejected' ? '保存并重新提交' : '保存并提交审核' }}
       </ElButton>
@@ -379,8 +385,11 @@
   import { useUserStore } from '@/store/modules/user'
   import { useTenantScopeStore } from '@/store/modules/tenant-scope'
   import { useDocumentNumberRule } from '@/hooks/core/useDocumentNumberRule'
+  import { useRouteOperationGuard } from '@/hooks/core/useRouteTableContext'
+  import { notifyFriendlyError } from '@/hooks/core/useArtFeedback'
   import { useAuth } from '@/hooks/core/useAuth'
   import { getFileExtension } from '@/utils/file'
+  import { getFocusedKeyboardButton, restoreButtonFocusIfLost } from '@/utils/ui/button-focus'
   import { copyTextToClipboard } from '@/utils/file/clipboard'
   import { attachmentTableLink } from '@/components/core/media/art-file-viewer/table-link'
   import { canEditField, canViewField } from '@/utils/field-permission'
@@ -476,6 +485,7 @@
 
   const route = useRoute()
   const router = useRouter()
+  const captureRouteOperation = useRouteOperationGuard()
   const { hasAuth } = useAuth()
   const userStore = useUserStore()
   const tenantScopeStore = useTenantScopeStore()
@@ -749,7 +759,7 @@
   const canEditArchiveField = (field: Api.Vms.ArchiveManage.VehicleArchiveFieldKey): boolean =>
     !isEdit.value || canEditField(form.value.fieldAccess, field)
   const canManageArchiveAttachments = computed(
-    () => canEditArchiveField('documents') && hasAuth(savePermission.value)
+    () => !page.saving && canEditArchiveField('documents') && hasAuth(savePermission.value)
   )
 
   const sensitiveFormFields: Partial<
@@ -1917,8 +1927,6 @@
         await tab.formRef.value?.validate()
       } catch {
         page.activeTab = tab.name
-        await nextTick()
-        focusFirstInvalidFormField(pageRef, `#pane-${tab.name} .el-form-item.is-error`)
         return false
       }
     }
@@ -1926,36 +1934,67 @@
     return true
   }
 
-  const handleSave = async (submitForApproval: boolean): Promise<void> => {
-    submitIntent.value = submitForApproval
-    await nextTick()
-    const valid = await validateForms()
-    if (!valid) return
-
+  const handleSave = async (submitForApproval: boolean, event: MouseEvent): Promise<void> => {
+    if (
+      page.saving ||
+      !hasAuth(savePermission.value) ||
+      (submitForApproval && !canSubmitForApproval.value)
+    )
+      return
+    const isCurrentRoute = captureRouteOperation()
+    const keyboardTrigger = getFocusedKeyboardButton(event)
     page.saving = true
+    submitIntent.value = submitForApproval
+    let invalidForm = false
+    let saveFailed = false
     try {
+      await nextTick()
+      if (!(await validateForms())) {
+        invalidForm = true
+        return
+      }
+      if (!isCurrentRoute()) return
       const payload = sanitizeVehicleArchivePayload(toRaw(form.value))
+      let savedId = payload.id
+      const creating = !isEdit.value
       if (isEdit.value) {
         await editVehicleArchive(payload, { showMessage: !submitForApproval })
-        if (submitForApproval) {
-          await submitVehicleArchiveForApproval(
-            String(payload.id),
-            String(payload.plateNo || '未编号车辆')
-          )
-        }
       } else {
         const response = await addVehicleArchive(payload, { showMessage: false })
         if (!response.data?.id) throw new Error('车辆档案创建成功，但未返回档案 ID')
-        if (submitForApproval) {
+        savedId = response.data.id
+      }
+      if (submitForApproval) {
+        try {
           await submitVehicleArchiveForApproval(
-            response.data.id,
-            String(payload.plateNo || '未编号车辆')
+            String(savedId),
+            String(payload.plateNo || '未编号车辆'),
+            { showErrorMessage: false }
           )
+        } catch {
+          if (!isCurrentRoute()) return
+          saveFailed = true
+          ElMessage.warning('车辆档案已保存，审批未发起。请稍后重新提交；仍失败时请联系管理员。')
+          if (creating)
+            await router.replace(`/vms/vehicle-archive-edit/${encodeURIComponent(String(savedId))}`)
+          return
         }
       }
-      goBack()
+      if (isCurrentRoute()) goBack()
+    } catch (error) {
+      saveFailed = true
+      if (isCurrentRoute())
+        notifyFriendlyError(error, '车辆档案保存失败，请检查填写内容和网络后重试')
     } finally {
       page.saving = false
+      if ((invalidForm || saveFailed) && isCurrentRoute()) {
+        await nextTick()
+        if (isCurrentRoute()) {
+          if (invalidForm)
+            focusFirstInvalidFormField(pageRef, `#pane-${page.activeTab} .el-form-item.is-error`)
+          else if (keyboardTrigger) restoreButtonFocusIfLost(keyboardTrigger)
+        }
+      }
     }
   }
 

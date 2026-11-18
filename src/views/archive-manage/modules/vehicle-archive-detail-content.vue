@@ -662,11 +662,14 @@
         gap: 5px;
         align-items: baseline;
         min-width: 0;
+        max-width: 100%;
       }
 
       dt {
+        flex-shrink: 0;
         font-size: 12px;
         color: var(--el-text-color-secondary);
+        white-space: nowrap;
       }
 
       dd {
@@ -675,6 +678,7 @@
         font-size: 13px;
         font-weight: 600;
         color: var(--el-text-color-primary);
+        overflow-wrap: anywhere;
       }
     }
 
@@ -880,6 +884,11 @@
 
     @media (width <= 760px) {
       padding: 12px;
+
+      &__identity {
+        flex-direction: column;
+        align-items: stretch;
+      }
 
       &__descriptions {
         :deep(.el-descriptions__label) {

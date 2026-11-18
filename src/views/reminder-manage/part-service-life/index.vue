@@ -10,7 +10,6 @@
       :table="tableQueryRef"
       title="配件寿命"
       description="提前识别达到日期或里程阈值的配件，为备件采购与更换排期留出窗口。"
-      :filters="tableState.searchQuery"
       :fetch-fn="fetchVehicleReminderPartServiceLifeRiskOverview"
       @select="handleRiskBandChange"
     />

@@ -17,9 +17,15 @@
     </BusinessWorkspaceHeader>
 
     <div class="vehicle-archive-manage__workspace">
-      <ArtWorkspaceSplitter primary-size="264px" primary-min="248px" :breakpoint="1160">
+      <ArtWorkspaceSplitter
+        primary-size="264px"
+        primary-min="248px"
+        :breakpoint="1160"
+        :stacked-primary-size="navigationExpanded ? '360px' : 'auto'"
+      >
         <template #primary>
           <ArtSectionCard
+            ref="navigationPanelRef"
             class="vehicle-archive-manage__navigation"
             :class="{ 'is-expanded': navigationExpanded }"
             title="车辆分类"
@@ -39,6 +45,7 @@
           >
             <template #actions>
               <ElButton
+                ref="navigationToggleRef"
                 class="vehicle-archive-manage__navigation-toggle"
                 text
                 :aria-expanded="navigationExpanded"
@@ -53,6 +60,7 @@
                 </span>
               </ElButton>
               <ArtTreeExpandToggle
+                class="vehicle-archive-manage__navigation-tree-toggle"
                 :tree="navigationTreeRef"
                 :data="navigationTree"
                 node-key="key"
@@ -104,6 +112,7 @@
               :current-node-key="navigationKey === 'all' ? undefined : navigationKey"
               :filter-node-method="filterNavigationNode"
               @node-click="handleNavigationClick"
+              @keydown.capture="handleSelectableTreeKeydown"
             >
               <template #default="{ data }">
                 <span class="vehicle-archive-manage__navigation-node">
@@ -164,13 +173,14 @@
   import { getFriendlySupabaseErrorMessage } from '@/utils/supabase'
   import { useRecordDeleteGuard } from '@/hooks/core/useRecordDeleteGuard'
   import type { ComputedRef, UnwrapNestedRefs } from 'vue'
-  import { ElMessage, ElTag, ElTree } from 'element-plus'
+  import { ElMessage, ElTag, ElTree, type ButtonInstance } from 'element-plus'
   import {
     buildVehicleClassificationTree,
     filterClassifiedVehicles,
     type VehicleClassificationNode as NavigationNode
   } from '@vms/views/vehicle-manage/components/vehicle-classification'
   import ArtSectionCard from '@/components/core/surfaces/art-section-card/index.vue'
+  import { handleSelectableTreeKeydown } from '@/utils/ui/selection-tree-keyboard'
   import ArtWorkspaceSplitter from '@/components/core/layouts/art-workspace-splitter/index.vue'
   import ArtTreeExpandToggle from '@/components/core/widget/art-tree-expand-toggle/index.vue'
   import ArtIconButton from '@/components/core/widget/art-icon-button/index.vue'
@@ -268,6 +278,8 @@
     rows: []
   })
   const navigationRows = ref<VehicleArchiveNavigationItem[]>([])
+  const navigationPanelRef = ref<InstanceType<typeof ArtSectionCard>>()
+  const navigationToggleRef = ref<ButtonInstance>()
   const navigationTreeRef = ref<InstanceType<typeof ElTree>>()
   const navigationKeyword = ref('')
   const navigationExpanded = ref(false)
@@ -319,6 +331,17 @@
   const handleNavigationClick = (node?: NavigationNode): void => {
     navigationKey.value = node?.key ?? 'all'
     navigationLabel.value = node?.label ?? ''
+    if (navigationExpanded.value) {
+      const panel: unknown = navigationPanelRef.value?.$el
+      const toggle: unknown = navigationToggleRef.value?.$el
+      if (
+        panel instanceof HTMLElement &&
+        panel.contains(panel.ownerDocument.activeElement) &&
+        toggle instanceof HTMLButtonElement &&
+        toggle.getClientRects().length
+      )
+        toggle.focus({ preventScroll: true })
+    }
     navigationExpanded.value = false
     selectedNavigation.value = {
       vehicleOwnership: node?.vehicleOwnership,
@@ -1277,8 +1300,12 @@
           display: none;
         }
 
+        &:not(.is-expanded) .vehicle-archive-manage__navigation-tree-toggle {
+          display: none;
+        }
+
         &.is-expanded {
-          height: 360px;
+          height: 100%;
 
           :deep(.art-section-card__header) {
             padding-bottom: 0;

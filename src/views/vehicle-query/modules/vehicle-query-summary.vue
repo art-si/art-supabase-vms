@@ -36,7 +36,9 @@
       </div>
     </div>
 
-    <div class="vehicle-query-summary__main grid min-w-0 gap-2">
+    <div
+      class="vehicle-query-summary__main grid min-w-0 gap-2 [&_dd]:min-w-0 [&_dd]:wrap-anywhere [&_dl>div]:max-w-full [&_dl>div]:min-w-0 [&_dt]:shrink-0 [&_dt]:whitespace-nowrap"
+    >
       <header
         class="vehicle-query-summary__header flex min-w-0 gap-4 min-[641px]:items-center min-[641px]:justify-between max-[640px]:flex-col max-[640px]:items-stretch"
       >

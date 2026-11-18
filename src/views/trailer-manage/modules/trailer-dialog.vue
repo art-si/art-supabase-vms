@@ -102,7 +102,7 @@
     DataSelectFetchParams
   } from '@/components/core/forms/art-data-select/types'
   import VehicleTypePicker from '../../vehicle-archive-edit/modules/vehicle-type-picker.vue'
-  import { vehicleTypeProfileLabel } from '../../vehicle-archive-edit/modules/vehicle-type-catalog'
+  import { vehicleTypeProfileLabel } from '@/utils/business/vehicle-type-display'
   import type { VehicleTypeProfile } from '@vms/types/vehicle-type'
   import type { TrailerRecord, TrailerTractorOption, TrailerWritePayload } from '@vms/types/trailer'
   import {

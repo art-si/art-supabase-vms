@@ -165,7 +165,7 @@
           stripe
           class="w-full"
           :row-class-name="rowClassName"
-          empty-text="该批次暂无对账明细"
+          :empty-text="loadError ? '该批次明细暂不可用' : '该批次暂无对账明细'"
         />
         <div v-if="rows.length > pageSize" class="mt-3 flex justify-end">
           <ElPagination
@@ -206,7 +206,7 @@
 
   const drawerRef = ref<ArtDrawerExpose>()
   const batches = ref<FuelStatementBatch[]>([])
-  const rows = ref<FuelStatementRow[]>([])
+  const loadedRows = ref<{ batchId: string; rows: FuelStatementRow[] } | null>(null)
   const selectedBatchId = ref('')
   const preparedFile = ref<File | null>(null)
   const preparedRows = ref<FuelStatementImportRow[]>([])
@@ -221,6 +221,10 @@
   const selectedBatch = computed(() =>
     batches.value.find((batch) => batch.id === selectedBatchId.value)
   )
+  const rows = computed(() => {
+    const result = loadedRows.value
+    return result?.batchId === selectedBatchId.value ? result.rows : []
+  })
   const pagedRows = computed(() =>
     rows.value.slice((page.value - 1) * pageSize, page.value * pageSize)
   )
@@ -341,18 +345,21 @@
   }
   const loadRows = async (): Promise<void> => {
     const request = ++rowRequest
+    const batchId = selectedBatchId.value
     page.value = 1
-    if (!selectedBatchId.value) {
-      rows.value = []
+    if (!batchId) {
+      loadedRows.value = null
+      loadingRows.value = false
       return
     }
+    const isCurrent = () => request === rowRequest && selectedBatchId.value === batchId
     loadingRows.value = true
     loadError.value = ''
     try {
-      const result = await fetchFuelStatementRows(selectedBatchId.value)
-      if (request === rowRequest) rows.value = result
+      const result = await fetchFuelStatementRows(batchId)
+      if (isCurrent()) loadedRows.value = { batchId, rows: result }
     } catch {
-      if (request === rowRequest) loadError.value = '对账明细加载失败，请重试。'
+      if (isCurrent()) loadError.value = '对账明细加载失败，请重试。'
     } finally {
       if (request === rowRequest) loadingRows.value = false
     }

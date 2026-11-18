@@ -1,0 +1,1 @@
+function e(e,t){return e==null?`未配置`:`${e} ${t}`}function t(t){let n=t.category===`按载重`,r=n?t.loadTons:t.lengthM;return r==null?t.category:`${t.category} · ${e(r,n?`吨`:`米`)}`}function n(e,t={}){let n=e?.trim();return n?/[\u3400-\u9fff]/u.test(n)&&/^[\u3400-\u9fff0-9\s·（）().、/－-]+$/u.test(n)?n:t.unknownText??`未识别`:t.emptyText??`--`}export{n,t as r,e as t};

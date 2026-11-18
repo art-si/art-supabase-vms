@@ -79,6 +79,7 @@
               :current-node-key="navigationKey === 'all' ? undefined : navigationKey"
               :filter-node-method="filterNavigationNode"
               @node-click="handleNavigationClick"
+              @keydown.capture="handleSelectableTreeKeydown"
             >
               <template #default="{ data }">
                 <span class="vehicle-query-page__navigation-node">
@@ -143,6 +144,7 @@
   import ArtButtonTable from '@/components/core/forms/art-button-table/index.vue'
   import ArtDictDisplay from '@/components/core/base/art-dict-display/index.vue'
   import { getVehicleTypeFallbackLabel } from '@/utils/business/vehicle-type-display'
+  import { handleSelectableTreeKeydown } from '@/utils/ui/selection-tree-keyboard'
   import BusinessWorkspaceHeader, {
     type BusinessWorkspaceMetric
   } from '@/components/business/business-workspace-header/index.vue'
@@ -347,10 +349,9 @@
         labelField: 'companyName',
         valueField: 'id',
         labelFn: (option) => {
-          const carrier = option as VmsCarrierReference
-          return carrier.carrierCode
-            ? `${carrier.companyName}（${carrier.carrierCode}）`
-            : carrier.companyName
+          const { carrierCode, companyName } = option as VmsCarrierReference
+          const code = carrierCode?.trim()
+          return code ? `${code} · ${companyName}` : companyName
         },
         props: { clearable: true, filterable: true, placeholder: '请选择承运商' }
       },

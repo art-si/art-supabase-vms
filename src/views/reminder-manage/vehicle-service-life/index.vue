@@ -10,7 +10,6 @@
       :table="tableQueryRef"
       title="车辆寿命"
       description="汇总车辆使用年限风险，帮助提前规划检修、替换与运力调整。"
-      :filters="tableState.searchQuery"
       :fetch-fn="fetchVehicleReminderVehicleServiceLifeRiskOverview"
       @select="handleRiskBandChange"
     />

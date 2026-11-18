@@ -2,6 +2,7 @@ import { isJavaApi } from '@/config/api-provider'
 import * as javaVehicleApi from '@vms/api/providers/java/vehicle'
 import * as supabaseVehicleApi from '@vms/api/providers/supabase/vehicle'
 import { startWorkflow } from '@/api/workflow'
+import type { ApiFeedbackOptions } from '@/types/api/request'
 
 export * from './providers/supabase/vehicle/part-inventory'
 export {
@@ -90,12 +91,19 @@ export const editVehicleArchive = supabaseVehicleApi.editVehicleArchive
 export const fetchVehicleArchiveDeletePreview = supabaseVehicleApi.fetchVehicleArchiveDeletePreview
 export const deleteVehicleArchive = supabaseVehicleApi.deleteVehicleArchive
 export const deleteVehicleArchiveBatch = supabaseVehicleApi.deleteVehicleArchiveBatch
-export async function submitVehicleArchiveForApproval(id: string, plateNo: string) {
-  return await startWorkflow({
-    businessType: 'vehicle_archive',
-    businessId: id,
-    businessTitle: `车辆档案 ${plateNo}`
-  })
+export function submitVehicleArchiveForApproval(
+  id: string,
+  plateNo: string,
+  options: Pick<ApiFeedbackOptions, 'showErrorMessage'> = {}
+): ReturnType<typeof startWorkflow> {
+  return startWorkflow(
+    {
+      businessType: 'vehicle_archive',
+      businessId: id,
+      businessTitle: `车辆档案 ${plateNo}`
+    },
+    options
+  )
 }
 
 export const fetchVehicleArchiveOptions = supabaseVehicleApi.fetchVehicleArchiveOptions

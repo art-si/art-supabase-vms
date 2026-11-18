@@ -56,6 +56,7 @@
       :current-node-key="selectedKey === 'all' ? undefined : selectedKey"
       :filter-node-method="filterNode"
       @node-click="select"
+      @keydown.capture="handleSelectableTreeKeydown"
     >
       <template #default="{ data }">
         <span class="flex min-w-0 flex-1 items-center gap-2">
@@ -92,6 +93,7 @@
   import ArtSvgIcon from '@/components/core/base/art-svg-icon/index.vue'
   import ArtEmptyState from '@/components/core/feedback/art-empty-state/index.vue'
   import { useUserStore } from '@/store/modules/user'
+  import { handleSelectableTreeKeydown } from '@/utils/ui/selection-tree-keyboard'
   import { fetchVehicleArchiveNavigation, type VehicleArchiveNavigationItem } from '@vms/api'
   import {
     buildVehicleClassificationTree,

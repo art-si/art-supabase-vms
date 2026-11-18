@@ -35,7 +35,6 @@
 </template>
 
 <script setup lang="ts">
-  import { watchDebounced } from '@vueuse/core'
   import type { ArtTableQueryExpose } from '@/components/core/tables/art-table-query/index.vue'
   import BusinessTableWorkspaceActions from '@/components/business/business-table-workspace-actions/index.vue'
   import ArtSvgIcon from '@/components/core/base/art-svg-icon/index.vue'
@@ -59,7 +58,6 @@
     overviewHidden?: boolean
     title: string
     description: string
-    filters: ReminderSearchParams
     fetchFn: (params: ReminderSearchParams) => Promise<RiskOverviewResponse>
   }
 
@@ -72,19 +70,45 @@
 
   const props = defineProps<Props>()
   const emit = defineEmits<{ select: [band: RiskBand] }>()
-  const activeRiskBand = computed<RiskBand>(() => props.filters.riskBand ?? 'all')
+  const appliedSearch = computed(() => props.table?.dataState.appliedSearchParams.value ?? null)
+  const activeRiskBand = computed<RiskBand>(() => {
+    const band = appliedSearch.value?.riskBand
+    return band === 'overdue' || band === 'due_7' || band === 'due_30' ? band : 'all'
+  })
+  const readFilterText = (value: unknown): string | undefined =>
+    typeof value === 'string' ? value || undefined : undefined
+  const overviewFilters = computed<Pick<ReminderSearchParams, 'companyName' | 'plateNo'> | null>(
+    (previous) => {
+      const search = appliedSearch.value
+      if (!search || props.overviewHidden) return null
+
+      const companyName = readFilterText(search.companyName)
+      const plateNo = readFilterText(search.plateNo)
+      // 风险区间切换和翻页不改变概览统计范围。
+      return previous && previous.companyName === companyName && previous.plateNo === plateNo
+        ? previous
+        : { companyName, plateNo }
+    }
+  )
   const overview = reactive<{ loading: boolean; error: Error | null; data: RiskOverview }>({
-    loading: true,
+    loading: false,
     error: null,
     data: { total: 0, overdue: 0, dueWithin7Days: 0, dueWithin30Days: 0, stable: 0 }
   })
+  const overviewBusy = computed(
+    () =>
+      overview.loading || (!overviewFilters.value && (props.table?.dataState.loading.value ?? true))
+  )
+  const canSelectMetric = computed(
+    () => Boolean(overviewFilters.value) && !overview.error && !overview.loading
+  )
 
   const metricCards = computed<MetricCard[]>(() => [
     {
       key: 'total',
       label: '全部提醒',
       value: overview.data.total,
-      description: '当前范围内的全部风险对象',
+      description: '当前查询范围',
       icon: 'ri:radar-line',
       tone: 'info',
       band: 'all'
@@ -121,27 +145,33 @@
   const workspaceMetrics = computed<BusinessWorkspaceMetric[]>(() =>
     metricCards.value.map((item) => ({
       ...item,
-      value: overview.error ? '—' : item.value,
-      interactive: !overview.error && !overview.loading,
-      selected: activeRiskBand.value === item.band,
-      loading: overview.loading
+      value: !overviewFilters.value || overview.error ? '—' : item.value,
+      interactive: canSelectMetric.value,
+      selected: Boolean(overviewFilters.value) && activeRiskBand.value === item.band,
+      loading: overviewBusy.value
     }))
   )
   const overviewTags = computed<BusinessWorkspaceTag[]>(() => [
     {
-      label: overview.error
-        ? '风险统计暂不可用'
-        : overview.loading
-          ? '正在检查风险'
-          : `状态稳定 ${overview.data.stable}`,
-      type: overview.error ? 'warning' : overview.loading ? 'info' : 'success',
+      label: !overviewFilters.value
+        ? '等待列表结果'
+        : overview.error
+          ? '风险统计暂不可用'
+          : overview.loading
+            ? '正在检查风险'
+            : `状态稳定 ${overview.data.stable}`,
+      type: overview.error
+        ? 'warning'
+        : !overviewFilters.value || overview.loading
+          ? 'info'
+          : 'success',
       effect: 'plain'
     },
     { label: '支持风险区间筛选', type: 'info', effect: 'plain' }
   ])
 
   const handleMetricClick = (metric: BusinessWorkspaceMetric): void => {
-    if (overview.loading || overview.error) return
+    if (!canSelectMetric.value) return
     const target = metricCards.value.find((item) => item.key === metric.key)
     if (target) emit('select', target.band)
   }
@@ -153,19 +183,16 @@
 
   async function loadOverview(): Promise<void> {
     const currentRequestId = ++requestId
-    if (props.overviewHidden) {
-      overview.loading = false
-      overview.error = null
-      return
-    }
-    overview.loading = true
+    const filters = overviewFilters.value
+    overview.loading = Boolean(filters)
     overview.error = null
+    if (!filters) return
+
     try {
-      const result = await props.fetchFn({
-        companyName: props.filters.companyName,
-        plateNo: props.filters.plateNo
-      })
-      if (currentRequestId === requestId && result.data) overview.data = result.data
+      const result = await props.fetchFn(filters)
+      if (currentRequestId !== requestId) return
+      if (!result.data) throw new Error('风险概览加载失败')
+      overview.data = result.data
     } catch (error) {
       if (currentRequestId === requestId) {
         overview.error = error instanceof Error ? error : new Error('风险概览加载失败')
@@ -175,22 +202,7 @@
     }
   }
 
-  const overviewFilters = () => [
-    props.filters.companyName,
-    props.filters.plateNo,
-    props.overviewHidden
-  ]
-  watch(
-    overviewFilters,
-    () => {
-      requestId += 1
-      overview.loading = true
-      overview.error = null
-    },
-    { flush: 'sync' }
-  )
-
-  watchDebounced(overviewFilters, () => void loadOverview(), { debounce: 260, immediate: true })
+  watch(overviewFilters, () => void loadOverview(), { immediate: true, flush: 'sync' })
 
   defineExpose({ loadOverview })
 </script>
